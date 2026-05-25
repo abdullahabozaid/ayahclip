@@ -20,6 +20,21 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[#0a0a0a] text-white antialiased">
+        <nav className="border-b border-white/10 px-4 py-3">
+          <div className="mx-auto flex max-w-5xl items-center justify-between">
+            <a href="/" className="text-lg font-bold">
+              AyahClip
+            </a>
+            <div className="flex gap-4">
+              <a
+                href="/browse"
+                className="text-sm text-gray-400 transition-colors hover:text-white"
+              >
+                Browse Surahs
+              </a>
+            </div>
+          </div>
+        </nav>
         {children}
       </body>
     </html>

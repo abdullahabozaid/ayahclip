@@ -46,7 +46,7 @@ export default function SurahPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 pb-20">
       <button
-        onClick={() => router.push("/")}
+        onClick={() => router.push("/browse")}
         className="mb-6 flex items-center gap-1 text-sm text-gray-400 transition-colors hover:text-white"
       >
         ← Back
