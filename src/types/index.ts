@@ -35,7 +35,7 @@ export interface TranslationLanguage {
 
 export type VideoFormat = "16:9" | "9:16" | "1:1" | "4:5";
 
-export type BackgroundType = "image" | "gradient" | "solid";
+export type BackgroundType = "image" | "gradient" | "solid" | "video";
 
 export interface Background {
   type: BackgroundType;
