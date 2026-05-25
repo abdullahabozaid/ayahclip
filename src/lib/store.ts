@@ -21,6 +21,8 @@ interface AppState {
   letterbox: LetterboxConfig;
   currentVerseIndex: number;
   projectId: string | null;
+  playbackSegmentArabic: string | null;
+  playbackSegmentTranslation: string | null;
 
   setSurah: (surah: Surah) => void;
   setVerses: (verses: Verse[]) => void;
@@ -42,6 +44,7 @@ interface AppState {
   setLetterbox: (config: LetterboxConfig) => void;
   setCurrentVerseIndex: (index: number) => void;
   setProjectId: (id: string | null) => void;
+  setPlaybackSegment: (arabic: string | null, translation: string | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -63,6 +66,8 @@ export const useAppStore = create<AppState>((set) => ({
   letterbox: { enabled: false, barColor: "#000000", barStyle: "solid" },
   currentVerseIndex: 0,
   projectId: null,
+  playbackSegmentArabic: null,
+  playbackSegmentTranslation: null,
 
   setSurah: (surah) => set({ surah }),
   setVerses: (verses) => set({ verses }),
@@ -92,4 +97,6 @@ export const useAppStore = create<AppState>((set) => ({
   setLetterbox: (config) => set({ letterbox: config }),
   setCurrentVerseIndex: (index) => set({ currentVerseIndex: index }),
   setProjectId: (id) => set({ projectId: id }),
+  setPlaybackSegment: (arabic, translation) =>
+    set({ playbackSegmentArabic: arabic, playbackSegmentTranslation: translation }),
 }));
