@@ -116,18 +116,18 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
         ctx.beginPath();
         ctx.rect(content.x, content.y, content.w, content.h);
         ctx.clip();
+        ctx.translate(0, content.y);
 
         if (bgImage) {
           drawBgImage(ctx, bgImage, content.w, content.h);
-          ctx.translate(0, content.y);
         } else {
-          ctx.translate(0, content.y);
           drawBackground(ctx, content.w, content.h, store.background);
         }
 
         ctx.fillStyle = `rgba(0, 0, 0, ${store.overlayOpacity / 100})`;
         ctx.fillRect(0, 0, content.w, content.h);
 
+        const letterboxScale = content.h / ratio.h;
         drawVerseText(
           ctx,
           content.w,
@@ -137,9 +137,9 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
           currentVerse.translation,
           {
             arabicFont: store.arabicFont,
-            arabicFontSize: store.arabicFontSize,
+            arabicFontSize: store.arabicFontSize * letterboxScale,
             translationEnabled: store.translationEnabled,
-            translationFontSize: store.translationFontSize,
+            translationFontSize: store.translationFontSize * letterboxScale,
             translationFont: store.translationFont,
             textColor: store.textColor,
             textShadow: store.textShadow,
