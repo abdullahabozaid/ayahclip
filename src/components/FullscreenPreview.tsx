@@ -43,6 +43,11 @@ export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
       canvas.width = size.w;
       canvas.height = size.h;
 
+      const displayArabic =
+        store.playbackSegmentArabic ?? currentVerse.text_uthmani;
+      const displayTranslation =
+        store.playbackSegmentTranslation ?? currentVerse.translation;
+
       const useLetterbox =
         store.letterbox.enabled && store.videoFormat === "9:16";
 
@@ -69,9 +74,9 @@ export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
           ctx,
           content.w,
           content.h,
-          currentVerse.text_uthmani,
+          displayArabic,
           currentVerse.verse_number,
-          currentVerse.translation,
+          displayTranslation,
           {
             arabicFont: store.arabicFont,
             arabicFontSize: store.arabicFontSize,
@@ -99,9 +104,9 @@ export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
           ctx,
           size.w,
           size.h,
-          currentVerse.text_uthmani,
+          displayArabic,
           currentVerse.verse_number,
-          currentVerse.translation,
+          displayTranslation,
           {
             arabicFont: store.arabicFont,
             arabicFontSize: store.arabicFontSize,
