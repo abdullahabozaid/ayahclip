@@ -22,6 +22,7 @@ export interface Reciter {
   id: string;
   name: string;
   folder: string;
+  quranComRecitationId: number;
 }
 
 export type VideoFormat = "16:9" | "9:16" | "1:1" | "4:5";
