@@ -1,6 +1,7 @@
 import { Surah, Verse } from "@/types";
 
 const QURAN_API = "https://api.quran.com/api/v4";
+const QURAN_CDN_API = "https://api.qurancdn.com/api/qdc";
 const EVERYAYAH_BASE = "https://everyayah.com/data";
 
 export async function fetchSurahs(): Promise<Surah[]> {
@@ -58,24 +59,27 @@ export async function fetchChapterTimings(
   chapterNumber: number
 ): Promise<VerseTiming[]> {
   const res = await fetch(
-    `${QURAN_API}/chapter_recitations/${recitationId}/${chapterNumber}`
+    `${QURAN_CDN_API}/audio/reciters/${recitationId}/audio_files?chapter=${chapterNumber}&segments=true`
   );
   const data = await res.json();
-  const audioFile = data.audio_file;
+  const audioFile = data.audio_files?.[0];
   if (!audioFile?.verse_timings) return [];
 
-  return audioFile.verse_timings.map((vt: any) => ({
-    verseKey: vt.verse_key,
-    timestampFrom: vt.timestamp_from,
-    timestampTo: vt.timestamp_to,
-    wordTimings: (vt.segments || [])
-      .filter((s: any[]) => s.length >= 3 && s[1] !== null && s[2] !== null)
-      .map((s: any[]) => ({
-        wordPosition: s[0],
-        startMs: s[1],
-        endMs: s[2],
-      })),
-  }));
+  return audioFile.verse_timings.map((vt: any) => {
+    const verseStart = vt.timestamp_from;
+    return {
+      verseKey: vt.verse_key,
+      timestampFrom: vt.timestamp_from,
+      timestampTo: vt.timestamp_to,
+      wordTimings: (vt.segments || [])
+        .filter((s: any[]) => s.length >= 3 && s[1] !== null && s[2] !== null)
+        .map((s: any[]) => ({
+          wordPosition: s[0],
+          startMs: s[1] - verseStart,
+          endMs: s[2] - verseStart,
+        })),
+    };
+  });
 }
 
 export interface WordData {
