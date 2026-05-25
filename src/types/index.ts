@@ -1,0 +1,49 @@
+export interface Surah {
+  id: number;
+  name_simple: string;
+  name_arabic: string;
+  verses_count: number;
+  revelation_place: "makkah" | "madinah";
+  translated_name: {
+    name: string;
+    language_name: string;
+  };
+}
+
+export interface Verse {
+  id: number;
+  verse_number: number;
+  verse_key: string;
+  text_uthmani: string;
+  translation?: string;
+}
+
+export interface Reciter {
+  id: string;
+  name: string;
+  folder: string;
+}
+
+export type VideoFormat = "16:9" | "9:16" | "1:1" | "4:5";
+
+export type BackgroundType = "image" | "gradient" | "solid";
+
+export interface Background {
+  type: BackgroundType;
+  value: string;
+  label: string;
+}
+
+export interface StudioSettings {
+  surah: Surah | null;
+  verses: Verse[];
+  reciterId: string;
+  videoFormat: VideoFormat;
+  arabicFontSize: number;
+  translationEnabled: boolean;
+  translationFontSize: number;
+  translationFont: string;
+  textColor: string;
+  overlayOpacity: number;
+  background: Background;
+}
