@@ -4,6 +4,12 @@ import { useRef, useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { reciters } from "@/lib/reciters";
 import { preloadVerseAudios } from "@/lib/audio";
+import { getTranslationLanguage } from "@/lib/translations";
+import {
+  TextSegment,
+  loadVerseSegments,
+  findCurrentSegmentIndex,
+} from "@/lib/playback-engine";
 import {
   drawBackground,
   drawBgImage,
@@ -38,6 +44,10 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
   const [audioLoading, setAudioLoading] = useState(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const stoppedRef = useRef(false);
+  const [verseSegments, setVerseSegments] = useState<Map<number, TextSegment[]>>(new Map());
+  const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
+  const prevSegmentRef = useRef<number>(-1);
+  const animFrameRef = useRef<number>(0);
 
   const reciterFolder = reciters.find((r) => r.id === store.reciterId)?.folder ?? "Alafasy_128kbps";
 
@@ -48,10 +58,18 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
     setIsPlaying(false);
   }, [store.reciterId]);
 
+  useEffect(() => {
+    return () => {
+      cancelAnimationFrame(animFrameRef.current);
+    };
+  }, []);
+
   const handlePlay = async () => {
     if (isPlaying) {
       stoppedRef.current = true;
       currentAudioRef.current?.pause();
+      cancelAnimationFrame(animFrameRef.current);
+      useAppStore.getState().setPlaybackSegment(null, null);
       setIsPlaying(false);
       return;
     }
@@ -71,6 +89,29 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
       setAudioLoading(false);
     }
 
+    const reciter = reciters.find((r) => r.id === store.reciterId);
+    if (!reciter) {
+      setIsPlaying(false);
+      return;
+    }
+
+    const lang = getTranslationLanguage(useAppStore.getState().translationLanguage);
+    let segMap = verseSegments;
+    if (segMap.size === 0) {
+      const newMap = new Map<number, TextSegment[]>();
+      for (const verse of selectedVerses) {
+        const segs = await loadVerseSegments(
+          reciter.quranComRecitationId,
+          store.surah!.id,
+          verse.verse_number,
+          lang.resourceId
+        );
+        if (segs.length > 0) newMap.set(verse.verse_number, segs);
+      }
+      setVerseSegments(newMap);
+      segMap = newMap;
+    }
+
     const startIndex = useAppStore.getState().currentVerseIndex;
     for (let i = startIndex; i < selectedVerses.length; i++) {
       if (stoppedRef.current) break;
@@ -82,14 +123,52 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
       useAppStore.getState().setCurrentVerseIndex(i);
       currentAudioRef.current = audio;
       audio.currentTime = 0;
+      prevSegmentRef.current = -1;
+
+      const segments = segMap.get(verse.verse_number);
+
+      if (segments && segments.length > 0) {
+        setActiveSegmentIndex(0);
+        useAppStore.getState().setPlaybackSegment(
+          segments[0].arabicText,
+          segments[0].translationText
+        );
+      }
 
       await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
+        audio.onended = () => {
+          cancelAnimationFrame(animFrameRef.current);
+          resolve();
+        };
+
         audio.play().catch(() => resolve());
+
+        if (segments && segments.length > 1) {
+          const animate = () => {
+            if (stoppedRef.current) return;
+            const timeMs = audio.currentTime * 1000;
+            const idx = findCurrentSegmentIndex(segments, timeMs);
+
+            if (idx !== prevSegmentRef.current) {
+              prevSegmentRef.current = idx;
+              setActiveSegmentIndex(idx);
+              useAppStore.getState().setPlaybackSegment(
+                segments[idx].arabicText,
+                segments[idx].translationText
+              );
+            }
+
+            animFrameRef.current = requestAnimationFrame(animate);
+          };
+          animFrameRef.current = requestAnimationFrame(animate);
+        }
       });
     }
+
+    useAppStore.getState().setPlaybackSegment(null, null);
     stoppedRef.current = false;
     setIsPlaying(false);
+    setVerseSegments(new Map());
   };
 
   useEffect(() => {
@@ -105,6 +184,15 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
     const drawContent = (bgImage?: HTMLImageElement) => {
       ctx.save();
       ctx.scale(2, 2);
+
+      const segments = verseSegments.get(currentVerse?.verse_number ?? 0);
+      const useSegments = isPlaying && segments && segments.length > 1;
+      const displayArabic = useSegments
+        ? segments[activeSegmentIndex]?.arabicText ?? currentVerse.text_uthmani
+        : currentVerse.text_uthmani;
+      const displayTranslation = useSegments
+        ? segments[activeSegmentIndex]?.translationText ?? currentVerse.translation
+        : currentVerse.translation;
 
       const useLetterbox = store.letterbox.enabled && store.videoFormat === "9:16";
 
@@ -132,9 +220,9 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
           ctx,
           content.w,
           content.h,
-          currentVerse.text_uthmani,
+          displayArabic,
           currentVerse.verse_number,
-          currentVerse.translation,
+          displayTranslation,
           {
             arabicFont: store.arabicFont,
             arabicFontSize: store.arabicFontSize * letterboxScale,
@@ -161,9 +249,9 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
           ctx,
           ratio.w,
           ratio.h,
-          currentVerse.text_uthmani,
+          displayArabic,
           currentVerse.verse_number,
-          currentVerse.translation,
+          displayTranslation,
           {
             arabicFont: store.arabicFont,
             arabicFontSize: store.arabicFontSize,
@@ -203,6 +291,9 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
     store.currentVerseIndex,
     currentVerse,
     ratio,
+    isPlaying,
+    activeSegmentIndex,
+    verseSegments,
   ]);
 
   return (
