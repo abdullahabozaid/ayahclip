@@ -27,12 +27,15 @@ export function ExportButton() {
         surahNumber: store.surah.id,
         videoFormat: store.videoFormat,
         arabicFontSize: store.arabicFontSize,
+        arabicFont: store.arabicFont,
         translationEnabled: store.translationEnabled,
         translationFontSize: store.translationFontSize,
         translationFont: store.translationFont,
         textColor: store.textColor,
         overlayOpacity: store.overlayOpacity,
         background: store.background,
+        textShadow: store.textShadow,
+        letterbox: store.letterbox,
         onProgress: (current, total) => setProgress({ current, total }),
       });
 

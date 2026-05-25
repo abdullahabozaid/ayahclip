@@ -34,16 +34,58 @@ export interface Background {
   label: string;
 }
 
+export interface TextShadow {
+  enabled: boolean;
+  color: string;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface LetterboxConfig {
+  enabled: boolean;
+  barColor: string;
+  barStyle: "solid" | "blur" | "gradient";
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  surahId: number;
+  surahName: string;
+  selectedVerseNumbers: number[];
+  settings: {
+    reciterId: string;
+    videoFormat: VideoFormat;
+    arabicFontSize: number;
+    arabicFont: string;
+    translationEnabled: boolean;
+    translationFontSize: number;
+    translationFont: string;
+    textColor: string;
+    overlayOpacity: number;
+    background: Background;
+    textShadow: TextShadow;
+    letterbox: LetterboxConfig;
+  };
+  createdAt: number;
+  updatedAt: number;
+  thumbnail?: string;
+}
+
 export interface StudioSettings {
   surah: Surah | null;
   verses: Verse[];
   reciterId: string;
   videoFormat: VideoFormat;
   arabicFontSize: number;
+  arabicFont: string;
   translationEnabled: boolean;
   translationFontSize: number;
   translationFont: string;
   textColor: string;
   overlayOpacity: number;
   background: Background;
+  textShadow: TextShadow;
+  letterbox: LetterboxConfig;
 }
