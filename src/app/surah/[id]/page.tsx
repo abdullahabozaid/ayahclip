@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { fetchSurahs, fetchVerses } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
+import { getTranslationLanguage } from "@/lib/translations";
 import { Surah, Verse } from "@/types";
 import { VerseList } from "@/components/VerseList";
 import { SelectionBar } from "@/components/SelectionBar";
@@ -23,10 +24,12 @@ export default function SurahPage() {
   const clearSelection = useAppStore((s) => s.clearSelection);
   const setSurahStore = useAppStore((s) => s.setSurah);
   const setVersesStore = useAppStore((s) => s.setVerses);
+  const translationLanguage = useAppStore((s) => s.translationLanguage);
 
   useEffect(() => {
     clearSelection();
-    Promise.all([fetchSurahs(), fetchVerses(surahId)]).then(
+    const lang = getTranslationLanguage(translationLanguage);
+    Promise.all([fetchSurahs(), fetchVerses(surahId, lang.resourceId)]).then(
       ([surahs, fetchedVerses]) => {
         const found = surahs.find((s) => s.id === surahId);
         if (found) {
@@ -38,7 +41,7 @@ export default function SurahPage() {
         setLoading(false);
       }
     );
-  }, [surahId]);
+  }, [surahId, translationLanguage]);
 
   const allSelected =
     verses.length > 0 && selectedVerseNumbers.length === verses.length;

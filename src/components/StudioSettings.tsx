@@ -7,6 +7,7 @@ import { ARABIC_FONTS } from "@/lib/canvas-utils";
 import { FormatSelector } from "./FormatSelector";
 import { BackgroundPicker } from "./BackgroundPicker";
 import { ExportButton } from "./ExportButton";
+import { TRANSLATION_LANGUAGES } from "@/lib/translations";
 
 const ARABIC_FONT_OPTIONS = [
   { value: "uthmanic", label: "Uthmanic HAFS" },
@@ -178,7 +179,7 @@ export function StudioSettings() {
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="text-xs text-gray-400">English Translation</label>
+          <label className="text-xs text-gray-400">Translation</label>
           <button
             onClick={() => store.setTranslationEnabled(!store.translationEnabled)}
             className={`relative h-6 w-11 rounded-full transition-colors ${
@@ -197,6 +198,21 @@ export function StudioSettings() {
 
         {store.translationEnabled && (
           <>
+            <div>
+              <label className="mb-2 block text-xs text-gray-500">Language</label>
+              <select
+                value={store.translationLanguage}
+                onChange={(e) => store.setTranslationLanguage(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-white/20"
+              >
+                {TRANSLATION_LANGUAGES.map((lang) => (
+                  <option key={lang.id} value={lang.id} className="bg-[#1a1a1a]">
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="mb-2 block text-xs text-gray-500">
                 Translation Size — {store.translationFontSize}px

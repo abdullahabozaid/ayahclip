@@ -13,6 +13,7 @@ interface AppState {
   translationEnabled: boolean;
   translationFontSize: number;
   translationFont: string;
+  translationLanguage: string;
   textColor: string;
   overlayOpacity: number;
   background: Background;
@@ -33,6 +34,7 @@ interface AppState {
   setTranslationEnabled: (enabled: boolean) => void;
   setTranslationFontSize: (size: number) => void;
   setTranslationFont: (font: string) => void;
+  setTranslationLanguage: (lang: string) => void;
   setTextColor: (color: string) => void;
   setOverlayOpacity: (opacity: number) => void;
   setBackground: (bg: Background) => void;
@@ -53,6 +55,7 @@ export const useAppStore = create<AppState>((set) => ({
   translationEnabled: true,
   translationFontSize: 18,
   translationFont: "serif",
+  translationLanguage: "en",
   textColor: "#ffffff",
   overlayOpacity: 50,
   background: backgroundPresets[0],
@@ -81,6 +84,7 @@ export const useAppStore = create<AppState>((set) => ({
   setTranslationEnabled: (enabled) => set({ translationEnabled: enabled }),
   setTranslationFontSize: (size) => set({ translationFontSize: size }),
   setTranslationFont: (font) => set({ translationFont: font }),
+  setTranslationLanguage: (lang) => set({ translationLanguage: lang }),
   setTextColor: (color) => set({ textColor: color }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
   setBackground: (bg) => set({ background: bg }),

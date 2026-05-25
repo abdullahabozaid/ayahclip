@@ -25,6 +25,14 @@ export interface Reciter {
   quranComRecitationId: number;
 }
 
+export interface TranslationLanguage {
+  id: string;
+  name: string;
+  nativeName: string;
+  resourceId: number;
+  direction: "ltr" | "rtl";
+}
+
 export type VideoFormat = "16:9" | "9:16" | "1:1" | "4:5";
 
 export type BackgroundType = "image" | "gradient" | "solid";
@@ -63,6 +71,7 @@ export interface Project {
     translationEnabled: boolean;
     translationFontSize: number;
     translationFont: string;
+    translationLanguage: string;
     textColor: string;
     overlayOpacity: number;
     background: Background;
@@ -84,6 +93,7 @@ export interface StudioSettings {
   translationEnabled: boolean;
   translationFontSize: number;
   translationFont: string;
+  translationLanguage: string;
   textColor: string;
   overlayOpacity: number;
   background: Background;

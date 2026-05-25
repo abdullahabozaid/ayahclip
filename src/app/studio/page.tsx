@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { saveProject, generateProjectId } from "@/lib/projects";
+import { fetchVerses } from "@/lib/api";
+import { getTranslationLanguage } from "@/lib/translations";
 import { StudioPreview } from "@/components/StudioPreview";
 import { StudioSettings } from "@/components/StudioSettings";
 import { FullscreenPreview } from "@/components/FullscreenPreview";
@@ -27,6 +29,14 @@ export default function StudioPage() {
   }, [surah, selectedVerseNumbers.length]);
 
   useEffect(() => {
+    if (!surah) return;
+    const lang = getTranslationLanguage(store.translationLanguage);
+    fetchVerses(surah.id, lang.resourceId).then((newVerses) => {
+      store.setVerses(newVerses);
+    });
+  }, [store.translationLanguage]);
+
+  useEffect(() => {
     if (!surah || selectedVerseNumbers.length === 0 || !store.projectId) return;
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -47,6 +57,7 @@ export default function StudioPage() {
           translationEnabled: state.translationEnabled,
           translationFontSize: state.translationFontSize,
           translationFont: state.translationFont,
+          translationLanguage: state.translationLanguage,
           textColor: state.textColor,
           overlayOpacity: state.overlayOpacity,
           background: state.background,
@@ -70,6 +81,7 @@ export default function StudioPage() {
     store.translationEnabled,
     store.translationFontSize,
     store.translationFont,
+    store.translationLanguage,
     store.textColor,
     store.overlayOpacity,
     store.background,
