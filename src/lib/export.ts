@@ -3,6 +3,7 @@ import { getAudioUrl } from "./api";
 import {
   drawBackground,
   drawBgImage,
+  drawVideoFrame,
   drawVerseText,
   drawLetterboxBars,
   getLetterboxContentArea,
@@ -59,6 +60,23 @@ export async function exportVideo(options: ExportOptions): Promise<Blob> {
     }
   }
 
+  let bgVideo: HTMLVideoElement | undefined;
+  if (options.background.type === "video") {
+    bgVideo = document.createElement("video");
+    bgVideo.src = options.background.value;
+    bgVideo.muted = true;
+    bgVideo.loop = true;
+    bgVideo.playsInline = true;
+    bgVideo.crossOrigin = "anonymous";
+    await new Promise<void>((resolve) => {
+      bgVideo!.addEventListener("loadeddata", () => {
+        bgVideo!.play();
+        resolve();
+      });
+      bgVideo!.addEventListener("error", () => resolve());
+    });
+  }
+
   const stream = canvas.captureStream(30);
   const audioCtx = new AudioContext();
   const destination = audioCtx.createMediaStreamDestination();
@@ -85,7 +103,7 @@ export async function exportVideo(options: ExportOptions): Promise<Blob> {
     const verse = options.verses[i];
     options.onProgress(i + 1, options.verses.length);
 
-    drawFrame(ctx, size.w, size.h, verse, options, scale, bgImage);
+    drawFrame(ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo);
 
     const audioUrl = getAudioUrl(options.reciterFolder, options.surahNumber, verse.verse_number);
 
@@ -100,12 +118,32 @@ export async function exportVideo(options: ExportOptions): Promise<Blob> {
       source.connect(audioCtx.destination);
       source.start();
 
-      await new Promise<void>((resolve) => {
-        source.onended = () => resolve();
-      });
+      if (bgVideo) {
+        await new Promise<void>((resolve) => {
+          let frameId: number;
+          source.onended = () => {
+            cancelAnimationFrame(frameId);
+            resolve();
+          };
+          const renderLoop = () => {
+            drawFrame(ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo);
+            frameId = requestAnimationFrame(renderLoop);
+          };
+          frameId = requestAnimationFrame(renderLoop);
+        });
+      } else {
+        await new Promise<void>((resolve) => {
+          source.onended = () => resolve();
+        });
+      }
     } catch {
       await new Promise((r) => setTimeout(r, 2000));
     }
+  }
+
+  if (bgVideo) {
+    bgVideo.pause();
+    bgVideo.src = "";
   }
 
   recorder.stop();
@@ -124,7 +162,8 @@ function drawFrame(
   verse: Verse,
   options: ExportOptions,
   scale: number,
-  bgImage?: HTMLImageElement
+  bgImage?: HTMLImageElement,
+  bgVideo?: HTMLVideoElement
 ) {
   const useLetterbox = options.letterbox.enabled && options.videoFormat === "9:16";
 
@@ -138,7 +177,9 @@ function drawFrame(
     ctx.clip();
     ctx.translate(0, content.y);
 
-    if (bgImage) {
+    if (bgVideo) {
+      drawVideoFrame(ctx, bgVideo, content.w, content.h);
+    } else if (bgImage) {
       drawBgImage(ctx, bgImage, content.w, content.h);
     } else {
       drawBackground(ctx, content.w, content.h, options.background);
@@ -168,7 +209,9 @@ function drawFrame(
 
     ctx.restore();
   } else {
-    if (bgImage) {
+    if (bgVideo) {
+      drawVideoFrame(ctx, bgVideo, w, h);
+    } else if (bgImage) {
       drawBgImage(ctx, bgImage, w, h);
     } else {
       drawBackground(ctx, w, h, options.background);
