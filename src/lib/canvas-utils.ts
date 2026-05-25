@@ -183,6 +183,65 @@ export function drawVerseText(
   clearShadow(ctx);
 }
 
+export function drawTransition(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  outgoingText: {
+    arabic: string;
+    translation: string;
+    verseNumber: number;
+  } | null,
+  incomingText: {
+    arabic: string;
+    translation: string;
+    verseNumber: number;
+  },
+  progress: number,
+  options: DrawVerseOptions,
+  scale: number = 1
+) {
+  if (outgoingText && progress < 1) {
+    ctx.globalAlpha = 1 - progress;
+    drawVerseText(
+      ctx,
+      w,
+      h,
+      outgoingText.arabic,
+      outgoingText.verseNumber,
+      outgoingText.translation || undefined,
+      options,
+      scale
+    );
+  }
+
+  ctx.globalAlpha = outgoingText ? progress : 1;
+  drawVerseText(
+    ctx,
+    w,
+    h,
+    incomingText.arabic,
+    incomingText.verseNumber,
+    incomingText.translation || undefined,
+    options,
+    scale
+  );
+
+  ctx.globalAlpha = 1;
+}
+
+export function drawVideoFrame(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  w: number,
+  h: number
+) {
+  const videoScale = Math.max(w / video.videoWidth, h / video.videoHeight);
+  const sw = video.videoWidth * videoScale;
+  const sh = video.videoHeight * videoScale;
+  ctx.drawImage(video, (w - sw) / 2, (h - sh) / 2, sw, sh);
+}
+
 export function drawBgImage(
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
