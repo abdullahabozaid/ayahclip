@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import {
   drawBackground,
   drawBgImage,
+  drawVideoFrame,
   drawVerseText,
   drawLetterboxBars,
   getLetterboxContentArea,
@@ -23,6 +24,8 @@ interface FullscreenPreviewProps {
 
 export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoAnimRef = useRef<number>(0);
   const store = useAppStore();
 
   const selectedVerses = store.verses.filter((v) =>
@@ -33,8 +36,38 @@ export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
   const size = FORMAT_SIZES[store.videoFormat];
   const scale = size.w / 480;
 
+  useEffect(() => {
+    if (store.background.type !== "video") {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = "";
+        videoRef.current = null;
+      }
+      cancelAnimationFrame(videoAnimRef.current);
+      return;
+    }
+
+    const video = document.createElement("video");
+    video.src = store.background.value;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.crossOrigin = "anonymous";
+    videoRef.current = video;
+
+    video.addEventListener("loadeddata", () => {
+      video.play();
+    });
+
+    return () => {
+      video.pause();
+      video.src = "";
+      cancelAnimationFrame(videoAnimRef.current);
+    };
+  }, [store.background.type, store.background.value]);
+
   const renderFrame = useCallback(
-    (bgImage?: HTMLImageElement) => {
+    (bgImage?: HTMLImageElement, bgVideo?: HTMLVideoElement) => {
       const canvas = canvasRef.current;
       if (!canvas || !currentVerse) return;
       const ctx = canvas.getContext("2d");
@@ -61,7 +94,9 @@ export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
         ctx.clip();
         ctx.translate(0, content.y);
 
-        if (bgImage) {
+        if (bgVideo) {
+          drawVideoFrame(ctx, bgVideo, content.w, content.h);
+        } else if (bgImage) {
           drawBgImage(ctx, bgImage, content.w, content.h);
         } else {
           drawBackground(ctx, content.w, content.h, store.background);
@@ -91,7 +126,9 @@ export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
 
         ctx.restore();
       } else {
-        if (bgImage) {
+        if (bgVideo) {
+          drawVideoFrame(ctx, bgVideo, size.w, size.h);
+        } else if (bgImage) {
           drawBgImage(ctx, bgImage, size.w, size.h);
         } else {
           drawBackground(ctx, size.w, size.h, store.background);
@@ -132,6 +169,14 @@ export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
       img.onload = () => renderFrame(img);
       img.onerror = () => renderFrame();
       img.src = store.background.value;
+    } else if (store.background.type === "video" && videoRef.current) {
+      const video = videoRef.current;
+      const renderLoop = () => {
+        renderFrame(undefined, video);
+        videoAnimRef.current = requestAnimationFrame(renderLoop);
+      };
+      videoAnimRef.current = requestAnimationFrame(renderLoop);
+      return () => cancelAnimationFrame(videoAnimRef.current);
     } else {
       renderFrame();
     }

@@ -13,6 +13,7 @@ import {
 import {
   drawBackground,
   drawBgImage,
+  drawVideoFrame,
   drawVerseText,
   drawLetterboxBars,
   getLetterboxContentArea,
@@ -48,6 +49,8 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
   const prevSegmentRef = useRef<number>(-1);
   const animFrameRef = useRef<number>(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoAnimRef = useRef<number>(0);
 
   const reciterFolder = reciters.find((r) => r.id === store.reciterId)?.folder ?? "Alafasy_128kbps";
 
@@ -63,6 +66,36 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
       cancelAnimationFrame(animFrameRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (store.background.type !== "video") {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = "";
+        videoRef.current = null;
+      }
+      cancelAnimationFrame(videoAnimRef.current);
+      return;
+    }
+
+    const video = document.createElement("video");
+    video.src = store.background.value;
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.crossOrigin = "anonymous";
+    videoRef.current = video;
+
+    video.addEventListener("loadeddata", () => {
+      video.play();
+    });
+
+    return () => {
+      video.pause();
+      video.src = "";
+      cancelAnimationFrame(videoAnimRef.current);
+    };
+  }, [store.background.type, store.background.value]);
 
   const handlePlay = async () => {
     if (isPlaying) {
@@ -181,7 +214,7 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
     canvas.width = ratio.w * 2;
     canvas.height = ratio.h * 2;
 
-    const drawContent = (bgImage?: HTMLImageElement) => {
+    const drawContent = (bgImage?: HTMLImageElement, bgVideo?: HTMLVideoElement) => {
       ctx.save();
       ctx.scale(2, 2);
 
@@ -206,7 +239,9 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
         ctx.clip();
         ctx.translate(0, content.y);
 
-        if (bgImage) {
+        if (bgVideo) {
+          drawVideoFrame(ctx, bgVideo, content.w, content.h);
+        } else if (bgImage) {
           drawBgImage(ctx, bgImage, content.w, content.h);
         } else {
           drawBackground(ctx, content.w, content.h, store.background);
@@ -236,7 +271,9 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
 
         ctx.restore();
       } else {
-        if (bgImage) {
+        if (bgVideo) {
+          drawVideoFrame(ctx, bgVideo, ratio.w, ratio.h);
+        } else if (bgImage) {
           drawBgImage(ctx, bgImage, ratio.w, ratio.h);
         } else {
           drawBackground(ctx, ratio.w, ratio.h, store.background);
@@ -273,6 +310,14 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
       img.onload = () => drawContent(img);
       img.onerror = () => drawContent();
       img.src = store.background.value;
+    } else if (store.background.type === "video" && videoRef.current) {
+      const video = videoRef.current;
+      const renderLoop = () => {
+        drawContent(undefined, video);
+        videoAnimRef.current = requestAnimationFrame(renderLoop);
+      };
+      videoAnimRef.current = requestAnimationFrame(renderLoop);
+      return () => cancelAnimationFrame(videoAnimRef.current);
     } else {
       drawContent();
     }
