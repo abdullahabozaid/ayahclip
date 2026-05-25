@@ -250,7 +250,6 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
         ctx.fillStyle = `rgba(0, 0, 0, ${store.overlayOpacity / 100})`;
         ctx.fillRect(0, 0, content.w, content.h);
 
-        const letterboxScale = content.h / ratio.h;
         drawVerseText(
           ctx,
           content.w,
@@ -260,9 +259,9 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
           displayTranslation,
           {
             arabicFont: store.arabicFont,
-            arabicFontSize: store.arabicFontSize * letterboxScale,
+            arabicFontSize: store.arabicFontSize,
             translationEnabled: store.translationEnabled,
-            translationFontSize: store.translationFontSize * letterboxScale,
+            translationFontSize: store.translationFontSize,
             translationFont: store.translationFont,
             textColor: store.textColor,
             textShadow: store.textShadow,

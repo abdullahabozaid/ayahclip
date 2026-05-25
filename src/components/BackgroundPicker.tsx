@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Background } from "@/types";
 import { backgroundPresets } from "@/lib/backgrounds";
 import { VIDEO_PRESETS, VIDEO_CATEGORIES } from "@/lib/video-presets";
-import { PexelsSearch } from "./PexelsSearch";
+import { StockLibrary } from "./StockLibrary";
 
 interface BackgroundPickerProps {
   value: Background;
@@ -42,7 +42,7 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
       </div>
 
       {tab === "presets" && <PresetsGrid value={value} onChange={onChange} />}
-      {tab === "pexels" && <PexelsSearch onSelect={onChange} />}
+      {tab === "pexels" && <StockLibrary onSelect={onChange} />}
       {tab === "video" && <VideoSection value={value} onChange={onChange} />}
       {tab === "upload" && <UploadSection onChange={onChange} />}
     </div>
