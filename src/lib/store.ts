@@ -49,7 +49,7 @@ export const useAppStore = create<AppState>((set) => ({
   reciterId: "alafasy",
   videoFormat: "9:16",
   arabicFontSize: 48,
-  arabicFont: "amiri",
+  arabicFont: "uthmanic",
   translationEnabled: true,
   translationFontSize: 18,
   translationFont: "serif",

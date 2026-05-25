@@ -1,12 +1,8 @@
 import { TextShadow, LetterboxConfig } from "@/types";
 
 export const ARABIC_FONTS: Record<string, string> = {
-  amiri: '"Amiri", serif',
-  scheherazade: '"Scheherazade New", serif',
+  uthmanic: '"KFGQPC HAFS Uthmanic Script", serif',
   "noto-naskh": '"Noto Naskh Arabic", serif',
-  "reem-kufi": '"Reem Kufi", sans-serif',
-  "aref-ruqaa": '"Aref Ruqaa", serif',
-  lateef: '"Lateef", serif',
 };
 
 export const TRANSLATION_FONTS: Record<string, string> = {
@@ -19,7 +15,7 @@ export const TRANSLATION_FONTS: Record<string, string> = {
 };
 
 export function getArabicFontFamily(font: string): string {
-  return ARABIC_FONTS[font] ?? '"Amiri", serif';
+  return ARABIC_FONTS[font] ?? '"KFGQPC HAFS Uthmanic Script", serif';
 }
 
 export function getTranslationFontFamily(font: string): string {

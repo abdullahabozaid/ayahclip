@@ -9,12 +9,8 @@ import { BackgroundPicker } from "./BackgroundPicker";
 import { ExportButton } from "./ExportButton";
 
 const ARABIC_FONT_OPTIONS = [
-  { value: "amiri", label: "Amiri" },
-  { value: "scheherazade", label: "Scheherazade New" },
+  { value: "uthmanic", label: "Uthmanic HAFS" },
   { value: "noto-naskh", label: "Noto Naskh Arabic" },
-  { value: "reem-kufi", label: "Reem Kufi" },
-  { value: "aref-ruqaa", label: "Aref Ruqaa" },
-  { value: "lateef", label: "Lateef" },
 ];
 
 function Section({
