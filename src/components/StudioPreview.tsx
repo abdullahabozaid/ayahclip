@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { reciters } from "@/lib/reciters";
+import { preloadVerseAudios } from "@/lib/audio";
 
 const FORMAT_RATIOS: Record<string, { w: number; h: number }> = {
   "16:9": { w: 640, h: 360 },
@@ -19,6 +21,61 @@ export function StudioPreview() {
   );
   const currentVerse = selectedVerses[store.currentVerseIndex] ?? selectedVerses[0];
   const ratio = FORMAT_RATIOS[store.videoFormat];
+
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioMap, setAudioMap] = useState<Map<number, HTMLAudioElement>>(new Map());
+  const [audioLoading, setAudioLoading] = useState(false);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const reciterFolder = reciters.find((r) => r.id === store.reciterId)?.folder ?? "Alafasy_128kbps";
+
+  useEffect(() => {
+    setAudioMap(new Map());
+    currentAudioRef.current?.pause();
+    setIsPlaying(false);
+  }, [store.reciterId]);
+
+  const handlePlay = async () => {
+    if (isPlaying) {
+      currentAudioRef.current?.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    setIsPlaying(true);
+    let map = audioMap;
+
+    if (map.size === 0) {
+      setAudioLoading(true);
+      map = await preloadVerseAudios(
+        reciterFolder,
+        store.surah!.id,
+        store.selectedVerseNumbers
+      );
+      setAudioMap(map);
+      setAudioLoading(false);
+    }
+
+    for (let i = store.currentVerseIndex; i < selectedVerses.length; i++) {
+      const verse = selectedVerses[i];
+      const audio = map.get(verse.verse_number);
+      if (!audio) continue;
+
+      store.setCurrentVerseIndex(i);
+      currentAudioRef.current = audio;
+      audio.currentTime = 0;
+
+      await new Promise<void>((resolve) => {
+        audio.onended = () => resolve();
+        audio.play().catch(() => resolve());
+      });
+
+      if (!currentAudioRef.current || currentAudioRef.current.paused) {
+        break;
+      }
+    }
+    setIsPlaying(false);
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -95,26 +152,26 @@ export function StudioPreview() {
       {selectedVerses.length > 0 && (
         <div className="flex items-center gap-4">
           <button
-            onClick={() =>
-              store.setCurrentVerseIndex(
-                Math.max(0, store.currentVerseIndex - 1)
-              )
-            }
+            onClick={() => store.setCurrentVerseIndex(Math.max(0, store.currentVerseIndex - 1))}
             disabled={store.currentVerseIndex === 0}
             className="rounded-lg border border-white/10 px-3 py-1 text-sm disabled:opacity-30"
             aria-label="Previous verse"
           >
             ←
           </button>
+          <button
+            onClick={handlePlay}
+            disabled={audioLoading}
+            className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
+            aria-label={isPlaying ? "Pause" : "Play"}
+          >
+            {audioLoading ? "Loading..." : isPlaying ? "⏸ Pause" : "▶ Play"}
+          </button>
           <span className="text-sm text-gray-400">
             {store.currentVerseIndex + 1} / {selectedVerses.length}
           </span>
           <button
-            onClick={() =>
-              store.setCurrentVerseIndex(
-                Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1)
-              )
-            }
+            onClick={() => store.setCurrentVerseIndex(Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1))}
             disabled={store.currentVerseIndex === selectedVerses.length - 1}
             className="rounded-lg border border-white/10 px-3 py-1 text-sm disabled:opacity-30"
             aria-label="Next verse"

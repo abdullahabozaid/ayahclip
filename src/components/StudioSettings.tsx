@@ -4,6 +4,7 @@ import { useAppStore } from "@/lib/store";
 import { reciters } from "@/lib/reciters";
 import { FormatSelector } from "./FormatSelector";
 import { BackgroundPicker } from "./BackgroundPicker";
+import { ExportButton } from "./ExportButton";
 
 export function StudioSettings() {
   const store = useAppStore();
@@ -152,12 +153,7 @@ export function StudioSettings() {
         <BackgroundPicker value={store.background} onChange={store.setBackground} />
       </div>
 
-      <button
-        className="w-full rounded-lg bg-emerald-600 py-3 text-sm font-medium transition-colors hover:bg-emerald-500 disabled:opacity-50"
-        disabled={selectedCount === 0}
-      >
-        Export Video
-      </button>
+      <ExportButton />
     </div>
   );
 }
