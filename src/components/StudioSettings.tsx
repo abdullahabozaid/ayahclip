@@ -9,13 +9,23 @@ import { ExportButton } from "./ExportButton";
 export function StudioSettings() {
   const store = useAppStore();
   const selectedCount = store.selectedVerseNumbers.length;
+  const estimatedDuration = selectedCount * 5;
+  const durationLabel =
+    estimatedDuration < 60
+      ? `~${estimatedDuration}s`
+      : `~${Math.floor(estimatedDuration / 60)}m ${estimatedDuration % 60}s`;
 
   return (
     <div className="space-y-6 overflow-y-auto">
       <div>
         <p className="text-xs text-gray-400">Surah {store.surah?.id}</p>
         <h2 className="text-xl font-bold">{store.surah?.name_simple ?? "—"}</h2>
-        <p className="text-sm text-gray-400">{selectedCount} verses selected</p>
+        <p className="text-sm text-gray-400">
+          {selectedCount} verses selected
+          {selectedCount > 0 && (
+            <span className="ml-2 text-emerald-400">{durationLabel}</span>
+          )}
+        </p>
       </div>
 
       <hr className="border-white/10" />
@@ -98,21 +108,24 @@ export function StudioSettings() {
             <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-gray-400">
               Translation Font
             </label>
-            <div className="flex gap-2">
-              {["serif", "sans-serif"].map((font) => (
-                <button
-                  key={font}
-                  onClick={() => store.setTranslationFont(font)}
-                  className={`flex-1 rounded-lg border px-3 py-2 text-sm capitalize transition-colors ${
-                    store.translationFont === font
-                      ? "border-emerald-500 bg-emerald-500/10"
-                      : "border-white/10 hover:bg-white/10"
-                  }`}
-                >
-                  {font === "serif" ? "Serif" : "Sans"}
-                </button>
+            <select
+              value={store.translationFont}
+              onChange={(e) => store.setTranslationFont(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-white/20"
+            >
+              {[
+                { value: "serif", label: "Georgia (Serif)" },
+                { value: "sans-serif", label: "Arial (Sans)" },
+                { value: "cinzel", label: "Cinzel" },
+                { value: "times-new-roman", label: "Times New Roman" },
+                { value: "lora", label: "Lora" },
+                { value: "playfair-display", label: "Playfair Display" },
+              ].map((f) => (
+                <option key={f.value} value={f.value} className="bg-[#1a1a1a]">
+                  {f.label}
+                </option>
               ))}
-            </div>
+            </select>
           </div>
         </>
       )}

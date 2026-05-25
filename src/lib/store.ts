@@ -42,7 +42,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   videoFormat: "9:16",
   arabicFontSize: 48,
   translationEnabled: true,
-  translationFontSize: 24,
+  translationFontSize: 18,
   translationFont: "serif",
   textColor: "#ffffff",
   overlayOpacity: 50,

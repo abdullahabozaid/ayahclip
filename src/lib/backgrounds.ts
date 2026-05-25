@@ -11,4 +11,9 @@ export const backgroundPresets: Background[] = [
   { type: "gradient", value: "linear-gradient(180deg, #0a0a0a 0%, #2d1b69 100%)", label: "Purple Night" },
   { type: "gradient", value: "linear-gradient(135deg, #0a3d0a 0%, #0a0a0a 100%)", label: "Forest Dark" },
   { type: "gradient", value: "linear-gradient(135deg, #1a0a0a 0%, #3d1a1a 100%)", label: "Warm Dark" },
+  { type: "image", value: "/backgrounds/mosque-silhouette.svg", label: "Mosque Silhouette" },
+  { type: "image", value: "/backgrounds/desert-dunes.svg", label: "Desert Dunes" },
+  { type: "image", value: "/backgrounds/night-stars.svg", label: "Night Stars" },
+  { type: "image", value: "/backgrounds/lanterns.svg", label: "Lanterns" },
+  { type: "image", value: "/backgrounds/geometric-pattern.svg", label: "Geometric" },
 ];

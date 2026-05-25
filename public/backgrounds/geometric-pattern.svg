@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="gbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1a2a"/>
+      <stop offset="100%" stop-color="#0a0a14"/>
+    </linearGradient>
+    <pattern id="geo" x="0" y="0" width="120" height="120" patternUnits="userSpaceOnUse">
+      <polygon points="60,10 110,35 110,85 60,110 10,85 10,35" fill="none" stroke="#1a3a5a" stroke-width="0.5" opacity="0.3"/>
+      <polygon points="60,25 95,42 95,78 60,95 25,78 25,42" fill="none" stroke="#1a3a5a" stroke-width="0.5" opacity="0.2"/>
+      <circle cx="60" cy="60" r="3" fill="#1a3a5a" opacity="0.15"/>
+    </pattern>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#gbg)"/>
+  <rect width="1080" height="1920" fill="url(#geo)"/>
+</svg>
