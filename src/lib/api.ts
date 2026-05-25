@@ -24,7 +24,12 @@ export async function fetchVerses(
     verse_key: v.verse_key,
     text_uthmani: v.text_uthmani,
     translation: v.translations?.[0]?.text
-      ? v.translations[0].text.replace(/<[^>]*>/g, "")
+      ? v.translations[0].text
+          .replace(/<sup[^>]*>.*?<\/sup>/gi, "")
+          .replace(/<[^>]*>/g, "")
+          .replace(/(?<=[a-zA-Z])\d+/g, "")
+          .replace(/\.\d+/g, ".")
+          .trim()
       : undefined,
   }));
 }
