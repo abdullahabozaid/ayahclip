@@ -30,6 +30,20 @@ the verse auto-detection ("Deep align") is only needed for imported audio.
 Imported-audio verse detection ("Deep align") uses a FastConformer Arabic CTC
 model (ONNX, adapted from [yazinsai/offline-tarteel](https://github.com/yazinsai/offline-tarteel),
 licensed CC-BY-4.0). The `.onnx` file is **gitignored** — it is not in the repo.
+The rest of the app works without it; only "Deep align" needs it.
+
+**Quickest way to get it (this repo's GitHub Release):**
+
+```bash
+mkdir -p public/asr
+gh release download asr-model-v1 \
+  --repo abdullahabozaid/ayahclip \
+  --pattern 'fastconformer_ar_ctc_q8.onnx' \
+  --dir public/asr
+```
+
+(Uses the GitHub CLI, which you're already signed into. The repo is private, so a
+plain `curl` won't work — `gh` carries your auth.)
 
 - **Local / same-origin (default):** place the file at
   `public/asr/fastconformer_ar_ctc_q8.onnx`. It's served from your own origin
