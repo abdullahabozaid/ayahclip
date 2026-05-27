@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AyahClip
 
-## Getting Started
+A fully browser-based tool that turns Quran recitation into vertical
+social-media video clips. Pick verses and a reciter (or import your own
+audio/video), style the composition, and export an MP4 — detection, editing,
+rendering, and export all run client-side.
 
-First, run the development server:
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # fill in the values below
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+See [`.env.example`](.env.example). Both are optional for basic use:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Purpose |
+|---|---|
+| `PEXELS_API_KEY` | Enables the stock photo/video background library. Free key at <https://www.pexels.com/api/>. Server-side only — never exposed to the client. |
+| `NEXT_PUBLIC_ASR_MODEL_URL` | Optional absolute URL to the ASR model (see below). Leave blank to serve it same-origin from `public/asr/`. |
 
-## Learn More
+The app runs without either: backgrounds fall back to presets/gradients, and
+the verse auto-detection ("Deep align") is only needed for imported audio.
 
-To learn more about Next.js, take a look at the following resources:
+## The Arabic ASR model (~131 MB)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Imported-audio verse detection ("Deep align") uses a FastConformer Arabic CTC
+model (ONNX, adapted from [yazinsai/offline-tarteel](https://github.com/yazinsai/offline-tarteel),
+licensed CC-BY-4.0). The `.onnx` file is **gitignored** — it is not in the repo.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Local / same-origin (default):** place the file at
+  `public/asr/fastconformer_ar_ctc_q8.onnx`. It's served from your own origin
+  and cached in IndexedDB after the first load.
+- **External hosting:** for hosts with a per-file static limit (e.g. Vercel),
+  upload the model to CORS-enabled storage (S3, Cloudflare R2, a CDN) and set
+  `NEXT_PUBLIC_ASR_MODEL_URL` to its absolute URL. The bucket **must** send an
+  `Access-Control-Allow-Origin` header that allows your site's origin.
 
-## Deploy on Vercel
+The vocab (`public/asr-vocab.json`) and the onnxruntime-web WASM (loaded from
+the jsDelivr CDN) need no extra setup. Inference is single-threaded, so no
+`COOP`/`COEP` headers (SharedArrayBuffer) are required.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Building & deploying
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build   # production build (also type-checks)
+npm run start   # serve the production build
+npm test        # synthetic verse-detection + forced-alignment checks
+```
+
+Deploy notes:
+
+- Any Next.js host works. If you bundle the model in `public/asr/`, confirm the
+  host allows a ~131 MB static file; otherwise use `NEXT_PUBLIC_ASR_MODEL_URL`.
+- Set `PEXELS_API_KEY` in the host's environment for the stock library.
+- Export uses WebCodecs (faster-than-real-time H.264/AAC) where supported, with
+  a `MediaRecorder` fallback — no server-side rendering or transcoding.
+
+## Attributions
+
+Quran text & translations: [Quran.com](https://quran.com) · Reciter audio:
+[EveryAyah](https://everyayah.com) · Stock media: [Pexels](https://www.pexels.com) ·
+ASR model: FastConformer (CC-BY-4.0).

@@ -68,15 +68,38 @@ export interface Project {
     videoFormat: VideoFormat;
     arabicFontSize: number;
     arabicFont: string;
+    arabicFontWeight?: number;
+    arabicVerseNumber?: boolean;
     translationEnabled: boolean;
     translationFontSize: number;
     translationFont: string;
+    translationFontWeight?: number;
     translationLanguage: string;
     textColor: string;
+    lineHeight: number;
+    textPosition: number;
     overlayOpacity: number;
+    overlayColor: string;
+    safeAreaTarget?: "none" | "tiktok" | "reels";
+    safePadding?: number;
     background: Background;
+    backgroundFit?: "cover" | "contain";
+    fitBackdrop?: "blur" | "black";
+    videoLoopMode?: "loop" | "freeze";
+    verseIntro?: "none" | "fade" | "blur" | "slide" | "scale";
+    verseIntroMs?: number;
     textShadow: TextShadow;
     letterbox: LetterboxConfig;
+    emphasis?: Record<string, { arabic: number[]; translation: number[] }>;
+    emphasisStyle?: "color" | "underline";
+    emphasisColor?: string;
+  };
+  /** Present when the clip uses uploaded audio/video — the blobs are stored
+   *  separately in IndexedDB under `audio:<id>` / `video:<id>`. */
+  imported?: {
+    name: string;
+    timings: { verseNumber: number; start: number; end: number }[];
+    videoBg: boolean;
   };
   createdAt: number;
   updatedAt: number;

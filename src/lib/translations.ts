@@ -6,7 +6,7 @@ export const TRANSLATION_LANGUAGES: TranslationLanguage[] = [
   { id: "tr", name: "Turkish", nativeName: "Türkçe", resourceId: 77, direction: "ltr" },
   { id: "ur", name: "Urdu", nativeName: "اردو", resourceId: 54, direction: "rtl" },
   { id: "id", name: "Indonesian", nativeName: "Bahasa Indonesia", resourceId: 33, direction: "ltr" },
-  { id: "es", name: "Spanish", nativeName: "Español", resourceId: 28, direction: "ltr" },
+  { id: "es", name: "Spanish", nativeName: "Español", resourceId: 83, direction: "ltr" },
 ];
 
 export function getTranslationLanguage(id: string): TranslationLanguage {

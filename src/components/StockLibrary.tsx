@@ -23,13 +23,13 @@ export function StockLibrary({ onSelect }: StockLibraryProps) {
         if (images.length === 0) return null;
         return (
           <div key={category}>
-            <p className="mb-2 text-xs capitalize text-gray-400">{category}</p>
+            <p className="mb-2 text-xs capitalize text-[var(--muted)]">{category}</p>
             <div className="grid grid-cols-3 gap-1.5">
               {images.map((image) => (
                 <button
                   key={image.id}
                   onClick={() => handleSelect(image)}
-                  className="group relative aspect-[3/4] overflow-hidden rounded-md border-2 border-transparent transition-all hover:border-white/30"
+                  className="group relative aspect-[3/4] overflow-hidden rounded-md border-2 border-transparent transition-all hover:border-[var(--hairline)]"
                 >
                   <img
                     src={image.thumbUrl}

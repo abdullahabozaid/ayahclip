@@ -5,9 +5,9 @@ interface SearchBarProps {
 
 export function SearchBar({ value, onChange }: SearchBarProps) {
   return (
-    <div className="relative w-full max-w-md">
+    <div className="relative w-full sm:max-w-sm">
       <svg
-        className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gold-soft/60"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -21,10 +21,10 @@ export function SearchBar({ value, onChange }: SearchBarProps) {
       </svg>
       <input
         type="text"
-        placeholder="Search surahs..."
+        placeholder="Search by name or number…"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-white/10 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-white/20 focus:bg-white/10"
+        className="field w-full py-3 pl-11 pr-4 text-sm placeholder-[var(--muted-deep)]"
         aria-label="Search surahs by name or number"
       />
     </div>

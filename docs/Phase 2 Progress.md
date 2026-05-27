@@ -1,5 +1,7 @@
 # AyahClip Phase 2 — Progress Report
 
+> ⚠️ **Superseded (2026-05-25).** This is an early Phase-2 snapshot. For the current, comprehensive build status, full feature inventory, QA report, and next steps, see the Obsidian doc: **AyahClip → "AyahClip - Build Status & QA Report"**. Notable since this snapshot: full UI revamp (Midnight Mihrab), Quran-font correctness fix (Amiri Quran), MP4 export, device-frame previews + safe zones, number-pad verse picker, local video library.
+
 ## Status: Core Features Complete
 
 All 5 planned features are implemented and tested. Several bugs were found and fixed during integration testing.
@@ -68,12 +70,12 @@ All 5 planned features are implemented and tested. Several bugs were found and f
 ## What's Remaining
 
 ### Must Fix
-- [ ] Video thumbnail URLs for presets — some show blank (Pexels video thumbnail pattern differs from photo pattern)
-- [ ] `surah/[id]/page.tsx` line 62 still references Amiri font for Arabic surah name header
-- [ ] Old project migration — projects saved with `amiri` font ID should fall back to `uthmanic`
+- [x] Video thumbnail URLs for presets — fixed: per-preset URLs with correct pattern, play icon placeholder for 3 without thumbnails
+- [x] `surah/[id]/page.tsx` line 62 still references Amiri font — fixed: all 3 files (SurahCard, VerseCard, surah page) now use Uthmanic HAFS + Noto Naskh
+- [x] Old project migration — handled: `getArabicFontFamily()` already falls back to Uthmanic for unknown font IDs like `amiri`
 
 ### Should Add
-- [ ] RTL support for Urdu translations (`ctx.direction = "rtl"`)
+- [x] RTL support for Urdu translations — added `translationDirection` to DrawVerseOptions, `ctx.direction = "rtl"` applied in canvas-utils, wired through StudioPreview, FullscreenPreview, and export
 - [ ] Crossfade transition between segments (function exists in `canvas-utils.ts` as `drawTransition()` but not wired up)
 - [ ] Segment-based text in Export (currently exports full verse text, not segments)
 

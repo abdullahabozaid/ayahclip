@@ -1,23 +1,236 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Midnight Mihrab — reverent dark luxury design system
+   ============================================================ */
+
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  /* Core palette — near-black base with a whisper of blue, gilded gold */
+  --ink: #08090d;          /* near-black, faint blue tint — page background */
+  --ink-deep: #050507;     /* almost pure black — contrast wells */
+  --surface: #10121a;      /* raised panel — dark slate */
+  --surface-2: #171a24;    /* hover / nested panel */
+  --gold: #c9a24b;         /* gilded brass — primary accent */
+  --gold-soft: #e0c074;    /* lighter gold for highlights */
+  --gold-deep: #a07d2c;    /* pressed / shadowed gold */
+  --emerald: #1f6f5c;      /* deep emerald — secondary accent */
+  --emerald-soft: #2f9279;
+  --parchment: #ece7da;    /* warm off-white text */
+  --muted: #8a8fa3;        /* slate grey muted text */
+  --muted-deep: #5a607a;   /* dimmest text */
+  --hairline: rgba(201, 162, 75, 0.18);   /* gold hairline borders */
+  --hairline-soft: rgba(236, 231, 218, 0.08);
+
+  --background: var(--ink);
+  --foreground: var(--parchment);
+
+  --font-display: "Marcellus", "Cormorant Garamond", Georgia, serif;
+  --font-body: "Outfit", system-ui, sans-serif;
+  --font-arabic: "Amiri Quran", "Scheherazade New", "Noto Naskh Arabic", serif;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-deep: var(--ink-deep);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-deep: var(--gold-deep);
+  --color-emerald-accent: var(--emerald);
+  --color-parchment: var(--parchment);
+  --color-muted-fg: var(--muted);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--ink);
+  color: var(--parchment);
+  font-family: var(--font-body);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display headings */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+.font-arabic {
+  font-family: var(--font-arabic);
+}
+
+/* ---- Atmospheric backgrounds ---- */
+
+/* Near-black base with a single subtle gold glow — no patterns */
+.bg-mihrab {
+  background-color: var(--ink);
+  background-image:
+    radial-gradient(ellipse 70% 45% at 50% -8%, rgba(201, 162, 75, 0.07), transparent 70%);
+  background-attachment: fixed;
+}
+
+.bg-mihrab-still {
+  background-color: var(--ink);
+  background-image:
+    radial-gradient(ellipse 80% 55% at 50% -15%, rgba(201, 162, 75, 0.08), transparent 65%);
+}
+
+/* Subtle film grain overlay for depth */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---- Component primitives ---- */
+
+.gold-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold) 50%, transparent);
+  opacity: 0.5;
+}
+
+.btn-gold {
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold) 60%, var(--gold-deep));
+  color: var(--ink-deep);
+  font-weight: 500;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 8px 24px -8px rgba(201, 162, 75, 0.55);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+.btn-gold:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 12px 32px -8px rgba(201, 162, 75, 0.7);
+}
+.btn-gold:active {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  border: 1px solid var(--hairline);
+  color: var(--parchment);
+  background: rgba(236, 231, 218, 0.02);
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+.btn-ghost:hover {
+  border-color: var(--gold);
+  background: rgba(201, 162, 75, 0.08);
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--hairline-soft);
+  border-radius: 16px;
+}
+
+.panel-inset {
+  background: var(--ink-deep);
+  border: 1px solid var(--hairline-soft);
+}
+
+/* Card hover lift */
+.card-lift {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, box-shadow 0.22s ease;
+}
+.card-lift:hover {
+  transform: translateY(-3px);
+  border-color: var(--hairline);
+  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.8);
+}
+
+/* Inputs */
+.field {
+  background: var(--ink-deep);
+  border: 1px solid var(--hairline-soft);
+  color: var(--parchment);
+  border-radius: 10px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.field:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(201, 162, 75, 0.12);
+  outline: none;
+}
+
+/* Range sliders — gold track */
+input[type="range"].slider-gold {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(236, 231, 218, 0.12);
+}
+input[type="range"].slider-gold::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--gold-soft), var(--gold));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+input[type="range"].slider-gold::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+}
+
+/* ---- Motion ---- */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise {
+  animation: rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Custom scrollbar */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(201, 162, 75, 0.2);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 162, 75, 0.4);
+  background-clip: padding-box;
 }
 
 *:focus-visible {
-  outline: 2px solid #10b981;
+  outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *, .rise, .shimmer {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }

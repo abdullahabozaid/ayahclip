@@ -1,9 +1,21 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { SiteNav } from "@/components/SiteNav";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "AyahClip",
-  description: "Create beautiful Quran recitation clips for social media",
+  title: "AyahClip — Luminous Quran recitation clips",
+  description: "Craft beautiful Quran recitation clips for social media",
+};
+
+// viewport-fit=cover lets us pad around the notch / Dynamic Island via the
+// env(safe-area-inset-*) values. themeColor blends the mobile browser chrome
+// into the app's dark background.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#08090d",
 };
 
 export default function RootLayout({
@@ -14,37 +26,17 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&family=Cinzel:wght@400;700&family=Lora:wght@400;700&family=Playfair+Display:wght@400;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Marcellus&family=Outfit:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&family=Amiri+Quran&family=Scheherazade+New:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Cinzel:wght@400;700&family=Lora:wght@400;700&family=Playfair+Display:wght@400;700&display=swap"
           rel="stylesheet"
         />
-        <style>{`
-          @font-face {
-            font-family: "KFGQPC HAFS Uthmanic Script";
-            src: url("https://cdn.jsdelivr.net/npm/kfgqpc-uthmanic-script-hafs-regular@1.0.0/arabic.otf") format("opentype");
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-          }
-        `}</style>
       </head>
-      <body className="min-h-screen bg-[#0a0a0a] text-white antialiased">
-        <nav className="border-b border-white/10 px-4 py-3">
-          <div className="mx-auto flex max-w-5xl items-center justify-between">
-            <a href="/" className="text-lg font-bold">
-              AyahClip
-            </a>
-            <div className="flex gap-4">
-              <a
-                href="/browse"
-                className="text-sm text-gray-400 transition-colors hover:text-white"
-              >
-                Browse Surahs
-              </a>
-            </div>
-          </div>
-        </nav>
+      <body className="grain min-h-dvh text-parchment antialiased">
+        <SiteNav />
         {children}
+        <SiteFooter />
       </body>
     </html>
   );

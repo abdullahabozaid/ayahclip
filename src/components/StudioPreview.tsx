@@ -17,7 +17,13 @@ import {
   drawVerseText,
   drawLetterboxBars,
   getLetterboxContentArea,
+  rgbaFromHex,
+  safeInsetFor,
+  ensureFontsReady,
 } from "@/lib/canvas-utils";
+import { FrameMode } from "./PlatformChrome";
+import { DevicePreview } from "./DevicePreview";
+import { importedPlayer } from "@/lib/imported-player";
 
 const FORMAT_RATIOS: Record<string, { w: number; h: number }> = {
   "16:9": { w: 640, h: 360 },
@@ -27,10 +33,11 @@ const FORMAT_RATIOS: Record<string, { w: number; h: number }> = {
 };
 
 interface StudioPreviewProps {
-  onFullscreen?: () => void;
+  frameMode?: FrameMode;
+  showSafeZones?: boolean;
 }
 
-export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
+export function StudioPreview({ frameMode = "studio", showSafeZones = false }: StudioPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const store = useAppStore();
 
@@ -50,7 +57,14 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
   const prevSegmentRef = useRef<number>(-1);
   const animFrameRef = useRef<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const videoAnimRef = useRef<number>(0);
+
+  // Verse entrance animation: reset the timestamp whenever the verse (or intro
+  // setting) changes. The fade/blur/slide is drawn by the unified animation loop
+  // below — no per-frame React state, so playback stays smooth.
+  const verseShownAtRef = useRef(0);
+  useEffect(() => {
+    verseShownAtRef.current = performance.now();
+  }, [store.currentVerseIndex, store.verseIntro, store.verseIntroMs]);
 
   const reciterFolder = reciters.find((r) => r.id === store.reciterId)?.folder ?? "Alafasy_128kbps";
 
@@ -74,30 +88,70 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
         videoRef.current.src = "";
         videoRef.current = null;
       }
-      cancelAnimationFrame(videoAnimRef.current);
       return;
     }
 
+    const synced = store.backgroundVideoSync && store.audioSource.mode === "imported";
     const video = document.createElement("video");
     video.src = store.background.value;
     video.muted = true;
-    video.loop = true;
+    // Loop unless synced or the user wants the last frame held when it ends.
+    video.loop = !synced && store.videoLoopMode !== "freeze";
     video.playsInline = true;
     video.crossOrigin = "anonymous";
     videoRef.current = video;
 
     video.addEventListener("loadeddata", () => {
-      video.play();
+      if (synced) video.currentTime = importedPlayer.currentTime();
+      else video.play();
     });
 
+    // Lip-sync: follow the recitation player's time, correcting drift, so the
+    // background video frames match the audio being recited.
+    let unsub: (() => void) | undefined;
+    if (synced) {
+      unsub = importedPlayer.subscribe((time, playing) => {
+        if (video.readyState < 2) return;
+        if (Math.abs(video.currentTime - time) > 0.2) {
+          try {
+            video.currentTime = time;
+          } catch {
+            /* seek may throw if not seekable yet */
+          }
+        }
+        if (playing && video.paused) video.play().catch(() => {});
+        if (!playing && !video.paused) video.pause();
+      });
+    }
+
     return () => {
+      unsub?.();
       video.pause();
       video.src = "";
-      cancelAnimationFrame(videoAnimRef.current);
     };
-  }, [store.background.type, store.background.value]);
+  }, [store.background.type, store.background.value, store.backgroundVideoSync, store.audioSource.mode, store.videoLoopMode]);
+
+  // Imported audio plays through the shared player (also used by the timeline and
+  // fullscreen) so there is only ever one track and one playhead.
+  useEffect(() => {
+    return importedPlayer.subscribe((_t, isP) => {
+      if (useAppStore.getState().audioSource.mode === "imported") setIsPlaying(isP);
+    });
+  }, []);
+  useEffect(
+    () => () => {
+      if (useAppStore.getState().audioSource.mode === "imported") importedPlayer.stop();
+    },
+    []
+  );
 
   const handlePlay = async () => {
+    // Imported audio: single shared player drives play/pause + verse index.
+    if (store.audioSource.mode === "imported") {
+      importedPlayer.toggle(store.audioSource.url);
+      return;
+    }
+
     if (isPlaying) {
       stoppedRef.current = true;
       currentAudioRef.current?.pause();
@@ -204,125 +258,196 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
     setVerseSegments(new Map());
   };
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !currentVerse) return;
+  // Mirror local React state into refs so the animation loop can read the latest
+  // values without re-subscribing or being part of the render cycle.
+  const verseSegmentsRef = useRef(verseSegments);
+  verseSegmentsRef.current = verseSegments;
+  const activeSegmentIndexRef = useRef(activeSegmentIndex);
+  activeSegmentIndexRef.current = activeSegmentIndex;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const bgImageElRef = useRef<HTMLImageElement | null>(null);
 
+  // One canvas paint, reading the latest store + playback state live. Called both
+  // for one-shot redraws (settings changes) and every frame by the animation loop.
+  const drawRef = useRef<() => void>(() => {});
+  drawRef.current = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const s = useAppStore.getState();
+    const r = FORMAT_RATIOS[s.videoFormat];
+    if (canvas.width !== r.w * 2) canvas.width = r.w * 2;
+    if (canvas.height !== r.h * 2) canvas.height = r.h * 2;
 
-    canvas.width = ratio.w * 2;
-    canvas.height = ratio.h * 2;
+    const verses = s.verses.filter((v) => s.selectedVerseNumbers.includes(v.verse_number));
+    const cv = verses[s.currentVerseIndex] ?? verses[0];
+    if (!cv) return;
 
-    const drawContent = (bgImage?: HTMLImageElement, bgVideo?: HTMLVideoElement) => {
-      ctx.save();
-      ctx.scale(2, 2);
+    const segments = verseSegmentsRef.current.get(cv.verse_number ?? 0);
+    const playing = isPlayingRef.current;
+    const useSegments = !!(playing && segments && segments.length > 1);
+    const segIdx = activeSegmentIndexRef.current;
+    const displayArabic = useSegments
+      ? segments![segIdx]?.arabicText ?? cv.text_uthmani
+      : cv.text_uthmani;
+    const displayTranslation = useSegments
+      ? segments![segIdx]?.translationText ?? cv.translation
+      : cv.translation;
+    const transDir = getTranslationLanguage(s.translationLanguage).direction as "ltr" | "rtl";
 
-      const segments = verseSegments.get(currentVerse?.verse_number ?? 0);
-      const useSegments = isPlaying && segments && segments.length > 1;
-      const displayArabic = useSegments
-        ? segments[activeSegmentIndex]?.arabicText ?? currentVerse.text_uthmani
-        : currentVerse.text_uthmani;
-      const displayTranslation = useSegments
-        ? segments[activeSegmentIndex]?.translationText ?? currentVerse.translation
-        : currentVerse.translation;
+    // Word emphasis applies to the static full-verse view (not mid-playback segments).
+    const verseEmphasis = s.emphasis[cv.verse_key];
+    const manualArabicEmphasis = useSegments ? undefined : verseEmphasis?.arabic;
+    const translationEmphasis = useSegments ? undefined : verseEmphasis?.translation;
 
-      const useLetterbox = store.letterbox.enabled && store.videoFormat === "9:16";
+    // Live word-by-word highlight during imported playback overrides manual emphasis.
+    const wordHi =
+      s.audioSource.mode === "imported" && playing && s.wordHighlight && s.activeWordIndex != null
+        ? s.activeWordIndex
+        : null;
+    const arabicEmphasis = wordHi != null ? [wordHi] : manualArabicEmphasis;
+    const effEmphasisStyle = wordHi != null ? "color" : s.emphasisStyle;
+    const effEmphasisColor = wordHi != null ? s.emphasisColor || "#c9a24b" : s.emphasisColor;
+    const introProgress =
+      s.verseIntro === "none"
+        ? 1
+        : Math.min(1, (performance.now() - verseShownAtRef.current) / s.verseIntroMs);
 
-      if (useLetterbox) {
-        drawLetterboxBars(ctx, ratio.w, ratio.h, store.letterbox);
+    const bgVideo = s.background.type === "video" ? videoRef.current ?? undefined : undefined;
+    const bgImage = s.background.type === "image" ? bgImageElRef.current ?? undefined : undefined;
 
-        const content = getLetterboxContentArea(ratio.w, ratio.h);
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(content.x, content.y, content.w, content.h);
-        ctx.clip();
-        ctx.translate(0, content.y);
-
-        if (bgVideo) {
-          drawVideoFrame(ctx, bgVideo, content.w, content.h);
-        } else if (bgImage) {
-          drawBgImage(ctx, bgImage, content.w, content.h);
-        } else {
-          drawBackground(ctx, content.w, content.h, store.background);
-        }
-
-        ctx.fillStyle = `rgba(0, 0, 0, ${store.overlayOpacity / 100})`;
-        ctx.fillRect(0, 0, content.w, content.h);
-
-        drawVerseText(
-          ctx,
-          content.w,
-          content.h,
-          displayArabic,
-          currentVerse.verse_number,
-          displayTranslation,
-          {
-            arabicFont: store.arabicFont,
-            arabicFontSize: store.arabicFontSize,
-            translationEnabled: store.translationEnabled,
-            translationFontSize: store.translationFontSize,
-            translationFont: store.translationFont,
-            textColor: store.textColor,
-            textShadow: store.textShadow,
-          }
-        );
-
-        ctx.restore();
-      } else {
-        if (bgVideo) {
-          drawVideoFrame(ctx, bgVideo, ratio.w, ratio.h);
-        } else if (bgImage) {
-          drawBgImage(ctx, bgImage, ratio.w, ratio.h);
-        } else {
-          drawBackground(ctx, ratio.w, ratio.h, store.background);
-        }
-
-        ctx.fillStyle = `rgba(0, 0, 0, ${store.overlayOpacity / 100})`;
-        ctx.fillRect(0, 0, ratio.w, ratio.h);
-
-        drawVerseText(
-          ctx,
-          ratio.w,
-          ratio.h,
-          displayArabic,
-          currentVerse.verse_number,
-          displayTranslation,
-          {
-            arabicFont: store.arabicFont,
-            arabicFontSize: store.arabicFontSize,
-            translationEnabled: store.translationEnabled,
-            translationFontSize: store.translationFontSize,
-            translationFont: store.translationFont,
-            textColor: store.textColor,
-            textShadow: store.textShadow,
-          }
-        );
-      }
-
-      ctx.restore();
+    const textOpts = {
+      arabicFont: s.arabicFont,
+      arabicFontSize: s.arabicFontSize,
+      translationEnabled: s.translationEnabled,
+      translationFontSize: s.translationFontSize,
+      translationFont: s.translationFont,
+      translationDirection: transDir,
+      textColor: s.textColor,
+      textShadow: s.textShadow,
+      lineHeight: s.lineHeight,
+      verticalPosition: s.textPosition,
+      safeInset: safeInsetFor(s.safeAreaTarget, s.safePadding / 100),
+      arabicFontWeight: s.arabicFontWeight,
+      arabicVerseNumber: s.arabicVerseNumber,
+      translationFontWeight: s.translationFontWeight,
+      arabicEmphasis,
+      translationEmphasis,
+      emphasisStyle: effEmphasisStyle,
+      emphasisColor: effEmphasisColor,
+      introStyle: s.verseIntro,
+      introProgress,
     };
 
-    if (store.background.type === "image") {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => drawContent(img);
-      img.onerror = () => drawContent();
-      img.src = store.background.value;
-    } else if (store.background.type === "video" && videoRef.current) {
-      const video = videoRef.current;
-      const renderLoop = () => {
-        drawContent(undefined, video);
-        videoAnimRef.current = requestAnimationFrame(renderLoop);
-      };
-      videoAnimRef.current = requestAnimationFrame(renderLoop);
-      return () => cancelAnimationFrame(videoAnimRef.current);
+    ctx.save();
+    ctx.scale(2, 2);
+
+    const useLetterbox = s.letterbox.enabled && s.videoFormat === "9:16";
+    if (useLetterbox) {
+      drawLetterboxBars(ctx, r.w, r.h, s.letterbox);
+      const content = getLetterboxContentArea(r.w, r.h);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(content.x, content.y, content.w, content.h);
+      ctx.clip();
+      ctx.translate(0, content.y);
+      if (bgVideo) drawVideoFrame(ctx, bgVideo, content.w, content.h, s.backgroundFit, s.fitBackdrop);
+      else if (bgImage) drawBgImage(ctx, bgImage, content.w, content.h, s.backgroundFit, s.fitBackdrop);
+      else drawBackground(ctx, content.w, content.h, s.background);
+      ctx.fillStyle = rgbaFromHex(s.overlayColor, s.overlayOpacity / 100);
+      ctx.fillRect(0, 0, content.w, content.h);
+      drawVerseText(ctx, content.w, content.h, displayArabic, cv.verse_number, displayTranslation, textOpts);
+      ctx.restore();
     } else {
-      drawContent();
+      if (bgVideo) drawVideoFrame(ctx, bgVideo, r.w, r.h, s.backgroundFit, s.fitBackdrop);
+      else if (bgImage) drawBgImage(ctx, bgImage, r.w, r.h, s.backgroundFit, s.fitBackdrop);
+      else drawBackground(ctx, r.w, r.h, s.background);
+      ctx.fillStyle = rgbaFromHex(s.overlayColor, s.overlayOpacity / 100);
+      ctx.fillRect(0, 0, r.w, r.h);
+      drawVerseText(ctx, r.w, r.h, displayArabic, cv.verse_number, displayTranslation, textOpts);
     }
+
+    ctx.restore();
+  };
+
+  // Load an image background into a ref so the draw loop can paint it synchronously.
+  useEffect(() => {
+    if (store.background.type !== "image") {
+      bgImageElRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      bgImageElRef.current = img;
+      drawRef.current();
+    };
+    img.onerror = () => {
+      bgImageElRef.current = null;
+      drawRef.current();
+    };
+    img.src = store.background.value;
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [store.background.type, store.background.value]);
+
+  // Arabic web fonts may not be loaded when we first paint. Drawing Quran text
+  // with a system fallback mis-renders diacritics, so repaint once the chosen
+  // fonts are ready (and again when all document fonts settle).
+  useEffect(() => {
+    let cancelled = false;
+    ensureFontsReady(store.arabicFont, store.translationFont).then(() => {
+      if (!cancelled) drawRef.current();
+    });
+    document.fonts?.ready.then(() => {
+      if (!cancelled) drawRef.current();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [store.arabicFont, store.translationFont]);
+
+  // Unified redraw: paints once on any settings/verse change, and runs a single
+  // rAF loop while animating (playing, video background, or a verse intro in
+  // progress). All per-frame motion — word highlight, intro, video — is drawn
+  // here without touching React state.
+  useEffect(() => {
+    let raf = 0;
+    const hasVideoBg = store.background.type === "video";
+    const loop = () => {
+      drawRef.current();
+      const s = useAppStore.getState();
+      const introActive =
+        s.verseIntro !== "none" && performance.now() - verseShownAtRef.current < s.verseIntroMs;
+      if (isPlayingRef.current || hasVideoBg || introActive) {
+        raf = requestAnimationFrame(loop);
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
   }, [
     store.background,
+    store.backgroundFit,
+    store.fitBackdrop,
     store.overlayOpacity,
+    store.overlayColor,
+    store.safeAreaTarget,
+    store.safePadding,
+    store.lineHeight,
+    store.textPosition,
+    store.arabicFontWeight,
+    store.arabicVerseNumber,
+    store.translationFontWeight,
+    store.emphasis,
+    store.emphasisStyle,
+    store.emphasisColor,
+    store.wordHighlight,
+    store.verseIntro,
+    store.verseIntroMs,
     store.textColor,
     store.arabicFontSize,
     store.arabicFont,
@@ -334,63 +459,83 @@ export function StudioPreview({ onFullscreen }: StudioPreviewProps) {
     store.videoFormat,
     store.currentVerseIndex,
     currentVerse,
-    ratio,
     isPlaying,
-    activeSegmentIndex,
     verseSegments,
+    frameMode,
   ]);
 
+  const framed = frameMode !== "studio";
+  const displayWidth = framed ? 348 : Math.min(ratio.w, 460);
+
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div
-        className="overflow-hidden rounded-lg border border-white/10"
-        style={{
-          width: Math.min(ratio.w, 480),
-          aspectRatio: `${ratio.w}/${ratio.h}`,
-        }}
+    <div className="flex flex-col items-center gap-6">
+      <DevicePreview
+        frameMode={frameMode}
+        width={displayWidth}
+        aspect={`${ratio.w} / ${ratio.h}`}
+        showSafeZones={showSafeZones}
+        safePadding={store.safePadding / 100}
       >
-        <canvas
-          ref={canvasRef}
-          className="h-full w-full"
-        />
-      </div>
+        <canvas ref={canvasRef} className="h-full w-full" />
+      </DevicePreview>
+
       {selectedVerses.length > 0 && (
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => store.setCurrentVerseIndex(Math.max(0, store.currentVerseIndex - 1))}
+            onClick={() => {
+              const i = Math.max(0, store.currentVerseIndex - 1);
+              store.setCurrentVerseIndex(i);
+              const src = store.audioSource;
+              if (src.mode === "imported" && src.timings[i]) importedPlayer.seek(src.url, src.timings[i].start);
+            }}
             disabled={store.currentVerseIndex === 0}
-            className="rounded-lg border border-white/10 px-3 py-1 text-sm disabled:opacity-30"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25"
             aria-label="Previous verse"
           >
-            ←
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
+
           <button
             onClick={handlePlay}
             disabled={audioLoading}
-            className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
+            className="btn-gold flex h-12 w-12 items-center justify-center rounded-full disabled:opacity-50"
             aria-label={isPlaying ? "Pause" : "Play"}
           >
-            {audioLoading ? "Loading..." : isPlaying ? "Pause" : "Preview"}
+            {audioLoading ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--ink-deep)]/40 border-t-[var(--ink-deep)]" />
+            ) : isPlaying ? (
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                <rect x="6" y="5" width="4" height="14" rx="1" />
+                <rect x="14" y="5" width="4" height="14" rx="1" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-5 w-5 translate-x-0.5" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
           </button>
-          <span className="text-sm text-gray-400">
-            {store.currentVerseIndex + 1} / {selectedVerses.length}
-          </span>
+
           <button
-            onClick={() => store.setCurrentVerseIndex(Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1))}
+            onClick={() => {
+              const i = Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1);
+              store.setCurrentVerseIndex(i);
+              const src = store.audioSource;
+              if (src.mode === "imported" && src.timings[i]) importedPlayer.seek(src.url, src.timings[i].start);
+            }}
             disabled={store.currentVerseIndex === selectedVerses.length - 1}
-            className="rounded-lg border border-white/10 px-3 py-1 text-sm disabled:opacity-30"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25"
             aria-label="Next verse"
           >
-            →
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
           </button>
-          {onFullscreen && (
-            <button
-              onClick={onFullscreen}
-              className="rounded-lg border border-white/10 px-3 py-1 text-xs text-gray-400 hover:text-white"
-            >
-              Full Screen
-            </button>
-          )}
+
+          <span className="ml-1 font-display text-sm tabular-nums text-[var(--muted)]">
+            {store.currentVerseIndex + 1} <span className="text-gold/40">/</span> {selectedVerses.length}
+          </span>
         </div>
       )}
     </div>
