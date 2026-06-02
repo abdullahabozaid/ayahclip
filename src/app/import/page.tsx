@@ -188,7 +188,10 @@ export default function ImportPage() {
               type="file"
               accept="audio/*,video/mp4,video/webm"
               onChange={(e) => handleFile(e.target.files?.[0])}
-              className="hidden"
+              // `sr-only` (not `hidden`) so iOS Safari/Chrome still opens the
+              // picker when the wrapping label is tapped — display:none inputs
+              // are detached from the layout on WebKit and silently refuse.
+              className="sr-only"
             />
           </label>
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}

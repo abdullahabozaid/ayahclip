@@ -265,7 +265,7 @@ function VideoSection({
           type="file"
           accept="video/mp4,video/webm"
           onChange={handleVideoUpload}
-          className="hidden"
+          className="sr-only"
         />
       </label>
     </div>
@@ -300,7 +300,7 @@ function UploadSection({
         type="file"
         accept="image/*,video/mp4,video/webm"
         onChange={handleFile}
-        className="hidden"
+        className="sr-only"
       />
     </label>
   );
