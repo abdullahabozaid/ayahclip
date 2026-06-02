@@ -49,6 +49,32 @@ export function verseTextAt(
 }
 
 /**
+ * Returns the text of every segment in `timing` (one per split + 1). When the
+ * verse has no splits the whole text is one segment. Used by the timeline UI
+ * to label what each split-bounded region will actually display on-screen, so
+ * users can confirm the chunking without playing through.
+ */
+export function verseSegments(timing: VerseTiming, fullText: string): string[] {
+  const splits = timing.splits ?? [];
+  const words = fullText.split(/\s+/).filter(Boolean);
+  const dur = timing.end - timing.start;
+  if (splits.length === 0 || words.length < 2 || dur <= 0) return [fullText];
+  const points = [timing.start, ...splits, timing.end];
+  const out: string[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const lo = points[i];
+    const hi = points[i + 1];
+    const wLo = Math.max(0, Math.floor(((lo - timing.start) / dur) * words.length));
+    const wHi = Math.min(
+      words.length,
+      Math.max(wLo + 1, Math.floor(((hi - timing.start) / dur) * words.length))
+    );
+    out.push(words.slice(wLo, wHi).join(" "));
+  }
+  return out;
+}
+
+/**
  * Build per-verse timings by splitting [start, end] proportionally to each verse's
  * weight (text length). If `snapPoints` (e.g. ASR word onsets) are given, each internal
  * boundary snaps to the nearest onset within `snapTol` seconds for audio-aligned cuts.

@@ -7,6 +7,7 @@ import {
   findSilenceCenters,
   autoSegment,
   resampleTo16kMono,
+  verseSegments,
 } from "@/lib/audio-import";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
 import { forceAlignVerses } from "@/lib/forced-align";
@@ -870,6 +871,40 @@ export function TimelineEditor() {
                   >
                     <span className="h-3/4 w-[3px] rounded bg-gold/70 group-hover:bg-gold" />
                   </div>
+                  {/* Segment preview labels: under the active verse, each split
+                      region shows the first words of the Arabic that segment will
+                      display on-screen — so you can confirm the chunking without
+                      playing through. */}
+                  {active && t.splits && t.splits.length > 0 && (() => {
+                    const verse = store.verses.find((v) => v.verse_number === t.verseNumber);
+                    if (!verse) return null;
+                    const segs = verseSegments(t, verse.text_uthmani);
+                    const span = t.end - t.start;
+                    if (span <= 0) return null;
+                    const points = [t.start, ...t.splits!, t.end];
+                    return segs.map((segText, si) => {
+                      const lo = points[si];
+                      const hi = points[si + 1];
+                      const leftPct = ((lo - t.start) / span) * 100;
+                      const widthPct = ((hi - lo) / span) * 100;
+                      return (
+                        <div
+                          key={`label-${si}`}
+                          className="pointer-events-none absolute bottom-1 z-[2] flex overflow-hidden px-1"
+                          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                          dir="rtl"
+                        >
+                          <span
+                            className="font-arabic truncate rounded bg-[var(--ink-deep)]/85 px-1.5 py-0.5 text-[11px] leading-snug text-emerald-soft ring-1 ring-[var(--hairline)]/50"
+                            title={segText}
+                          >
+                            {segText}
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
+
                   {/* Intra-verse split markers (long-verse text breaks). Emerald
                       to distinguish from the gold verse boundaries. Drag to move,
                       tap × to remove (× only shows on the active verse). */}
