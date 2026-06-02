@@ -66,31 +66,35 @@ function frame() {
     audio.currentTime = t;
   }
   const src = useAppStore.getState().audioSource;
-  if (src.mode === "imported" && src.timings.length && loopEnd == null) {
-    // Skip gaps so playback covers only the kept (cropped) regions.
-    const inBlock = src.timings.some((s) => t >= s.start && t < s.end);
-    if (!inBlock) {
-      const nextStart = src.timings
-        .map((s) => s.start)
-        .filter((s) => s > t + 0.001)
-        .sort((a, b) => a - b)[0];
-      if (nextStart !== undefined) {
-        audio.currentTime = nextStart; // skip a trimmed/gap region
-        t = nextStart;
-      } else {
-        // Past the final verse — stop so the trimmed tail never plays.
-        audio.pause();
-        playing = false;
-        cancelAnimationFrame(raf);
-        if (lastWord !== null) {
-          lastWord = null;
-          useAppStore.getState().setActiveWordIndex(null);
+  if (src.mode === "imported" && src.timings.length) {
+    // Gap-skip only when NOT looping. When the user has Loop verse on, they want
+    // to stay inside the chosen region — don't jump them to the next verse's start.
+    if (loopEnd == null) {
+      const inBlock = src.timings.some((s) => t >= s.start && t < s.end);
+      if (!inBlock) {
+        const nextStart = src.timings
+          .map((s) => s.start)
+          .filter((s) => s > t + 0.001)
+          .sort((a, b) => a - b)[0];
+        if (nextStart !== undefined) {
+          audio.currentTime = nextStart; // skip a trimmed/gap region
+          t = nextStart;
+        } else {
+          // Past the final verse — stop so the trimmed tail never plays.
+          audio.pause();
+          playing = false;
+          cancelAnimationFrame(raf);
+          if (lastWord !== null) {
+            lastWord = null;
+            useAppStore.getState().setActiveWordIndex(null);
+          }
+          clearPlaybackSegment();
+          emit();
+          return;
         }
-        clearPlaybackSegment();
-        emit();
-        return;
       }
     }
+
     const idx = src.timings.findIndex((s) => t >= s.start && t < s.end);
     if (idx >= 0 && idx !== useAppStore.getState().currentVerseIndex) {
       useAppStore.getState().setCurrentVerseIndex(idx);
