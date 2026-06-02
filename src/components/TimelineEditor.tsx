@@ -8,6 +8,7 @@ import {
   autoSegment,
   resampleTo16kMono,
   verseSegments,
+  type VerseTiming,
 } from "@/lib/audio-import";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
 import { forceAlignVerses } from "@/lib/forced-align";
@@ -77,6 +78,60 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const [viewport, setViewport] = useState({ left: 0, width: 100 });
   const [toolsOpen, setToolsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // ---- Undo / redo history for verse-timing edits ------------------------
+  // Bounded stack; each entry is a deep copy of timings (splits is the only
+  // nested array). Drag operations push ONCE on release (the start snapshot),
+  // not on every pointermove — otherwise undo would step pixel-by-pixel.
+  const HISTORY_MAX = 50;
+  const historyRef = useRef<VerseTiming[][]>([]);
+  const futureRef = useRef<VerseTiming[][]>([]);
+  const dragSnapshotRef = useRef<VerseTiming[] | null>(null);
+  // Tick state so the Undo/Redo buttons re-render when history changes
+  // (refs alone wouldn't trigger React updates).
+  const [, setHistoryTick] = useState(0);
+  const bumpHistory = () => setHistoryTick((n) => n + 1);
+
+  const cloneTimings = (timings: readonly VerseTiming[]): VerseTiming[] =>
+    timings.map((t) => ({ ...t, splits: t.splits ? [...t.splits] : undefined }));
+
+  const pushHistory = (snapshot: readonly VerseTiming[]) => {
+    historyRef.current.push(cloneTimings(snapshot));
+    if (historyRef.current.length > HISTORY_MAX) historyRef.current.shift();
+    futureRef.current = []; // a new action breaks the redo chain
+    bumpHistory();
+  };
+
+  /** Apply new timings + (optionally) record the previous state for undo. */
+  const commit = (next: VerseTiming[], record = true) => {
+    if (record) {
+      const cur = useAppStore.getState().audioSource;
+      if (cur.mode === "imported") pushHistory(cur.timings);
+    }
+    useAppStore.getState().setVerseTimings(next);
+  };
+
+  const undo = () => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported") return;
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    futureRef.current.push(cloneTimings(cur.timings));
+    if (futureRef.current.length > HISTORY_MAX) futureRef.current.shift();
+    useAppStore.getState().setVerseTimings(prev);
+    bumpHistory();
+  };
+
+  const redo = () => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported") return;
+    const next = futureRef.current.pop();
+    if (!next) return;
+    historyRef.current.push(cloneTimings(cur.timings));
+    if (historyRef.current.length > HISTORY_MAX) historyRef.current.shift();
+    useAppStore.getState().setVerseTimings(next);
+    bumpHistory();
+  };
   const scrubWasPlaying = useRef(false);
 
   durationRef.current = duration;
@@ -314,6 +369,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         const t = Math.min(durationRef.current, Math.max(0, importedPlayer.currentTime() + dir * step));
         importedPlayer.seek(u, t);
         setHead(t);
+      } else if ((e.metaKey || e.ctrlKey) && e.code === "KeyZ" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((e.metaKey || e.ctrlKey) && e.code === "KeyZ" && e.shiftKey) {
+        e.preventDefault();
+        redo();
       } else if (e.code === "KeyS" && e.shiftKey) {
         // Shift+S: intra-verse split at the playhead — divides the verse's text
         // into segments that change at the marker. Distinct from plain S which
@@ -332,7 +393,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           const b = Math.max(next[i].start + MIN_DUR, Math.min(next[i + 1].end - MIN_DUR, t));
           next[i].end = b;
           next[i + 1].start = b;
-          useAppStore.getState().setVerseTimings(next);
+          commit(next);
         }
       }
     };
@@ -425,12 +486,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       seg.end = s + len;
       edgeTime = s;
     }
-    useAppStore.getState().setVerseTimings(next);
+    // Drag mutations don't record history per frame; the start snapshot is
+    // pushed on release so undo restores to the pre-drag state in one step.
+    commit(next, false);
     setDragInfo({ pct: (edgeTime / dur) * 100, time: edgeTime });
   }, []);
 
   const onDragMove = useCallback((e: PointerEvent) => applyDrag(e.clientX), [applyDrag]);
   const onDragEnd = useCallback(() => {
+    // Push the pre-drag snapshot so undo rewinds the entire drag in one step.
+    if (dragSnapshotRef.current) {
+      pushHistory(dragSnapshotRef.current);
+      dragSnapshotRef.current = null;
+    }
     dragRef.current = null;
     setDragInfo(null);
     window.removeEventListener("pointermove", onDragMove);
@@ -448,6 +516,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     e.stopPropagation();
     const seg = timings[index];
     const t = pxToTime(e.clientX);
+    // Snapshot for undo — anything mutated during this drag rewinds in one step.
+    dragSnapshotRef.current = cloneTimings(timings);
     dragRef.current = {
       index,
       kind,
@@ -489,19 +559,45 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   // long ayah can change on-screen text mid-recitation without breaking the
   // ayah itself.
   const addSplitAt = (time: number) => {
-    const cur = useAppStore.getState().audioSource;
+    const state = useAppStore.getState();
+    const cur = state.audioSource;
     if (cur.mode !== "imported") return;
-    const i = useAppStore.getState().currentVerseIndex;
+    const i = state.currentVerseIndex;
     const seg = cur.timings[i];
     if (!seg) return;
-    if (time <= seg.start + MIN_DUR || time >= seg.end - MIN_DUR) return;
-    const splits = (seg.splits ?? []).slice();
-    for (const sp of splits) if (Math.abs(sp - time) < MIN_DUR) return;
-    splits.push(time);
-    splits.sort((a, b) => a - b);
+    const verse = state.verses.find((v) => v.verse_number === seg.verseNumber);
+    if (!verse) return;
+    const words = verse.text_uthmani.split(/\s+/).filter(Boolean);
+    const dur = seg.end - seg.start;
+    if (dur <= 0 || words.length < 4) return; // need room for 2 words on each side
+
+    // Map the tap time to a word index, then snap to a boundary. Each resulting
+    // segment must contain at least 2 whole words — single-word chunks read as
+    // typos in motion. Existing splits define which sub-range we're in.
+    const MIN_WORDS_PER_SEG = 2;
+    const fraction = Math.max(0, Math.min(1, (time - seg.start) / dur));
+    const existingWIdx = (seg.splits ?? []).map((sp) =>
+      Math.round(((sp - seg.start) / dur) * words.length)
+    );
+    const sorted = [...existingWIdx].sort((a, b) => a - b);
+    let lo = 0;
+    let hi = words.length;
+    for (const w of sorted) {
+      if (w <= Math.round(fraction * words.length)) lo = w;
+      else { hi = w; break; }
+    }
+    const minWIdx = lo + MIN_WORDS_PER_SEG;
+    const maxWIdx = hi - MIN_WORDS_PER_SEG;
+    if (minWIdx > maxWIdx) return; // sub-range too short to split with 2+2 words
+    const desired = Math.round(fraction * words.length);
+    const wIdx = Math.max(minWIdx, Math.min(maxWIdx, desired));
+    if (existingWIdx.includes(wIdx)) return;
+
+    const snappedTime = seg.start + (wIdx / words.length) * dur;
+    const splits = [...(seg.splits ?? []), snappedTime].sort((a, b) => a - b);
     const next = cur.timings.map((x) => ({ ...x }));
     next[i] = { ...next[i], splits };
-    useAppStore.getState().setVerseTimings(next);
+    commit(next);
   };
 
   const addSplit = () => addSplitAt(headTimeRef.current);
@@ -514,7 +610,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     if (!target?.splits) return;
     const remaining = target.splits.filter((_, j) => j !== splitIdx);
     next[verseIdx] = { ...target, splits: remaining.length ? remaining : undefined };
-    useAppStore.getState().setVerseTimings(next);
+    commit(next);
   };
 
   // Snap the selected verse's start/end to the current playhead — play, pause at the
@@ -539,7 +635,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       if (i < next.length - 1 && e > next[i + 1].start) next[i + 1].start = e;
       seg.end = e;
     }
-    useAppStore.getState().setVerseTimings(next);
+    commit(next);
   };
 
   // Delete the head (everything before the playhead) or the tail (everything after).
@@ -557,7 +653,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       const seg = next[next.length - 1];
       seg.end = Math.min(dur, Math.max(seg.start + MIN_DUR, t));
     }
-    useAppStore.getState().setVerseTimings(next);
+    commit(next);
   };
 
   // Wheel over the timeline: plain wheel scrolls horizontally, Ctrl/⌘+wheel zooms.
@@ -589,7 +685,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     try {
       await loadCorpus();
       const weights = getVerseWeights(surahId, verseNumbers[0], verseNumbers[verseNumbers.length - 1]);
-      useAppStore.getState().setVerseTimings(autoSegment(buf, verseNumbers, weights));
+      commit(autoSegment(buf, verseNumbers, weights));
     } finally {
       setRedetecting(false);
     }
@@ -634,12 +730,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         audioDuration: buf.duration,
       });
       if (aligned) {
-        useAppStore.getState().setVerseTimings(aligned);
+        commit(aligned);
       } else {
         // ASR ran but the transcript didn't line up with the known verses —
         // keep a usable result by rebuilding from pauses, and tell the user.
         const weights = getVerseWeights(surahId, lo, hi);
-        useAppStore.getState().setVerseTimings(autoSegment(buf, verseNumbers, weights));
+        commit(autoSegment(buf, verseNumbers, weights));
         setDeepErr("Couldn't align to the verses — used pause detection instead. Fine-tune by ear.");
       }
     } catch {
@@ -689,6 +785,34 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         >
           🔁 Loop verse
         </button>
+
+        {/* Undo / Redo — paired buttons next to the transport so the user
+            never has to hunt for them. Disabled state reads naturally. */}
+        <div className="flex items-center">
+          <button
+            onClick={undo}
+            disabled={historyRef.current.length === 0}
+            className="btn-ghost flex h-9 w-9 items-center justify-center rounded-l-full border-r-0 text-[13px] disabled:opacity-30"
+            aria-label="Undo last timeline edit"
+            title="Undo (⌘Z)"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v6h6M3 13a9 9 0 1 0 3-6.7" />
+            </svg>
+          </button>
+          <button
+            onClick={redo}
+            disabled={futureRef.current.length === 0}
+            className="btn-ghost flex h-9 w-9 items-center justify-center rounded-r-full text-[13px] disabled:opacity-30"
+            aria-label="Redo timeline edit"
+            title="Redo (⌘⇧Z)"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 7v6h-6M21 13a9 9 0 1 1-3-6.7" />
+            </svg>
+          </button>
+        </div>
+
         <span className="tabular-nums text-[13px] text-[var(--muted)]">
           {fmt(headTime)} <span className="text-[var(--muted-deep)]">/ {fmt(duration)}</span>
         </span>
