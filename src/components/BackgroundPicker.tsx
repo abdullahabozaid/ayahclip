@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Background } from "@/types";
 import { backgroundPresets } from "@/lib/backgrounds";
 import { VIDEO_PRESETS, VIDEO_CATEGORIES } from "@/lib/video-presets";
@@ -199,6 +199,7 @@ function VideoSection({
   value: Background;
   onChange: (bg: Background) => void;
 }) {
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -209,6 +210,12 @@ function VideoSection({
     revokeIfBlob(value.value);
     const url = URL.createObjectURL(file);
     onChange({ type: "video", value: url, label: file.name });
+  };
+  const openVideoPicker = () => {
+    const el = videoInputRef.current;
+    if (!el) return;
+    el.value = "";
+    el.click();
   };
 
   return (
@@ -256,18 +263,23 @@ function VideoSection({
         );
       })}
 
-      <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-4 transition-colors hover:border-white/20">
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/mp4,video/webm"
+        onChange={handleVideoUpload}
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <button
+        type="button"
+        onClick={openVideoPicker}
+        className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-4 transition-colors hover:border-white/20 focus-visible:border-gold"
+      >
         <span className="text-lg text-[var(--muted-deep)]">+</span>
-        <span className="text-xs text-[var(--muted)]">
-          Upload video (MP4/WebM, max 50MB)
-        </span>
-        <input
-          type="file"
-          accept="video/mp4,video/webm"
-          onChange={handleVideoUpload}
-          className="sr-only"
-        />
-      </label>
+        <span className="text-xs text-[var(--muted)]">Upload video (MP4/WebM, max 50MB)</span>
+      </button>
     </div>
   );
 }
@@ -279,6 +291,7 @@ function UploadSection({
   value: Background;
   onChange: (bg: Background) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -291,17 +304,32 @@ function UploadSection({
       label: file.name,
     });
   };
+  const openPicker = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.value = "";
+    el.click();
+  };
 
   return (
-    <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-6 transition-colors hover:border-white/20">
-      <span className="text-2xl text-[var(--muted-deep)]">+</span>
-      <span className="text-xs text-[var(--muted)]">Click to upload image or video</span>
+    <>
       <input
+        ref={inputRef}
         type="file"
         accept="image/*,video/mp4,video/webm"
         onChange={handleFile}
         className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
       />
-    </label>
+      <button
+        type="button"
+        onClick={openPicker}
+        className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-6 transition-colors hover:border-white/20 focus-visible:border-gold"
+      >
+        <span className="text-2xl text-[var(--muted-deep)]">+</span>
+        <span className="text-xs text-[var(--muted)]">Click to upload image or video</span>
+      </button>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchSurahs, fetchVerses } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
@@ -31,6 +31,15 @@ export default function ImportPage() {
   const [from, setFrom] = useState("1");
   const [to, setTo] = useState("1");
   const [building, setBuilding] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openFilePicker = () => {
+    const el = fileInputRef.current;
+    if (!el) return;
+    // Reset so picking the same file twice still fires onChange.
+    el.value = "";
+    el.click();
+  };
 
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState<string | null>(null);
@@ -172,7 +181,24 @@ export default function ImportPage() {
           <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/80">
             1 · Upload audio or video
           </p>
-          <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[var(--hairline)] p-8 text-center transition-colors hover:border-gold">
+          {/* Defensive uploader: explicit ref + button.click() — iOS WebKit
+              has historically refused to open the picker for label-wrapped
+              hidden file inputs. The button is the user-gesture target;
+              programmatic input.click() is guaranteed to work inside it. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*,video/mp4,video/webm"
+            onChange={(e) => handleFile(e.target.files?.[0])}
+            className="sr-only"
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <button
+            type="button"
+            onClick={openFilePicker}
+            className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[var(--hairline)] p-8 text-center transition-colors hover:border-gold focus-visible:border-gold"
+          >
             <span className="text-2xl text-gold-soft/70">↑</span>
             <span className="text-sm text-parchment">
               {file ? file.name : "Click to choose an MP3, M4A, WAV or MP4"}
@@ -184,16 +210,7 @@ export default function ImportPage() {
                   ? `Loaded · ${fmt(buffer.duration)}`
                   : "Audio/video is processed on your device — nothing is uploaded to a server"}
             </span>
-            <input
-              type="file"
-              accept="audio/*,video/mp4,video/webm"
-              onChange={(e) => handleFile(e.target.files?.[0])}
-              // `sr-only` (not `hidden`) so iOS Safari/Chrome still opens the
-              // picker when the wrapping label is tapped — display:none inputs
-              // are detached from the layout on WebKit and silently refuse.
-              className="sr-only"
-            />
-          </label>
+          </button>
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
           {/* Use the uploaded video as the clip background */}
