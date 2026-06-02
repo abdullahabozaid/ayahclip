@@ -22,11 +22,13 @@ function fmt(s: number): string {
 const MIN_DUR = 0.12;
 const MAX_CANVAS_W = 16000;
 
-type DragKind = "start" | "end" | "body";
+type DragKind = "start" | "end" | "body" | "split";
 interface Drag {
   index: number;
   kind: DragKind;
   grabOffset: number;
+  /** Position of the split within timings[index].splits when kind === "split". */
+  splitIdx?: number;
 }
 
 /**
@@ -303,6 +305,12 @@ export function TimelineEditor() {
         const t = Math.min(durationRef.current, Math.max(0, importedPlayer.currentTime() + dir * step));
         importedPlayer.seek(u, t);
         setHead(t);
+      } else if (e.code === "KeyS" && e.shiftKey) {
+        // Shift+S: intra-verse split at the playhead — divides the verse's text
+        // into segments that change at the marker. Distinct from plain S which
+        // moves the boundary between adjacent verses.
+        e.preventDefault();
+        addSplit();
       } else if (e.code === "KeyS") {
         // Split at the playhead: move the boundary of the verse under the playhead.
         e.preventDefault();
@@ -389,6 +397,16 @@ export function TimelineEditor() {
       if (i < next.length - 1 && e > next[i + 1].start) next[i + 1].start = e;
       seg.end = e;
       edgeTime = e;
+    } else if (drag.kind === "split") {
+      const splits = (seg.splits ?? []).slice();
+      const si = drag.splitIdx ?? 0;
+      if (si < 0 || si >= splits.length) return;
+      const prev = si > 0 ? splits[si - 1] : seg.start;
+      const after = si < splits.length - 1 ? splits[si + 1] : seg.end;
+      const sp = Math.max(prev + MIN_DUR, Math.min(after - MIN_DUR, t));
+      splits[si] = sp;
+      seg.splits = splits;
+      edgeTime = sp;
     } else {
       const len = seg.end - seg.start;
       const prevEnd = i > 0 ? next[i - 1].end : 0;
@@ -410,18 +428,54 @@ export function TimelineEditor() {
     window.removeEventListener("pointerup", onDragEnd);
   }, [onDragMove]);
 
-  const startDrag = (index: number, kind: DragKind) => (e: React.PointerEvent) => {
+  const startDrag = (index: number, kind: DragKind, splitIdx?: number) => (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const seg = timings[index];
     const t = pxToTime(e.clientX);
-    dragRef.current = { index, kind, grabOffset: kind === "body" ? t - seg.start : 0 };
+    dragRef.current = {
+      index,
+      kind,
+      splitIdx,
+      grabOffset: kind === "body" ? t - seg.start : 0,
+    };
     if (kind === "body") {
       store.setCurrentVerseIndex(index);
       seek(seg.start);
     }
     window.addEventListener("pointermove", onDragMove);
     window.addEventListener("pointerup", onDragEnd);
+  };
+
+  // Drop an intra-verse split at the playhead inside the active verse. The verse's
+  // text gets divided proportionally at each split — so a long ayah can change
+  // on-screen text mid-recitation without breaking the ayah itself.
+  const addSplit = () => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported") return;
+    const i = useAppStore.getState().currentVerseIndex;
+    const seg = cur.timings[i];
+    if (!seg) return;
+    const t = headTimeRef.current;
+    if (t <= seg.start + MIN_DUR || t >= seg.end - MIN_DUR) return;
+    const splits = (seg.splits ?? []).slice();
+    for (const sp of splits) if (Math.abs(sp - t) < MIN_DUR) return;
+    splits.push(t);
+    splits.sort((a, b) => a - b);
+    const next = cur.timings.map((x) => ({ ...x }));
+    next[i] = { ...next[i], splits };
+    useAppStore.getState().setVerseTimings(next);
+  };
+
+  const removeSplit = (verseIdx: number, splitIdx: number) => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported") return;
+    const next = cur.timings.map((x) => ({ ...x }));
+    const target = next[verseIdx];
+    if (!target?.splits) return;
+    const remaining = target.splits.filter((_, j) => j !== splitIdx);
+    next[verseIdx] = { ...target, splits: remaining.length ? remaining : undefined };
+    useAppStore.getState().setVerseTimings(next);
   };
 
   // Snap the selected verse's start/end to the current playhead — play, pause at the
@@ -696,6 +750,19 @@ export function TimelineEditor() {
           >
             ⤓ at playhead
           </button>
+          <button
+            onClick={addSplit}
+            className="btn-ghost rounded-full px-2 py-0.5 text-[10px]"
+            title="Split this verse's text at the playhead (for long verses)"
+          >
+            ✂ Split at playhead
+          </button>
+          {timings[activeIdx].splits?.length ? (
+            <span className="text-[10px] text-emerald-soft">
+              {timings[activeIdx].splits!.length} split
+              {timings[activeIdx].splits!.length === 1 ? "" : "s"}
+            </span>
+          ) : null}
           <span className="ml-auto text-[var(--muted-deep)]">
             click a verse to select · play, pause at the spot, then “at playhead”
           </span>
@@ -803,6 +870,47 @@ export function TimelineEditor() {
                   >
                     <span className="h-3/4 w-[3px] rounded bg-gold/70 group-hover:bg-gold" />
                   </div>
+                  {/* Intra-verse split markers (long-verse text breaks). Emerald
+                      to distinguish from the gold verse boundaries. Drag to move,
+                      tap × to remove (× only shows on the active verse). */}
+                  {t.splits?.map((sp, si) => {
+                    const span = t.end - t.start;
+                    if (span <= 0) return null;
+                    const localLeft = ((sp - t.start) / span) * 100;
+                    return (
+                      <div
+                        key={si}
+                        className="absolute top-0 bottom-0 z-[11]"
+                        style={{ left: `${localLeft}%`, transform: "translateX(-50%)" }}
+                      >
+                        {active && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeSplit(i, si);
+                            }}
+                            className="absolute -top-2 left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-[10px] leading-none text-emerald-soft ring-1 ring-[var(--hairline)] hover:text-red-400"
+                            title="Remove split"
+                          >
+                            ×
+                          </button>
+                        )}
+                        <div
+                          onPointerDown={active ? startDrag(i, "split", si) : undefined}
+                          className={
+                            active
+                              ? "flex h-full w-2.5 cursor-ew-resize items-center justify-center"
+                              : "pointer-events-none flex h-full w-px items-center justify-center"
+                          }
+                          title={active ? "Drag to adjust · × to remove" : undefined}
+                        >
+                          <span
+                            className={`h-3/4 w-px ${active ? "bg-emerald-soft" : "bg-emerald-soft/60"}`}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -859,7 +967,7 @@ export function TimelineEditor() {
       <p className="text-[11px] text-[var(--muted-deep)]">
         Drag a verse’s edges (snap to pauses) · drag into a neighbour to push it · drag the middle
         to move it · drag the waveform to scrub · Space play · ←/→ seek · S splits at the playhead ·
-        gaps are skipped on play and export
+        Shift+S adds an intra-verse split (for long verses) · gaps are skipped on play and export
       </p>
     </div>
   );

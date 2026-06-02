@@ -5,6 +5,7 @@
 // element must survive component mounts/unmounts (e.g. opening fullscreen).
 
 import { useAppStore } from "./store";
+import { verseTextAt } from "./audio-import";
 
 type Listener = (time: number, playing: boolean) => void;
 
@@ -18,6 +19,15 @@ let raf = 0;
 let lastWord: number | null = -1; // last active word index pushed to the store
 let loopStart: number | null = null; // when set, playback loops this region (a verse)
 let loopEnd: number | null = null;
+// Track which intra-verse segment is currently on-screen so we only push to the
+// store when it changes (cheaper than re-rendering every frame).
+let lastSegKey: string | null = null;
+
+function clearPlaybackSegment() {
+  if (lastSegKey === null) return;
+  lastSegKey = null;
+  useAppStore.getState().setPlaybackSegment(null, null);
+}
 const listeners = new Set<Listener>();
 
 function emit() {
@@ -39,6 +49,7 @@ function ensure(url: string): HTMLAudioElement {
         lastWord = null;
         useAppStore.getState().setActiveWordIndex(null);
       }
+      clearPlaybackSegment();
       emit();
     });
   }
@@ -75,6 +86,7 @@ function frame() {
           lastWord = null;
           useAppStore.getState().setActiveWordIndex(null);
         }
+        clearPlaybackSegment();
         emit();
         return;
       }
@@ -105,6 +117,33 @@ function frame() {
     } else if (lastWord !== null) {
       lastWord = null;
       st.setActiveWordIndex(null);
+    }
+
+    // Intra-verse splits: swap on-screen Arabic + translation to the current
+    // segment when the active verse has splits. No splits → restore full text.
+    if (idx >= 0) {
+      const seg = src.timings[idx];
+      const verse = st.verses.find((vv) => vv.verse_number === seg.verseNumber);
+      if (seg.splits && seg.splits.length > 0 && verse) {
+        // Identify the segment by index so we only emit on transitions.
+        let segIdx = 0;
+        for (const sp of seg.splits) {
+          if (t >= sp) segIdx++;
+          else break;
+        }
+        const key = `${idx}:${segIdx}`;
+        if (key !== lastSegKey) {
+          lastSegKey = key;
+          const ar = verseTextAt(seg, verse.text_uthmani, t);
+          const tr =
+            verse.translation != null ? verseTextAt(seg, verse.translation, t) : null;
+          st.setPlaybackSegment(ar, tr);
+        }
+      } else if (lastSegKey !== null) {
+        clearPlaybackSegment();
+      }
+    } else if (lastSegKey !== null) {
+      clearPlaybackSegment();
     }
   }
   emit();
@@ -144,6 +183,7 @@ export const importedPlayer = {
       lastWord = null;
       useAppStore.getState().setActiveWordIndex(null);
     }
+    clearPlaybackSegment();
     emit();
   },
   toggle(url: string) {

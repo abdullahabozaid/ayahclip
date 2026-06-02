@@ -289,12 +289,14 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     const playing = isPlayingRef.current;
     const useSegments = !!(playing && segments && segments.length > 1);
     const segIdx = activeSegmentIndexRef.current;
-    const displayArabic = useSegments
-      ? segments![segIdx]?.arabicText ?? cv.text_uthmani
-      : cv.text_uthmani;
-    const displayTranslation = useSegments
-      ? segments![segIdx]?.translationText ?? cv.translation
-      : cv.translation;
+    // Imported playback pushes the current intra-verse segment via the store; it
+    // overrides everything else so the on-screen text follows the user's splits.
+    const displayArabic =
+      s.playbackSegmentArabic ??
+      (useSegments ? segments![segIdx]?.arabicText ?? cv.text_uthmani : cv.text_uthmani);
+    const displayTranslation =
+      s.playbackSegmentTranslation ??
+      (useSegments ? segments![segIdx]?.translationText ?? cv.translation : cv.translation);
     const transDir = getTranslationLanguage(s.translationLanguage).direction as "ltr" | "rtl";
 
     // Word emphasis applies to the static full-verse view (not mid-playback segments).
@@ -458,6 +460,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.letterbox,
     store.videoFormat,
     store.currentVerseIndex,
+    store.playbackSegmentArabic,
+    store.playbackSegmentTranslation,
     currentVerse,
     isPlaying,
     verseSegments,

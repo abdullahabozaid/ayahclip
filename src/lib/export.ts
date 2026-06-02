@@ -14,6 +14,7 @@ import {
   ensureFontsReady,
   SafeAreaTarget,
 } from "./canvas-utils";
+import { verseTextAt, type VerseTiming } from "./audio-import";
 
 const FORMAT_SIZES: Record<VideoFormat, { w: number; h: number }> = {
   "16:9": { w: 1920, h: 1080 },
@@ -58,8 +59,27 @@ interface ExportOptions {
   emphasisStyle: "color" | "underline";
   emphasisColor: string;
   /** When set, use this single uploaded track (sliced per verse) instead of EveryAyah. */
-  importedAudio?: { url: string; timings: { verseNumber: number; start: number; end: number }[] };
+  importedAudio?: { url: string; timings: VerseTiming[] };
   onProgress: (current: number, total: number) => void;
+}
+
+// Pick the slice of a verse's text + translation to show at `sourceTime` based
+// on its intra-verse splits. No splits → the full verse text passes through.
+function segmentFor(
+  verse: Verse,
+  tm: VerseTiming | undefined,
+  sourceTime: number
+): { ar: string; tr: string | null | undefined } {
+  if (!tm?.splits?.length) {
+    return { ar: verse.text_uthmani, tr: verse.translation };
+  }
+  return {
+    ar: verseTextAt(tm, verse.text_uthmani, sourceTime),
+    tr:
+      verse.translation != null
+        ? verseTextAt(tm, verse.translation, sourceTime)
+        : verse.translation,
+  };
 }
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
@@ -219,16 +239,24 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
     const verse = options.verses[i];
     options.onProgress(i + 1, options.verses.length);
 
+    // Looked up once per verse — used both for audio slicing AND for the
+    // intra-verse segment that drives on-screen text.
+    const tm = options.importedAudio?.timings.find((t) => t.verseNumber === verse.verse_number);
+    const sourceStart = tm?.start ?? 0;
+
     const verseStart = performance.now();
-    drawFrame(ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo, introAt(verseStart));
+    const seg0 = segmentFor(verse, tm, sourceStart);
+    drawFrame(
+      ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
+      introAt(verseStart), seg0.ar, seg0.tr
+    );
 
     try {
       const source = audioCtx.createBufferSource();
-      let renderWhilePlaying = !!bgVideo || hasIntro;
+      let renderWhilePlaying = !!bgVideo || hasIntro || !!tm?.splits?.length;
 
       if (importedBuffer && options.importedAudio) {
-        const tm = options.importedAudio.timings.find((t) => t.verseNumber === verse.verse_number);
-        const start = tm?.start ?? 0;
+        const start = sourceStart;
         const dur = Math.max(0.05, (tm?.end ?? importedBuffer.duration) - start);
         source.buffer = importedBuffer;
         source.connect(destination);
@@ -262,7 +290,12 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
             resolve();
           };
           const renderLoop = () => {
-            drawFrame(ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo, introAt(verseStart));
+            const elapsed = (performance.now() - verseStart) / 1000;
+            const seg = segmentFor(verse, tm, sourceStart + elapsed);
+            drawFrame(
+              ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
+              introAt(verseStart), seg.ar, seg.tr
+            );
             frameId = requestAnimationFrame(renderLoop);
           };
           frameId = requestAnimationFrame(renderLoop);
@@ -468,7 +501,17 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     const verse = options.verses[vi];
     const introProgress = introMs > 0 ? Math.min(1, ((t - cum[vi]) * 1000) / introMs) : 1;
     if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(t, vi));
-    drawFrame(ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo, introProgress);
+    // Intra-verse split segment: derive source time within the imported track,
+    // then look up which text chunk should be on-screen at this frame.
+    const tmFast = options.importedAudio?.timings.find(
+      (x) => x.verseNumber === verse.verse_number
+    );
+    const sourceTime = (tmFast?.start ?? 0) + (t - cum[vi]);
+    const segFast = segmentFor(verse, tmFast, sourceTime);
+    drawFrame(
+      ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
+      introProgress, segFast.ar, segFast.tr
+    );
 
     const frame = new VideoFrame(canvas, {
       timestamp: Math.round(t * 1e6),
@@ -537,9 +580,20 @@ function drawFrame(
   scale: number,
   bgImage?: HTMLImageElement,
   bgVideo?: HTMLVideoElement,
-  introProgress = 1
+  introProgress = 1,
+  /** Override Arabic text (intra-verse split segment). Falls back to verse.text_uthmani. */
+  displayArabic?: string,
+  /** Override translation. Falls back to verse.translation. */
+  displayTranslation?: string | null
 ) {
-  const ve = options.emphasis[verse.verse_key];
+  // When showing a mid-verse segment, manual word emphasis indices wouldn't
+  // line up with the partial text — so emphasis only applies on the full verse.
+  const showingFullVerse =
+    (displayArabic == null || displayArabic === verse.text_uthmani);
+  const ve = showingFullVerse ? options.emphasis[verse.verse_key] : undefined;
+  const arText = displayArabic ?? verse.text_uthmani;
+  const trText =
+    displayTranslation === undefined ? verse.translation : displayTranslation ?? undefined;
   const useLetterbox = options.letterbox.enabled && options.videoFormat === "9:16";
 
   if (useLetterbox) {
@@ -567,9 +621,9 @@ function drawFrame(
       ctx,
       content.w,
       content.h,
-      verse.text_uthmani,
+      arText,
       verse.verse_number,
-      verse.translation,
+      trText,
       {
         arabicFont: options.arabicFont,
         arabicFontSize: options.arabicFontSize,
@@ -612,9 +666,9 @@ function drawFrame(
       ctx,
       w,
       h,
-      verse.text_uthmani,
+      arText,
       verse.verse_number,
-      verse.translation,
+      trText,
       {
         arabicFont: options.arabicFont,
         arabicFontSize: options.arabicFontSize,

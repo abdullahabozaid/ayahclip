@@ -54,6 +54,7 @@ function dropChars(text: string, rate: number, seed: number): string {
 async function main() {
 const { loadCorpus, matchVerses, getVersesText } = await import("../src/lib/verse-match");
 const { forceAlignVerses } = await import("../src/lib/forced-align");
+const { verseTextAt } = await import("../src/lib/audio-import");
 await loadCorpus();
 
 console.log("\n── Matcher: exact text → correct surah + range ──");
@@ -154,6 +155,33 @@ console.log("\n── Forced alignment: rejects unusable input ──");
 {
   check("empty verse list → null", forceAlignVerses({ hypText: "ا", hypCharTimes: [0], surah: 2, verseNumbers: [], audioDuration: 10 }) === null);
   check("non-contiguous verses → null", forceAlignVerses({ hypText: "الم", hypCharTimes: [0, 1, 2], surah: 2, verseNumbers: [1, 3], audioDuration: 10 }) === null);
+}
+
+console.log("\n── Intra-verse splits: verseTextAt segment math ──");
+{
+  const t = { verseNumber: 1, start: 0, end: 10, splits: [5] };
+  const text = "a b c d e f g h i j"; // 10 words
+  check("before split → first half", verseTextAt(t, text, 2) === "a b c d e", `got "${verseTextAt(t, text, 2)}"`);
+  check("after split → second half", verseTextAt(t, text, 7) === "f g h i j", `got "${verseTextAt(t, text, 7)}"`);
+  check("at split boundary → second half", verseTextAt(t, text, 5) === "f g h i j");
+}
+{
+  const t = { verseNumber: 1, start: 0, end: 12, splits: [4, 8] };
+  const words = Array.from({ length: 12 }, (_, i) => String(i + 1)).join(" ");
+  check("no splits → full text", verseTextAt({ verseNumber: 1, start: 0, end: 12 }, words, 5) === words);
+  const s0 = verseTextAt(t, words, 1);
+  const s1 = verseTextAt(t, words, 5);
+  const s2 = verseTextAt(t, words, 10);
+  check("3 segments cover all 12 words", (s0.split(" ").length + s1.split(" ").length + s2.split(" ").length) === 12,
+    `got ${s0.split(" ").length}+${s1.split(" ").length}+${s2.split(" ").length}`);
+  check("3 segments are disjoint and in order",
+    s0 === "1 2 3 4" && s1 === "5 6 7 8" && s2 === "9 10 11 12",
+    `s0="${s0}" s1="${s1}" s2="${s2}"`);
+}
+{
+  // Edge: single-word verse → no segmentation, return full.
+  const t = { verseNumber: 1, start: 0, end: 5, splits: [2] };
+  check("single-word verse falls back to full text", verseTextAt(t, "only", 3) === "only");
 }
 
 console.log(`\n${failed === 0 ? "✅" : "❌"} ${passed} passed, ${failed} failed\n`);

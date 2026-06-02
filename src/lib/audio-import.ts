@@ -5,6 +5,47 @@ export interface VerseTiming {
   verseNumber: number;
   start: number; // seconds
   end: number; // seconds
+  /**
+   * Intra-verse split timestamps (seconds, absolute on the timeline) for long
+   * verses. The verse's text is shown in chunks that change at each split.
+   * Strictly increasing; each value must lie strictly between `start` and `end`.
+   */
+  splits?: number[];
+}
+
+/**
+ * For a verse with optional intra-verse splits, returns the slice of its text
+ * that should be on-screen at time `t`. Words are divided by count proportional
+ * to time within the verse — keeps it predictable without any text parsing.
+ * Falls back to the full text when there are no splits or the verse is too short.
+ */
+export function verseTextAt(
+  timing: VerseTiming,
+  fullText: string,
+  t: number
+): string {
+  const splits = timing.splits;
+  if (!splits || splits.length === 0) return fullText;
+  const words = fullText.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return fullText;
+  const dur = timing.end - timing.start;
+  if (dur <= 0) return fullText;
+
+  let segIdx = 0;
+  for (const sp of splits) {
+    if (t >= sp) segIdx++;
+    else break;
+  }
+
+  const points = [timing.start, ...splits, timing.end];
+  const lo = points[segIdx];
+  const hi = points[segIdx + 1];
+  const wLo = Math.max(0, Math.floor(((lo - timing.start) / dur) * words.length));
+  const wHi = Math.min(
+    words.length,
+    Math.max(wLo + 1, Math.floor(((hi - timing.start) / dur) * words.length))
+  );
+  return words.slice(wLo, wHi).join(" ");
 }
 
 /**
