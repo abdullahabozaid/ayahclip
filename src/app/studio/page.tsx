@@ -9,6 +9,7 @@ import { getTranslationLanguage } from "@/lib/translations";
 import { StudioPreview } from "@/components/StudioPreview";
 import { StudioSettings } from "@/components/StudioSettings";
 import { TimelineEditor } from "@/components/TimelineEditor";
+import { FullscreenTimeline } from "@/components/FullscreenTimeline";
 import { FullscreenPreview } from "@/components/FullscreenPreview";
 import { FRAME_MODES, FrameMode } from "@/components/PlatformChrome";
 
@@ -22,6 +23,7 @@ export default function StudioPage() {
   const [frameMode, setFrameMode] = useState<FrameMode>("studio");
   const [showSafeZones, setShowSafeZones] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
+  const [timelineFullscreen, setTimelineFullscreen] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const savedAudioUrlRef = useRef<string | null>(null);
   const savedVideoUrlRef = useRef<string | null>(null);
@@ -319,29 +321,45 @@ export default function StudioPage() {
       {/* Verse timeline dock — imported audio only */}
       {store.audioSource.mode === "imported" && (
         <div className="shrink-0 border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <button
-            onClick={() => setTimelineOpen((v) => !v)}
-            className="mb-2.5 flex w-full items-center gap-2 text-left"
-            aria-expanded={timelineOpen}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className={`h-3.5 w-3.5 text-gold-soft/80 transition-transform ${timelineOpen ? "" : "-rotate-90"}`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
+          <div className="mb-2.5 flex items-center gap-2">
+            <button
+              onClick={() => setTimelineOpen((v) => !v)}
+              className="flex flex-1 items-center gap-2 text-left"
+              aria-expanded={timelineOpen}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-            </svg>
-            <span className="text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/80">
-              Verse Timeline
-            </span>
-            <span className="text-[11px] text-[var(--muted-deep)]">
-              {timelineOpen ? "— set where each verse begins and ends" : "— click to expand"}
-            </span>
-          </button>
+              <svg
+                viewBox="0 0 24 24"
+                className={`h-3.5 w-3.5 text-gold-soft/80 transition-transform ${timelineOpen ? "" : "-rotate-90"}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+              </svg>
+              <span className="text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/80">
+                Verse Timeline
+              </span>
+              <span className="text-[11px] text-[var(--muted-deep)]">
+                {timelineOpen ? "— set where each verse begins and ends" : "— click to expand"}
+              </span>
+            </button>
+            <button
+              onClick={() => setTimelineFullscreen(true)}
+              className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold"
+              title="Edit verses in a full-screen editor (more room for the waveform and handles)"
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 9V5a1 1 0 011-1h4M4 15v4a1 1 0 001 1h4m6-16h4a1 1 0 011 1v4m0 6v4a1 1 0 01-1 1h-4" />
+              </svg>
+              Expand
+            </button>
+          </div>
           {timelineOpen && <TimelineEditor />}
         </div>
+      )}
+
+      {timelineFullscreen && (
+        <FullscreenTimeline onClose={() => setTimelineFullscreen(false)} />
       )}
 
       {fullscreen && (

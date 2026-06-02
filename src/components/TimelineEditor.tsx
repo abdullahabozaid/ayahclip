@@ -40,7 +40,13 @@ interface Drag {
  * from the recitation's pauses; "Deep align" re-runs speech recognition to align
  * each verse's words to the audio. Playback is the shared importedPlayer.
  */
-export function TimelineEditor() {
+interface TimelineEditorProps {
+  /** When true, the track + cards grow to use the available vertical space —
+   *  intended for the FullscreenTimeline overlay (`Expand` from the dock). */
+  fullscreen?: boolean;
+}
+
+export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {}) {
   const store = useAppStore();
   const imported = store.audioSource.mode === "imported" ? store.audioSource : null;
   const url = imported?.url ?? null;
@@ -863,7 +869,9 @@ export function TimelineEditor() {
                 startScrub(e.clientX); // drag to scrub (seek + hear audio)
               }
             }}
-            className="relative h-24 cursor-text overflow-hidden rounded-xl border border-[var(--hairline)] bg-[var(--ink-deep)]"
+            className={`relative cursor-text overflow-hidden rounded-xl border border-[var(--hairline)] bg-[var(--ink-deep)] ${
+              fullscreen ? "h-[clamp(180px,38dvh,420px)]" : "h-24"
+            }`}
           >
             <canvas
               ref={waveCanvasRef}
