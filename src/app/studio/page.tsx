@@ -18,7 +18,9 @@ export default function StudioPage() {
   const store = useAppStore();
   const surah = store.surah;
   const selectedVerseNumbers = store.selectedVerseNumbers;
-  const [settingsOpen, setSettingsOpen] = useState(true);
+  // Settings stay tucked away by default; users tap the header toggle to
+  // reveal them. Keeps the preview surface uncluttered on every screen size.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [frameMode, setFrameMode] = useState<FrameMode>("studio");
   const [showSafeZones, setShowSafeZones] = useState(false);
@@ -41,12 +43,6 @@ export default function StudioPage() {
   useEffect(() => {
     if (!framesAllowed && frameMode !== "studio") setFrameMode("studio");
   }, [framesAllowed, frameMode]);
-
-  // On phones/tablets, start with the settings drawer closed so the preview is
-  // visible first (it opens as an overlay, not beside the preview).
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 1023px)").matches) setSettingsOpen(false);
-  }, []);
 
   useEffect(() => {
     if (!surah) return;

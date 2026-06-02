@@ -437,6 +437,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     window.removeEventListener("pointerup", onDragEnd);
   }, [onDragMove]);
 
+  // Tracks the pointer-down on a verse body so we can distinguish a tap (no
+  // movement) from a drag (movement). On tap-up over the ACTIVE verse, the
+  // pointer position becomes an intra-verse split — no playhead positioning,
+  // no Split button needed.
+  const tapDownRef = useRef<{ x: number; t: number; idx: number } | null>(null);
+
   const startDrag = (index: number, kind: DragKind, splitIdx?: number) => (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -449,32 +455,56 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       grabOffset: kind === "body" ? t - seg.start : 0,
     };
     if (kind === "body") {
-      store.setCurrentVerseIndex(index);
-      seek(seg.start);
+      tapDownRef.current = { x: e.clientX, t: performance.now(), idx: index };
+      // Only seek when activating a different verse. Re-tapping the active one
+      // should not yank the playhead away from where the user is editing.
+      if (store.currentVerseIndex !== index) {
+        store.setCurrentVerseIndex(index);
+        seek(seg.start);
+      }
     }
     window.addEventListener("pointermove", onDragMove);
     window.addEventListener("pointerup", onDragEnd);
   };
 
-  // Drop an intra-verse split at the playhead inside the active verse. The verse's
-  // text gets divided proportionally at each split — so a long ayah can change
-  // on-screen text mid-recitation without breaking the ayah itself.
-  const addSplit = () => {
+  // Tap-up on the active verse → split at the tapped position. Cancels if the
+  // pointer moved (that's a drag) or the tap wasn't on the already-active card
+  // (first tap activates, second tap splits).
+  const onBodyPointerUp = (index: number) => (e: React.PointerEvent) => {
+    const down = tapDownRef.current;
+    tapDownRef.current = null;
+    if (!down) return;
+    if (down.idx !== index) return;
+    if (Math.abs(e.clientX - down.x) > 5) return; // movement → was a drag
+    if (performance.now() - down.t > 400) return; // long press, ignore
+    if (index !== activeIdx) return; // first tap activates, second splits
+    const t = pxToTime(e.clientX);
+    addSplitAt(t);
+    seek(t); // park playhead at the split so the preview can confirm
+  };
+
+  // Core: insert a split at an arbitrary time inside the active verse. The
+  // playhead-button version (Split at playhead, Shift+S) and the tap-to-split
+  // both funnel through here. The verse's text divides proportionally so a
+  // long ayah can change on-screen text mid-recitation without breaking the
+  // ayah itself.
+  const addSplitAt = (time: number) => {
     const cur = useAppStore.getState().audioSource;
     if (cur.mode !== "imported") return;
     const i = useAppStore.getState().currentVerseIndex;
     const seg = cur.timings[i];
     if (!seg) return;
-    const t = headTimeRef.current;
-    if (t <= seg.start + MIN_DUR || t >= seg.end - MIN_DUR) return;
+    if (time <= seg.start + MIN_DUR || time >= seg.end - MIN_DUR) return;
     const splits = (seg.splits ?? []).slice();
-    for (const sp of splits) if (Math.abs(sp - t) < MIN_DUR) return;
-    splits.push(t);
+    for (const sp of splits) if (Math.abs(sp - time) < MIN_DUR) return;
+    splits.push(time);
     splits.sort((a, b) => a - b);
     const next = cur.timings.map((x) => ({ ...x }));
     next[i] = { ...next[i], splits };
     useAppStore.getState().setVerseTimings(next);
   };
+
+  const addSplit = () => addSplitAt(headTimeRef.current);
 
   const removeSplit = (verseIdx: number, splitIdx: number) => {
     const cur = useAppStore.getState().audioSource;
@@ -889,9 +919,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                   key={t.verseNumber}
                   className={`group absolute top-1 bottom-1 rounded-lg border transition-colors ${
                     active
-                      ? "z-[15] border-gold bg-[rgba(201,162,75,0.18)] ring-1 ring-gold/70"
-                      : `border-[var(--hairline-soft)] hover:bg-[rgba(201,162,75,0.12)] ${
-                          i % 2 === 0 ? "bg-[rgba(255,255,255,0.04)]" : "bg-transparent"
+                      ? "z-[15] border-gold/70 bg-[rgba(201,162,75,0.06)]"
+                      : `border-[var(--hairline-soft)] hover:bg-[rgba(255,255,255,0.04)] ${
+                          i % 2 === 0 ? "bg-[rgba(255,255,255,0.025)]" : "bg-transparent"
                         }`
                   }`}
                   style={{ left: `${left}%`, width: `${width}%` }}
@@ -915,10 +945,18 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                   >
                     <span className="h-3/4 w-[3px] rounded bg-gold/70 group-hover:bg-gold" />
                   </div>
-                  {/* body — drag to move / click to select */}
+                  {/* body — drag to move · tap on the active verse to add a
+                      split at the tap position · tap a non-active verse to
+                      select it (cursor reflects which one). */}
                   <div
                     onPointerDown={startDrag(i, "body")}
-                    className="h-full w-full cursor-grab active:cursor-grabbing"
+                    onPointerUp={onBodyPointerUp(i)}
+                    className={`h-full w-full ${
+                      active
+                        ? "cursor-cell active:cursor-grabbing"
+                        : "cursor-grab active:cursor-grabbing"
+                    }`}
+                    title={active ? "Tap to add a split here · drag to move the verse" : "Tap to select this verse"}
                   />
                   {/* right handle — inside the card edge (trim the tail from here) */}
                   <div

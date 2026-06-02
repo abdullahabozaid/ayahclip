@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { TimelineEditor } from "./TimelineEditor";
+import { StudioPreview } from "./StudioPreview";
+import { verseTextAt } from "@/lib/audio-import";
+import { importedPlayer } from "@/lib/imported-player";
 
 interface FullscreenTimelineProps {
   onClose: () => void;
@@ -24,6 +27,43 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Drive the preview while editing splits — when the audio is paused, the
+  // imported-player's frame loop doesn't run so the on-screen segment never
+  // changes. Subscribe to time updates here and push the segment matching the
+  // current playhead so the caption preview tracks the user's edits in real
+  // time, without needing them to press play.
+  useEffect(() => {
+    const unsub = importedPlayer.subscribe((time, playing) => {
+      if (playing) return; // active playback already drives segments
+      const st = useAppStore.getState();
+      if (st.audioSource.mode !== "imported") return;
+      const timings = st.audioSource.timings;
+      const idx = timings.findIndex((s) => time >= s.start && time < s.end);
+      if (idx < 0) {
+        if (st.playbackSegmentArabic !== null) st.setPlaybackSegment(null, null);
+        return;
+      }
+      if (idx !== st.currentVerseIndex) st.setCurrentVerseIndex(idx);
+      const seg = timings[idx];
+      const verse = st.verses.find((vv) => vv.verse_number === seg.verseNumber);
+      if (!verse) return;
+      if (seg.splits && seg.splits.length > 0) {
+        const ar = verseTextAt(seg, verse.text_uthmani, time);
+        const tr =
+          verse.translation != null ? verseTextAt(seg, verse.translation, time) : null;
+        if (st.playbackSegmentArabic !== ar) st.setPlaybackSegment(ar, tr);
+      } else {
+        if (st.playbackSegmentArabic !== null) st.setPlaybackSegment(null, null);
+      }
+    });
+    return () => {
+      unsub();
+      // Clear any lingering segment when the user exits the fullscreen editor
+      // so the studio preview falls back to the full verse on close.
+      useAppStore.getState().setPlaybackSegment(null, null);
+    };
+  }, []);
 
   const verseRange =
     selectedVerseNumbers.length === 1
@@ -67,14 +107,22 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
         </button>
       </header>
 
-      {/* The whole editor, with grown track height. Scroll if its contents
-          exceed the viewport (rare, but keeps the controls reachable on
-          short windows). */}
+      {/* Preview on top (mobile) / left (lg+); timeline below (mobile) /
+          right (lg+). The preview tracks the playhead live so users can
+          confirm caption splits without playing. */}
       <div
-        className="flex-1 overflow-y-auto px-5 py-5"
-        style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <TimelineEditor fullscreen />
+        <section className="bg-mihrab-still relative flex shrink-0 items-center justify-center overflow-hidden border-b border-[var(--hairline-soft)] p-3 lg:max-w-[420px] lg:basis-[40%] lg:border-b-0 lg:border-r lg:p-5">
+          <div className="flex h-full max-h-[42dvh] w-full items-center justify-center lg:max-h-none">
+            <StudioPreview />
+          </div>
+        </section>
+
+        <section className="flex-1 overflow-y-auto px-5 py-5">
+          <TimelineEditor fullscreen />
+        </section>
       </div>
     </div>
   );
