@@ -69,6 +69,8 @@ export function TimelineEditor() {
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [looping, setLooping] = useState(false);
   const [viewport, setViewport] = useState({ left: 0, width: 100 });
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const scrubWasPlaying = useRef(false);
 
   durationRef.current = duration;
@@ -620,13 +622,14 @@ export function TimelineEditor() {
   const busy = redetecting || deepMsg != null;
 
   return (
-    <div className="space-y-3">
-      {/* Transport */}
+    <div className="space-y-4">
+      {/* Primary transport — the controls used 80% of the time stay in front.
+          Tools (Redetect / Deep align / Trim) live in a collapsible cluster. */}
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={togglePlay}
           disabled={loading || duration === 0}
-          className="btn-gold flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-40"
+          className="btn-gold flex h-10 w-10 items-center justify-center rounded-full disabled:opacity-40"
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? (
@@ -643,75 +646,105 @@ export function TimelineEditor() {
         <button
           onClick={toggleLoop}
           disabled={loading || duration === 0}
-          className={`flex h-8 items-center rounded-full px-3 text-[11px] transition-colors disabled:opacity-40 ${
+          className={`flex h-9 items-center rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 ${
             looping ? "bg-[var(--gold)] text-[var(--ink-deep)]" : "btn-ghost"
           }`}
           title="Loop the selected verse to fine-tune its start/end by ear"
         >
           🔁 Loop verse
         </button>
-        <span className="tabular-nums text-xs text-[var(--muted)]">
+        <span className="tabular-nums text-[13px] text-[var(--muted)]">
           {fmt(headTime)} <span className="text-[var(--muted-deep)]">/ {fmt(duration)}</span>
         </span>
 
-        <button
-          onClick={redetect}
-          disabled={busy || loading}
-          className="btn-gold rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
-          title="Rebuild every verse boundary from the recitation's pauses"
-        >
-          {redetecting ? "Redetecting…" : "↻ Redetect"}
-        </button>
-        <button
-          onClick={deepAlign}
-          disabled={busy || loading}
-          className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
-          title="Re-run speech recognition to align each verse's words to the audio (best for run-on recitation)"
-        >
-          {deepMsg ? deepMsg : "✨ Deep align"}
-        </button>
-
-        <span className="h-4 w-px bg-[var(--hairline)]" />
-        <button
-          onClick={() => trimTo("start")}
-          disabled={loading || duration === 0}
-          className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
-          title="Delete everything before the playhead"
-        >
-          ⇤ Trim start
-        </button>
-        <button
-          onClick={() => trimTo("end")}
-          disabled={loading || duration === 0}
-          className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
-          title="Delete everything after the playhead"
-        >
-          Trim end ⇥
-        </button>
-
-        {/* Zoom */}
-        <div className="ml-auto flex items-center gap-1">
+        {/* Right cluster: Tools toggle + zoom */}
+        <div className="ml-auto flex items-center gap-2.5">
           <button
-            onClick={() => setZoom((z) => Math.max(1, +(z / 1.5).toFixed(2)))}
-            disabled={zoom <= 1}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
-            aria-label="Zoom out"
+            onClick={() => setToolsOpen((v) => !v)}
+            disabled={loading || duration === 0}
+            className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 ${
+              toolsOpen ? "border border-gold/40 bg-[var(--gold)]/[0.08] text-parchment" : "btn-ghost"
+            }`}
+            aria-expanded={toolsOpen}
+            title="Open detect / trim tools"
           >
-            −
+            Tools
+            <svg
+              viewBox="0 0 24 24"
+              className={`h-3 w-3 transition-transform ${toolsOpen ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.25"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+            </svg>
           </button>
-          <span className="w-9 text-center text-[11px] tabular-nums text-[var(--muted-deep)]">
-            {zoom.toFixed(1)}×
-          </span>
-          <button
-            onClick={() => setZoom((z) => Math.min(24, +(z * 1.5).toFixed(2)))}
-            disabled={zoom >= 24}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
-            aria-label="Zoom in"
-          >
-            +
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setZoom((z) => Math.max(1, +(z / 1.5).toFixed(2)))}
+              disabled={zoom <= 1}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <span className="w-9 text-center text-[11px] tabular-nums text-[var(--muted-deep)]">
+              {zoom.toFixed(1)}×
+            </span>
+            <button
+              onClick={() => setZoom((z) => Math.min(24, +(z * 1.5).toFixed(2)))}
+              disabled={zoom >= 24}
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Tools cluster — only when you need it. Quieter chrome than the
+          primary row; the actions inside are intentionally less frequent. */}
+      {toolsOpen && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/60 px-4 py-2.5">
+          <button
+            onClick={redetect}
+            disabled={busy || loading}
+            className="btn-gold rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            title="Rebuild every verse boundary from the recitation's pauses"
+          >
+            {redetecting ? "Redetecting…" : "↻ Redetect"}
+          </button>
+          <button
+            onClick={deepAlign}
+            disabled={busy || loading}
+            className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            title="Re-run speech recognition to align each verse's words to the audio (best for run-on recitation)"
+          >
+            {deepMsg ? deepMsg : "✨ Deep align"}
+          </button>
+          <span className="mx-1 h-4 w-px bg-[var(--hairline)]" />
+          <button
+            onClick={() => trimTo("start")}
+            disabled={loading || duration === 0}
+            className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            title="Delete everything before the playhead"
+          >
+            ⇤ Trim start
+          </button>
+          <button
+            onClick={() => trimTo("end")}
+            disabled={loading || duration === 0}
+            className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            title="Delete everything after the playhead"
+          >
+            Trim end ⇥
+          </button>
+          <span className="ml-auto hidden text-[10px] text-[var(--muted-deep)] sm:inline">
+            Rebuild or refine the detection · crop the edges
+          </span>
+        </div>
+      )}
 
       {deepErr && (
         <div
@@ -729,46 +762,62 @@ export function TimelineEditor() {
         </div>
       )}
 
-      {/* Selected-verse precise controls */}
-      {timings[activeIdx] && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-3 py-2 text-[11px]">
-          <span className="font-medium text-gold-soft">Verse {timings[activeIdx].verseNumber}</span>
-          <span className="text-[var(--muted-deep)]">start</span>
-          <span className="tabular-nums text-parchment">{fmt(timings[activeIdx].start)}</span>
-          <button
-            onClick={() => setBoundaryToHead("start")}
-            className="btn-ghost rounded-full px-2 py-0.5 text-[10px]"
-            title="Set this verse's start to the playhead"
-          >
-            ⤓ at playhead
-          </button>
-          <span className="ml-1 text-[var(--muted-deep)]">end</span>
-          <span className="tabular-nums text-parchment">{fmt(timings[activeIdx].end)}</span>
-          <button
-            onClick={() => setBoundaryToHead("end")}
-            className="btn-ghost rounded-full px-2 py-0.5 text-[10px]"
-            title="Set this verse's end to the playhead"
-          >
-            ⤓ at playhead
-          </button>
-          <button
-            onClick={addSplit}
-            className="btn-ghost rounded-full px-2 py-0.5 text-[10px]"
-            title="Split this verse's text at the playhead (for long verses)"
-          >
-            ✂ Split at playhead
-          </button>
-          {timings[activeIdx].splits?.length ? (
-            <span className="text-[10px] text-emerald-soft">
-              {timings[activeIdx].splits!.length} split
-              {timings[activeIdx].splits!.length === 1 ? "" : "s"}
+      {/* Selected-verse inspector — one quiet strip with breathing room.
+          Each time is its own button: click to snap that boundary to the
+          playhead. No repeated "at playhead" labels. */}
+      {timings[activeIdx] && (() => {
+        const v = timings[activeIdx];
+        const len = Math.max(0, v.end - v.start);
+        const splitCount = v.splits?.length ?? 0;
+        const segCount = splitCount + 1;
+        return (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-4 py-2.5">
+            <span
+              className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-md bg-[var(--gold)]/15 px-2 text-[12px] font-medium tabular-nums text-gold-soft ring-1 ring-inset ring-[var(--hairline)]"
+              title={`Verse ${v.verseNumber} of this clip`}
+            >
+              {v.verseNumber}
             </span>
-          ) : null}
-          <span className="ml-auto text-[var(--muted-deep)]">
-            click a verse to select · play, pause at the spot, then “at playhead”
-          </span>
-        </div>
-      )}
+
+            <div className="flex items-center gap-2 text-[12px] tabular-nums">
+              <button
+                onClick={() => setBoundaryToHead("start")}
+                className="rounded text-parchment underline-offset-4 transition-colors hover:text-gold hover:underline"
+                title="Click to set this verse's start at the playhead"
+              >
+                {fmt(v.start)}
+              </button>
+              <span className="text-[var(--muted-deep)]">→</span>
+              <button
+                onClick={() => setBoundaryToHead("end")}
+                className="rounded text-parchment underline-offset-4 transition-colors hover:text-gold hover:underline"
+                title="Click to set this verse's end at the playhead"
+              >
+                {fmt(v.end)}
+              </button>
+              <span className="text-[var(--muted-deep)]">({fmt(len)})</span>
+            </div>
+
+            <button
+              onClick={addSplit}
+              className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px]"
+              title="Split this verse's text at the playhead (for long verses)"
+            >
+              ✂ Split
+            </button>
+
+            {splitCount > 0 && (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-soft/10 px-2.5 py-1 text-[10px] text-emerald-soft ring-1 ring-inset ring-emerald-soft/20"
+                title={`${segCount} on-screen text segments separated by ${splitCount} split${splitCount === 1 ? "" : "s"}`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-soft" />
+                {segCount} segments
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       {loading && <p className="text-[11px] text-[var(--muted-deep)]">Loading waveform…</p>}
 
@@ -999,11 +1048,56 @@ export function TimelineEditor() {
         </div>
       </div>
 
-      <p className="text-[11px] text-[var(--muted-deep)]">
-        Drag a verse’s edges (snap to pauses) · drag into a neighbour to push it · drag the middle
-        to move it · drag the waveform to scrub · Space play · ←/→ seek · S splits at the playhead ·
-        Shift+S adds an intra-verse split (for long verses) · gaps are skipped on play and export
-      </p>
+      {/* Discoverable shortcuts — replaces the dense help paragraph that used
+          to live here. Tucked at the right so the timeline itself can breathe. */}
+      <div className="relative flex items-center justify-end">
+        <button
+          onClick={() => setShortcutsOpen((v) => !v)}
+          className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] text-[var(--muted-deep)] transition-colors hover:bg-[var(--ink-deep)] hover:text-parchment"
+          aria-expanded={shortcutsOpen}
+          title="Show keyboard shortcuts and tips"
+        >
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <rect x="3" y="6" width="18" height="12" rx="2" />
+            <path strokeLinecap="round" d="M7 10h.01M11 10h.01M15 10h.01M7 14h10" />
+          </svg>
+          Shortcuts
+        </button>
+        {shortcutsOpen && (
+          <div
+            role="dialog"
+            className="absolute bottom-full right-0 z-40 mb-2 w-[320px] rounded-xl border border-[var(--hairline)] bg-[var(--surface)] p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]"
+          >
+            <div className="mb-2.5 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-gold-soft/80">
+                Timeline shortcuts
+              </span>
+              <button
+                onClick={() => setShortcutsOpen(false)}
+                aria-label="Close"
+                className="text-[var(--muted-deep)] hover:text-parchment"
+              >
+                ✕
+              </button>
+            </div>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
+              <dt className="font-mono text-gold-soft">Space</dt>
+              <dd className="text-[var(--muted)]">Play / pause</dd>
+              <dt className="font-mono text-gold-soft">← / →</dt>
+              <dd className="text-[var(--muted)]">Seek 0.25s · hold Shift for 1s</dd>
+              <dt className="font-mono text-gold-soft">S</dt>
+              <dd className="text-[var(--muted)]">Snap nearest verse boundary to playhead</dd>
+              <dt className="font-mono text-gold-soft">Shift+S</dt>
+              <dd className="text-[var(--muted)]">Split the current verse’s text at playhead</dd>
+            </dl>
+            <div className="mt-3 border-t border-[var(--hairline-soft)] pt-3 text-[11px] leading-relaxed text-[var(--muted)]">
+              Drag a verse’s edges to retime · drag into a neighbour to push it
+              · drag the middle to move · drag the waveform to scrub. Trimmed
+              regions and gaps are skipped on play and export.
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
