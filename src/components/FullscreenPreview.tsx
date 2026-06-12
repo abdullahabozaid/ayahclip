@@ -3,57 +3,49 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { getTranslationLanguage } from "@/lib/translations";
+import { ensureFontsReady, splitWords } from "@/lib/canvas-utils";
 import {
-  drawBackground,
-  drawBgImage,
-  drawVideoFrame,
-  drawVerseText,
-  drawLetterboxBars,
-  getLetterboxContentArea,
-  rgbaFromHex,
-  safeInsetFor,
-  ensureFontsReady,
-} from "@/lib/canvas-utils";
-import { FrameMode } from "./PlatformChrome";
-import { DevicePreview } from "./DevicePreview";
+  FORMAT_SIZES,
+  drawScene,
+  sliceQcfForDisplay,
+  type SceneContent,
+} from "@/lib/render-core";
+import { DeviceFrame } from "./DeviceFrame";
+import { DEVICES, DEFAULT_DEVICE, DeviceSpec } from "@/lib/devices";
 import { importedPlayer } from "@/lib/imported-player";
 
-const FORMAT_SIZES: Record<string, { w: number; h: number }> = {
-  "16:9": { w: 1920, h: 1080 },
-  "9:16": { w: 1080, h: 1920 },
-  "1:1": { w: 1080, h: 1080 },
-  "4:5": { w: 1080, h: 1350 },
-};
+type ChromeMode = "none" | "tiktok" | "reels";
 
 interface FullscreenPreviewProps {
   onClose: () => void;
-  frameMode?: FrameMode;
-  showSafeZones?: boolean;
 }
 
-export function FullscreenPreview({
-  onClose,
-  frameMode = "studio",
-  showSafeZones = false,
-}: FullscreenPreviewProps) {
+export function FullscreenPreview({ onClose }: FullscreenPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoAnimRef = useRef<number>(0);
   const store = useAppStore();
 
   const [vh, setVh] = useState(800);
+  const [vw, setVw] = useState(600);
   useEffect(() => {
-    const update = () => setVh(window.innerHeight);
+    const update = () => {
+      setVh(window.innerHeight);
+      setVw(window.innerWidth);
+    };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
+  const [device, setDevice] = useState<DeviceSpec>(DEFAULT_DEVICE);
+  const [chromeMode, setChromeMode] = useState<ChromeMode>("none");
+  const [showSafeZones, setShowSafeZones] = useState(false);
+
   const isImported = store.audioSource.mode === "imported";
   const [playing, setPlaying] = useState(importedPlayer.isPlaying());
   useEffect(() => importedPlayer.subscribe((_t, isP) => setPlaying(isP)), []);
 
-  // Verse entrance animation timing (mirrors the studio preview).
   const verseShownAtRef = useRef(0);
   const [introTick, setIntroTick] = useState(0);
   useEffect(() => {
@@ -68,21 +60,33 @@ export function FullscreenPreview({
     };
     raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
-  }, [store.currentVerseIndex, store.verseIntro, store.verseIntroMs]);
+  }, [store.currentVerseIndex, store.activePartIndex, store.playbackSegmentArabic, store.verseIntro, store.verseIntroMs]);
 
   const selectedVerses = store.verses.filter((v) =>
-    store.selectedVerseNumbers.includes(v.verse_number)
+    store.selectedVerseNumbers.includes(v.verse_number),
   );
   const currentVerse =
     selectedVerses[store.currentVerseIndex] ?? selectedVerses[0];
   const size = FORMAT_SIZES[store.videoFormat];
-  const scale = size.w / 480;
+
+  const isSE = device.cutout === "home-button";
+  const screenRatio = device.screenH / device.screenW;
+  const bezelOverhead = isSE ? 0.30 : 0.044;
+  const totalHeightPerWidth = screenRatio + bezelOverhead;
+  const maxDeviceH = vh * 0.94;
+  const maxDeviceW = vw * 0.75;
+  const deviceWidth = Math.min(maxDeviceW, Math.round(maxDeviceH / totalHeightPerWidth));
+
+  const videoAspect = size.w / size.h;
+  const screenAspect = device.screenW / device.screenH;
+  const fitByWidth = videoAspect >= screenAspect;
 
   const goToVerse = (i: number) => {
     const idx = Math.max(0, Math.min(selectedVerses.length - 1, i));
     store.setCurrentVerseIndex(idx);
     const src = store.audioSource;
-    if (src.mode === "imported" && src.timings[idx]) importedPlayer.seek(src.url, src.timings[idx].start);
+    if (src.mode === "imported" && src.timings[idx])
+      importedPlayer.seek(src.url, src.timings[idx].start);
   };
 
   useEffect(() => {
@@ -96,7 +100,8 @@ export function FullscreenPreview({
       return;
     }
 
-    const synced = store.backgroundVideoSync && store.audioSource.mode === "imported";
+    const synced =
+      store.backgroundVideoSync && store.audioSource.mode === "imported";
     const video = document.createElement("video");
     video.src = store.background.value;
     video.muted = true;
@@ -112,7 +117,7 @@ export function FullscreenPreview({
 
     let unsub: (() => void) | undefined;
     if (synced) {
-      unsub = importedPlayer.subscribe((time, playing) => {
+      unsub = importedPlayer.subscribe((time, isP) => {
         if (video.readyState < 2) return;
         if (Math.abs(video.currentTime - time) > 0.2) {
           try {
@@ -121,8 +126,8 @@ export function FullscreenPreview({
             /* not seekable yet */
           }
         }
-        if (playing && video.paused) video.play().catch(() => {});
-        if (!playing && !video.paused) video.pause();
+        if (isP && video.paused) video.play().catch(() => {});
+        if (!isP && !video.paused) video.pause();
       });
     }
 
@@ -132,7 +137,13 @@ export function FullscreenPreview({
       video.src = "";
       cancelAnimationFrame(videoAnimRef.current);
     };
-  }, [store.background.type, store.background.value, store.backgroundVideoSync, store.audioSource.mode, store.videoLoopMode]);
+  }, [
+    store.background.type,
+    store.background.value,
+    store.backgroundVideoSync,
+    store.audioSource.mode,
+    store.videoLoopMode,
+  ]);
 
   const renderFrame = useCallback(
     (bgImage?: HTMLImageElement, bgVideo?: HTMLVideoElement) => {
@@ -144,135 +155,94 @@ export function FullscreenPreview({
       canvas.width = size.w;
       canvas.height = size.h;
 
-      const displayArabic =
-        store.playbackSegmentArabic ?? currentVerse.text_uthmani;
-      const displayTranslation =
-        store.playbackSegmentTranslation ?? currentVerse.translation;
-      const transDir = getTranslationLanguage(store.translationLanguage).direction as "ltr" | "rtl";
+      let displayArabic: string;
+      let displayTranslation: string | undefined;
+      let isLastPart = true;
 
-      // Emphasis only on the static full-verse view (not mid-playback segments).
+      if (store.playbackSegmentArabic != null) {
+        displayArabic = store.playbackSegmentArabic;
+        displayTranslation =
+          store.playbackSegmentTranslation ?? currentVerse.translation;
+        isLastPart = store.playbackSegmentIsLast;
+      } else {
+        const boundaries =
+          store.verseParts[currentVerse.verse_number] ?? [];
+        if (boundaries.length > 0) {
+          const words = splitWords(currentVerse.text_uthmani);
+          const sorted = [...boundaries].sort((a, b) => a - b);
+          const cuts = [
+            0,
+            ...sorted.map((b) => Math.min(b, words.length)),
+            words.length,
+          ];
+          const pi = Math.min(store.activePartIndex, cuts.length - 2);
+          const lo = cuts[pi];
+          const hi = cuts[pi + 1];
+          displayArabic = words.slice(lo, hi).join(" ");
+          if (currentVerse.translation) {
+            const tWords = currentVerse.translation
+              .split(/\s+/)
+              .filter(Boolean);
+            const tLo = Math.floor((lo / words.length) * tWords.length);
+            const tHi = Math.floor((hi / words.length) * tWords.length);
+            displayTranslation = tWords.slice(tLo, tHi).join(" ");
+          } else {
+            displayTranslation = currentVerse.translation;
+          }
+          isLastPart = pi === cuts.length - 2;
+        } else {
+          displayArabic = currentVerse.text_uthmani;
+          displayTranslation = currentVerse.translation;
+        }
+      }
+
       const segPlaying = store.playbackSegmentArabic != null;
-      const verseEmphasis = segPlaying ? undefined : store.emphasis[currentVerse.verse_key];
-      // Live word highlight during imported playback overrides manual emphasis.
+      const verseEmphasis = segPlaying
+        ? undefined
+        : store.emphasis[currentVerse.verse_key];
       const wordHi =
-        store.audioSource.mode === "imported" && store.wordHighlight && store.activeWordIndex != null
+        store.audioSource.mode === "imported" &&
+        store.wordHighlight &&
+        store.activeWordIndex != null
           ? store.activeWordIndex
           : null;
-      const arabicEmphasisArr = wordHi != null ? [wordHi] : verseEmphasis?.arabic;
-      const effEmphasisStyle = wordHi != null ? "color" : store.emphasisStyle;
-      const effEmphasisColor = wordHi != null ? store.emphasisColor || "#c9a24b" : store.emphasisColor;
       const introProgress =
         store.verseIntro === "none"
           ? 1
-          : Math.min(1, (performance.now() - verseShownAtRef.current) / store.verseIntroMs);
+          : Math.min(
+              1,
+              (performance.now() - verseShownAtRef.current) /
+                store.verseIntroMs,
+            );
 
-      const useLetterbox =
-        store.letterbox.enabled && store.videoFormat === "9:16";
+      const content: SceneContent = {
+        arabicText: displayArabic,
+        verseNumber: currentVerse.verse_number,
+        translation: displayTranslation ?? undefined,
+        isLastPart,
+        qcfWords: sliceQcfForDisplay(currentVerse, displayArabic, isLastPart),
+        arabicEmphasis: wordHi != null ? [wordHi] : verseEmphasis?.arabic,
+        translationEmphasis: verseEmphasis?.translation,
+        emphasisStyleOverride: wordHi != null ? "color" : undefined,
+        emphasisColorOverride:
+          wordHi != null ? store.emphasisColor || "#c9a24b" : undefined,
+        introProgress,
+      };
 
-      if (useLetterbox) {
-        drawLetterboxBars(ctx, size.w, size.h, store.letterbox);
-
-        const content = getLetterboxContentArea(size.w, size.h);
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(content.x, content.y, content.w, content.h);
-        ctx.clip();
-        ctx.translate(0, content.y);
-
-        if (bgVideo) {
-          drawVideoFrame(ctx, bgVideo, content.w, content.h, store.backgroundFit, store.fitBackdrop);
-        } else if (bgImage) {
-          drawBgImage(ctx, bgImage, content.w, content.h, store.backgroundFit, store.fitBackdrop);
-        } else {
-          drawBackground(ctx, content.w, content.h, store.background);
-        }
-
-        ctx.fillStyle = rgbaFromHex(store.overlayColor, store.overlayOpacity / 100);
-        ctx.fillRect(0, 0, content.w, content.h);
-
-        drawVerseText(
-          ctx,
-          content.w,
-          content.h,
-          displayArabic,
-          currentVerse.verse_number,
-          displayTranslation,
-          {
-            arabicFont: store.arabicFont,
-            arabicFontSize: store.arabicFontSize,
-            translationEnabled: store.translationEnabled,
-            translationFontSize: store.translationFontSize,
-            translationFont: store.translationFont,
-            translationDirection: transDir,
-            textColor: store.textColor,
-            textShadow: store.textShadow,
-            lineHeight: store.lineHeight,
-            verticalPosition: store.textPosition,
-            safeInset: safeInsetFor(store.safeAreaTarget, store.safePadding / 100),
-            arabicFontWeight: store.arabicFontWeight,
-            arabicVerseNumber: store.arabicVerseNumber,
-            translationFontWeight: store.translationFontWeight,
-            arabicEmphasis: arabicEmphasisArr,
-            translationEmphasis: verseEmphasis?.translation,
-            emphasisStyle: effEmphasisStyle,
-            emphasisColor: effEmphasisColor,
-            introStyle: store.verseIntro,
-            introProgress,
-          },
-          scale
-        );
-
-        ctx.restore();
-      } else {
-        if (bgVideo) {
-          drawVideoFrame(ctx, bgVideo, size.w, size.h, store.backgroundFit, store.fitBackdrop);
-        } else if (bgImage) {
-          drawBgImage(ctx, bgImage, size.w, size.h, store.backgroundFit, store.fitBackdrop);
-        } else {
-          drawBackground(ctx, size.w, size.h, store.background);
-        }
-
-        ctx.fillStyle = rgbaFromHex(store.overlayColor, store.overlayOpacity / 100);
-        ctx.fillRect(0, 0, size.w, size.h);
-
-        drawVerseText(
-          ctx,
-          size.w,
-          size.h,
-          displayArabic,
-          currentVerse.verse_number,
-          displayTranslation,
-          {
-            arabicFont: store.arabicFont,
-            arabicFontSize: store.arabicFontSize,
-            translationEnabled: store.translationEnabled,
-            translationFontSize: store.translationFontSize,
-            translationFont: store.translationFont,
-            translationDirection: transDir,
-            textColor: store.textColor,
-            textShadow: store.textShadow,
-            lineHeight: store.lineHeight,
-            verticalPosition: store.textPosition,
-            safeInset: safeInsetFor(store.safeAreaTarget, store.safePadding / 100),
-            arabicFontWeight: store.arabicFontWeight,
-            arabicVerseNumber: store.arabicVerseNumber,
-            translationFontWeight: store.translationFontWeight,
-            arabicEmphasis: arabicEmphasisArr,
-            translationEmphasis: verseEmphasis?.translation,
-            emphasisStyle: effEmphasisStyle,
-            emphasisColor: effEmphasisColor,
-            introStyle: store.verseIntro,
-            introProgress,
-          },
-          scale
-        );
-      }
+      drawScene(
+        ctx,
+        {
+          ...store,
+          translationDirection: getTranslationLanguage(store.translationLanguage)
+            .direction as "ltr" | "rtl",
+        },
+        content,
+        { image: bgImage, video: bgVideo }
+      );
     },
-    [currentVerse, store, size, scale, frameMode, introTick]
+    [currentVerse, store, size, introTick, device.id],
   );
 
-  // Repaint once the Arabic web font is ready so Quran diacritics aren't drawn
-  // with a mis-rendering system fallback.
   useEffect(() => {
     let cancelled = false;
     ensureFontsReady(store.arabicFont, store.translationFont).then(() => {
@@ -315,97 +285,173 @@ export function FullscreenPreview({
         store.setCurrentVerseIndex(Math.max(0, store.currentVerseIndex - 1));
       if (e.key === "ArrowRight")
         store.setCurrentVerseIndex(
-          Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1)
+          Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1),
         );
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [onClose, store, selectedVerses.length]);
 
-  const framed = frameMode !== "studio";
-  const framedWidth = Math.min(440, Math.round((vh * 0.74 * 9) / 16));
+  const brands = [
+    { key: "apple" as const, label: "Apple" },
+    { key: "samsung" as const, label: "Samsung" },
+    { key: "google" as const, label: "Google" },
+  ];
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-[var(--ink-deep)] px-2 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/95"
       style={{ height: vh }}
       onClick={onClose}
     >
-      <button
-        onClick={onClose}
-        className="btn-ghost absolute right-4 top-[max(1rem,env(safe-area-inset-top))] z-10 flex items-center gap-2 rounded-full px-4 py-2 text-sm"
-      >
-        Close
-        <kbd className="hidden rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-[var(--muted)] sm:inline">Esc</kbd>
-      </button>
+      {/* Device — fills the viewport, centered */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <DeviceFrame
+          device={device}
+          width={deviceWidth}
+          chromeMode={chromeMode === "none" ? undefined : chromeMode}
+          showSafeZones={showSafeZones}
+          safePadding={store.safePadding / 100}
+        >
+          <div className="flex h-full w-full items-center justify-center">
+            <canvas
+              ref={canvasRef}
+              className="block"
+              style={
+                fitByWidth
+                  ? { width: "100%", aspectRatio: `${size.w} / ${size.h}` }
+                  : { height: "100%", aspectRatio: `${size.w} / ${size.h}` }
+              }
+            />
+          </div>
+        </DeviceFrame>
+      </div>
 
+      {/* Overlay: top-left — chrome & safe toggles */}
       <div
-        className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-5"
+        className="pointer-events-auto absolute left-4 top-0 flex items-center gap-1.5 rounded-b-xl bg-black/60 px-3 py-2 backdrop-blur-md"
+        style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {framed ? (
-          <DevicePreview
-            frameMode={frameMode}
-            width={framedWidth}
-            showSafeZones={showSafeZones}
-            safePadding={store.safePadding / 100}
+        {(["none", "tiktok", "reels"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setChromeMode(m)}
+            className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+              chromeMode === m
+                ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                : "text-white/60 hover:text-white"
+            }`}
           >
-            <canvas ref={canvasRef} className="h-full w-full" />
-          </DevicePreview>
-        ) : (
-          <canvas
-            ref={canvasRef}
-            className="min-h-0 w-auto rounded-2xl border border-[var(--hairline)] shadow-[0_40px_90px_-30px_rgba(0,0,0,0.95)]"
-            style={{ aspectRatio: `${size.w}/${size.h}`, maxHeight: Math.max(160, vh - 150), maxWidth: "100%" }}
-          />
+            {m === "none" ? "Clean" : m === "tiktok" ? "TikTok" : "Reels"}
+          </button>
+        ))}
+        {chromeMode !== "none" && (
+          <button
+            onClick={() => setShowSafeZones((v) => !v)}
+            className={`ml-0.5 flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] transition-colors ${
+              showSafeZones
+                ? "bg-red-500/30 text-red-300 ring-1 ring-red-400/50"
+                : "text-white/50 hover:text-white"
+            }`}
+          >
+            <span className="h-2 w-2 rounded-sm border border-current" />
+            Safe
+          </button>
         )}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => goToVerse(store.currentVerseIndex - 1)}
-            disabled={store.currentVerseIndex === 0}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25"
-            aria-label="Previous verse"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+      </div>
 
-          {isImported && (
-            <button
-              onClick={() => {
-                const src = store.audioSource;
-                if (src.mode === "imported") importedPlayer.toggle(src.url);
-              }}
-              className="btn-gold flex h-12 w-12 items-center justify-center rounded-full"
-              aria-label={playing ? "Pause" : "Play"}
-            >
-              {playing ? (
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                  <rect x="6" y="5" width="4" height="14" rx="1" />
-                  <rect x="14" y="5" width="4" height="14" rx="1" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" className="h-5 w-5 translate-x-0.5" fill="currentColor">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </button>
-          )}
+      {/* Overlay: top-right — close */}
+      <button
+        onClick={onClose}
+        className="pointer-events-auto absolute right-4 flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm text-white/80 backdrop-blur-md transition-colors hover:text-white"
+        style={{ top: "max(0.5rem, env(safe-area-inset-top))" }}
+      >
+        Close
+        <kbd className="hidden rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/40 sm:inline">Esc</kbd>
+      </button>
 
-          <span className="font-display text-sm tabular-nums text-[var(--muted)]">
-            {store.currentVerseIndex + 1} <span className="text-gold/40">/</span> {selectedVerses.length}
-          </span>
+      {/* Overlay: left — verse nav (vertical) */}
+      <div
+        className="pointer-events-auto absolute left-4 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={() => goToVerse(store.currentVerseIndex - 1)}
+          disabled={store.currentVerseIndex === 0}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white/70 backdrop-blur-md transition-colors hover:text-white disabled:opacity-25"
+          aria-label="Previous verse"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18 15l-6-6-6 6" />
+          </svg>
+        </button>
+
+        <span className="rounded-full bg-black/60 px-2 py-1 font-display text-[11px] tabular-nums text-white/60 backdrop-blur-md">
+          {store.currentVerseIndex + 1}/{selectedVerses.length}
+        </span>
+
+        <button
+          onClick={() => goToVerse(store.currentVerseIndex + 1)}
+          disabled={store.currentVerseIndex === selectedVerses.length - 1}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white/70 backdrop-blur-md transition-colors hover:text-white disabled:opacity-25"
+          aria-label="Next verse"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+
+        {isImported && (
           <button
-            onClick={() => goToVerse(store.currentVerseIndex + 1)}
-            disabled={store.currentVerseIndex === selectedVerses.length - 1}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25"
-            aria-label="Next verse"
+            onClick={() => {
+              const src = store.audioSource;
+              if (src.mode === "imported") importedPlayer.toggle(src.url);
+            }}
+            className="mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--gold)] text-[var(--ink-deep)]"
+            aria-label={playing ? "Pause" : "Play"}
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
+            {playing ? (
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                <rect x="6" y="5" width="4" height="14" rx="1" />
+                <rect x="14" y="5" width="4" height="14" rx="1" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-4 w-4 translate-x-0.5" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
           </button>
+        )}
+      </div>
+
+      {/* Overlay: bottom — device picker */}
+      <div
+        className="pointer-events-auto absolute inset-x-0 bottom-0 overflow-x-auto bg-gradient-to-t from-black/80 via-black/60 to-transparent px-4 pb-2 pt-6"
+        style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-center gap-3">
+          {brands.map((brand) => (
+            <div key={brand.key} className="flex items-center gap-1">
+              <span className="mr-1 text-[9px] font-semibold uppercase tracking-widest text-white/25">
+                {brand.label}
+              </span>
+              {DEVICES.filter((d) => d.brand === brand.key).map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => setDevice(d)}
+                  className={`whitespace-nowrap rounded-full px-2 py-1 text-[11px] transition-all ${
+                    device.id === d.id
+                      ? "bg-[var(--gold)] font-medium text-[var(--ink-deep)] shadow-[0_0_12px_rgba(201,162,75,0.3)]"
+                      : "text-white/45 hover:bg-white/10 hover:text-white/80"
+                  }`}
+                >
+                  {d.name.replace(/^iPhone /, "").replace(/^Galaxy /, "").replace(/^Pixel /, "")}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>
