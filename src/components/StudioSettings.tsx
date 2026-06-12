@@ -78,9 +78,7 @@ function WeightControl({
 }
 
 const ARABIC_FONT_OPTIONS = [
-  { value: "amiri-quran", label: "Amiri Quran" },
-  { value: "scheherazade", label: "Scheherazade" },
-  { value: "noto-naskh", label: "Noto Naskh" },
+  { value: "uthmanic-hafs", label: "UthmanicHafs (Madinah Mushaf)" },
 ];
 
 const TRANSLATION_FONT_OPTIONS = [
@@ -253,8 +251,8 @@ export function StudioSettings() {
           </p>
         </div>
 
-        {/* Style — templates & saved looks */}
-        <Section title="Style">
+        {/* Saved layout presets (font size, position, line height — no colors) */}
+        <Section title="Presets">
           <StylePanel />
         </Section>
 
@@ -373,12 +371,6 @@ export function StudioSettings() {
 
         {/* Typography */}
         <Section title="Typography">
-          <Field
-            label="Arabic Font"
-            value={store.arabicFont}
-            onChange={store.setArabicFont}
-            options={ARABIC_FONT_OPTIONS}
-          />
           <Slider
             label="Arabic Size"
             value={store.arabicFontSize}
@@ -427,7 +419,7 @@ export function StudioSettings() {
             />
           )}
           <Slider
-            label="Line Height"
+            label="Arabic Line Height"
             value={store.lineHeight}
             min={0.7}
             max={2}
@@ -449,6 +441,35 @@ export function StudioSettings() {
             checked={store.translationEnabled}
             onChange={() => store.setTranslationEnabled(!store.translationEnabled)}
           />
+          {store.translationEnabled && (
+            <>
+              <Slider
+                label="Translation Line Height"
+                value={store.translationLineHeight}
+                min={0.7}
+                max={2}
+                step={0.05}
+                display={(v) => `${v.toFixed(2)}×`}
+                onChange={store.setTranslationLineHeight}
+              />
+              <Slider
+                label="Arabic–Translation Gap"
+                value={store.arabicTranslationGap}
+                min={0}
+                max={2}
+                step={0.05}
+                display={(v) => `${v.toFixed(2)}×`}
+                onChange={store.setArabicTranslationGap}
+              />
+            </>
+          )}
+          {store.translationEnabled && (
+            <Toggle
+              label="Verse Number (Translation)"
+              checked={store.translationVerseNumber}
+              onChange={() => store.setTranslationVerseNumber(!store.translationVerseNumber)}
+            />
+          )}
 
           {store.translationEnabled && (
             <>
@@ -496,6 +517,49 @@ export function StudioSettings() {
               max={20}
               onChange={(n) => store.setTextShadow({ ...store.textShadow, blur: n })}
             />
+          )}
+
+          {/* Continuous highlight bar behind each Arabic line */}
+          <Toggle
+            label="Highlight behind Arabic"
+            checked={store.highlightEnabled}
+            onChange={() => store.setHighlightEnabled(!store.highlightEnabled)}
+          />
+          {store.highlightEnabled && (
+            <>
+              <ColorRow
+                label="Highlight Color"
+                value={store.highlightColor}
+                onChange={store.setHighlightColor}
+              />
+              <Slider
+                label="Highlight Opacity"
+                value={store.highlightOpacity}
+                min={0.1}
+                max={1}
+                step={0.05}
+                display={(v) => `${Math.round(v * 100)}%`}
+                onChange={store.setHighlightOpacity}
+              />
+              <Slider
+                label="Highlight Roundness"
+                value={store.highlightRadius}
+                min={0}
+                max={1}
+                step={0.05}
+                display={(v) => `${Math.round(v * 100)}%`}
+                onChange={store.setHighlightRadius}
+              />
+              <Slider
+                label="Highlight Padding"
+                value={store.highlightPadding}
+                min={0}
+                max={0.8}
+                step={0.05}
+                display={(v) => `${Math.round(v * 100)}%`}
+                onChange={store.setHighlightPadding}
+              />
+            </>
           )}
         </Section>
 
