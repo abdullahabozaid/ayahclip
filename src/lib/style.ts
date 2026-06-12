@@ -8,7 +8,10 @@ export interface StyleSettings {
   arabicFontSize: number;
   arabicFontWeight: number;
   arabicVerseNumber?: boolean;
+  translationVerseNumber?: boolean;
   lineHeight: number;
+  translationLineHeight?: number;
+  arabicTranslationGap?: number;
   textPosition: number;
   translationEnabled: boolean;
   translationFont: string;
@@ -18,6 +21,12 @@ export interface StyleSettings {
   overlayOpacity: number;
   overlayColor: string;
   textShadow: TextShadow;
+  /** Continuous rounded bar behind each Arabic line. */
+  highlightEnabled?: boolean;
+  highlightColor?: string;
+  highlightOpacity?: number;
+  highlightRadius?: number;
+  highlightPadding?: number;
   background: Background;
   backgroundFit?: MediaFit;
   fitBackdrop?: FitBackdrop;
@@ -32,7 +41,10 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "arabicFontSize",
   "arabicFontWeight",
   "arabicVerseNumber",
+  "translationVerseNumber",
   "lineHeight",
+  "translationLineHeight",
+  "arabicTranslationGap",
   "textPosition",
   "translationEnabled",
   "translationFont",
@@ -42,10 +54,39 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "overlayOpacity",
   "overlayColor",
   "textShadow",
+  "highlightEnabled",
+  "highlightColor",
+  "highlightOpacity",
+  "highlightRadius",
+  "highlightPadding",
   "background",
   "backgroundFit",
   "fitBackdrop",
   "videoLoopMode",
+  "verseIntro",
+  "verseIntroMs",
+  "letterbox",
+];
+
+/** Keys saved in user style presets — layout & typography only, no colors/backgrounds. */
+export const PRESET_KEYS: (keyof StyleSettings)[] = [
+  "arabicFont",
+  "arabicFontSize",
+  "arabicFontWeight",
+  "arabicVerseNumber",
+  "translationVerseNumber",
+  "lineHeight",
+  "translationLineHeight",
+  "arabicTranslationGap",
+  "textPosition",
+  "translationEnabled",
+  "translationFont",
+  "translationFontSize",
+  "translationFontWeight",
+  "textShadow",
+  "highlightEnabled",
+  "highlightRadius",
+  "highlightPadding",
   "verseIntro",
   "verseIntroMs",
   "letterbox",
@@ -58,4 +99,13 @@ export function extractStyle(state: StyleSettings): StyleSettings {
     acc[key] = state[key];
     return acc;
   }, {} as StyleSettings);
+}
+
+/** Pull only layout/typography fields (no colors/backgrounds) for saved presets. */
+export function extractPresetStyle(state: StyleSettings): Partial<StyleSettings> {
+  return PRESET_KEYS.reduce((acc, key) => {
+    // @ts-expect-error indexed assignment across the union is safe for these keys
+    acc[key] = state[key];
+    return acc;
+  }, {} as Partial<StyleSettings>);
 }

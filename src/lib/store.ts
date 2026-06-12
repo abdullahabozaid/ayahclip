@@ -24,6 +24,7 @@ interface AppState {
   arabicFont: string;
   arabicFontWeight: number;
   arabicVerseNumber: boolean;
+  translationVerseNumber: boolean;
   translationEnabled: boolean;
   translationFontSize: number;
   translationFont: string;
@@ -31,6 +32,8 @@ interface AppState {
   translationLanguage: string;
   textColor: string;
   lineHeight: number;
+  translationLineHeight: number;
+  arabicTranslationGap: number;
   textPosition: number;
   overlayOpacity: number;
   overlayColor: string;
@@ -47,14 +50,27 @@ interface AppState {
   projectId: string | null;
   playbackSegmentArabic: string | null;
   playbackSegmentTranslation: string | null;
+  playbackSegmentIsLast: boolean;
   emphasis: Record<string, VerseEmphasis>;
   emphasisStyle: EmphasisStyle;
   emphasisColor: string;
   wordHighlight: boolean;
   activeWordIndex: number | null; // current word during imported playback (transient)
+  // Continuous rounded bar behind each Arabic line.
+  highlightEnabled: boolean;
+  highlightColor: string;
+  highlightOpacity: number;
+  highlightRadius: number;
+  highlightPadding: number;
   verseIntro: VerseIntro;
   verseIntroMs: number;
   audioSource: AudioSource;
+  // Manual word-part boundaries for reciter (library) clips, keyed by verse
+  // number. Each entry is a sorted list of word indices AFTER which a new part
+  // begins (e.g. [9] splits a verse into words 1–9 and the rest). Imported clips
+  // use VerseTiming.splits instead; this is the reciter-mode equivalent.
+  verseParts: Record<number, number[]>;
+  activePartIndex: number;
 
   setSurah: (surah: Surah) => void;
   setVerses: (verses: Verse[]) => void;
@@ -69,6 +85,7 @@ interface AppState {
   setArabicFont: (font: string) => void;
   setArabicFontWeight: (weight: number) => void;
   setArabicVerseNumber: (on: boolean) => void;
+  setTranslationVerseNumber: (on: boolean) => void;
   setTranslationEnabled: (enabled: boolean) => void;
   setTranslationFontSize: (size: number) => void;
   setTranslationFont: (font: string) => void;
@@ -76,6 +93,8 @@ interface AppState {
   setTranslationLanguage: (lang: string) => void;
   setTextColor: (color: string) => void;
   setLineHeight: (lh: number) => void;
+  setTranslationLineHeight: (lh: number) => void;
+  setArabicTranslationGap: (gap: number) => void;
   setTextPosition: (pos: number) => void;
   setOverlayOpacity: (opacity: number) => void;
   setOverlayColor: (color: string) => void;
@@ -90,7 +109,7 @@ interface AppState {
   setLetterbox: (config: LetterboxConfig) => void;
   setCurrentVerseIndex: (index: number) => void;
   setProjectId: (id: string | null) => void;
-  setPlaybackSegment: (arabic: string | null, translation: string | null) => void;
+  setPlaybackSegment: (arabic: string | null, translation: string | null, isLast?: boolean) => void;
   applyStyle: (style: Partial<StyleSettings>) => void;
   restoreProject: (
     surah: Surah,
@@ -98,14 +117,22 @@ interface AppState {
     selectedVerseNumbers: number[],
     settings: Project["settings"],
     projectId: string,
-    importedAudio?: { url: string; name: string; timings: VerseTiming[] }
+    importedAudio?: { url: string; name: string; timings: VerseTiming[] },
+    verseParts?: Record<number, number[]>
   ) => void;
   toggleEmphasisWord: (verseKey: string, which: "arabic" | "translation", index: number) => void;
   clearVerseEmphasis: (verseKey: string) => void;
   setEmphasisStyle: (style: EmphasisStyle) => void;
   setEmphasisColor: (color: string) => void;
   setWordHighlight: (on: boolean) => void;
+  setHighlightEnabled: (v: boolean) => void;
+  setHighlightColor: (v: string) => void;
+  setHighlightOpacity: (v: number) => void;
+  setHighlightRadius: (v: number) => void;
+  setHighlightPadding: (v: number) => void;
   setActiveWordIndex: (index: number | null) => void;
+  setVerseParts: (verseNumber: number, boundaries: number[]) => void;
+  setActivePartIndex: (index: number) => void;
   setVerseIntro: (v: VerseIntro) => void;
   setVerseIntroMs: (ms: number) => void;
   setImportedAudio: (url: string, name: string, timings: VerseTiming[]) => void;
@@ -120,9 +147,10 @@ export const useAppStore = create<AppState>((set) => ({
   reciterId: "alafasy",
   videoFormat: "9:16",
   arabicFontSize: 30,
-  arabicFont: "amiri-quran",
+  arabicFont: "uthmanic-hafs",
   arabicFontWeight: 400,
   arabicVerseNumber: false,
+  translationVerseNumber: true,
   translationEnabled: true,
   translationFontSize: 14,
   translationFont: "sans-serif",
@@ -130,6 +158,8 @@ export const useAppStore = create<AppState>((set) => ({
   translationLanguage: "en",
   textColor: "#ffffff",
   lineHeight: 1,
+  translationLineHeight: 1,
+  arabicTranslationGap: 0.6,
   textPosition: 50,
   overlayOpacity: 50,
   overlayColor: "#000000",
@@ -146,14 +176,22 @@ export const useAppStore = create<AppState>((set) => ({
   projectId: null,
   playbackSegmentArabic: null,
   playbackSegmentTranslation: null,
+  playbackSegmentIsLast: true,
   emphasis: {},
   emphasisStyle: "color",
   emphasisColor: "#c9a24b",
   wordHighlight: false,
   activeWordIndex: null,
+  highlightEnabled: false,
+  highlightColor: "#1f2a44",
+  highlightOpacity: 1,
+  highlightRadius: 1,
+  highlightPadding: 0.25,
   verseIntro: "none",
   verseIntroMs: 450,
   audioSource: { mode: "reciter" },
+  verseParts: {},
+  activePartIndex: 0,
 
   setSurah: (surah) => set({ surah }),
   setVerses: (verses) => set({ verses }),
@@ -188,6 +226,7 @@ export const useAppStore = create<AppState>((set) => ({
   setArabicFont: (font) => set({ arabicFont: font }),
   setArabicFontWeight: (weight) => set({ arabicFontWeight: weight }),
   setArabicVerseNumber: (on) => set({ arabicVerseNumber: on }),
+  setTranslationVerseNumber: (on) => set({ translationVerseNumber: on }),
   setTranslationEnabled: (enabled) => set({ translationEnabled: enabled }),
   setTranslationFontSize: (size) => set({ translationFontSize: size }),
   setTranslationFont: (font) => set({ translationFont: font }),
@@ -195,6 +234,8 @@ export const useAppStore = create<AppState>((set) => ({
   setTranslationLanguage: (lang) => set({ translationLanguage: lang }),
   setTextColor: (color) => set({ textColor: color }),
   setLineHeight: (lh) => set({ lineHeight: lh }),
+  setTranslationLineHeight: (lh) => set({ translationLineHeight: lh }),
+  setArabicTranslationGap: (gap) => set({ arabicTranslationGap: gap }),
   setTextPosition: (pos) => set({ textPosition: pos }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
   setOverlayColor: (color) => set({ overlayColor: color }),
@@ -207,18 +248,22 @@ export const useAppStore = create<AppState>((set) => ({
   setVideoLoopMode: (m) => set({ videoLoopMode: m }),
   setTextShadow: (shadow) => set({ textShadow: shadow }),
   setLetterbox: (config) => set({ letterbox: config }),
-  setCurrentVerseIndex: (index) => set({ currentVerseIndex: index }),
+  setCurrentVerseIndex: (index) => set((state) => ({
+    currentVerseIndex: index,
+    ...(state.currentVerseIndex !== index ? { activePartIndex: 0 } : {}),
+  })),
   setProjectId: (id) => set({ projectId: id }),
-  setPlaybackSegment: (arabic, translation) =>
-    set({ playbackSegmentArabic: arabic, playbackSegmentTranslation: translation }),
+  setPlaybackSegment: (arabic, translation, isLast = true) =>
+    set({ playbackSegmentArabic: arabic, playbackSegmentTranslation: translation, playbackSegmentIsLast: isLast }),
   applyStyle: (style) => set(style),
-  restoreProject: (surah, verses, selectedVerseNumbers, settings, projectId, importedAudio) =>
+  restoreProject: (surah, verses, selectedVerseNumbers, settings, projectId, importedAudio, verseParts) =>
     set({
       surah,
       verses,
       selectedVerseNumbers,
       currentVerseIndex: 0,
       projectId,
+      verseParts: verseParts ?? {},
       audioSource: importedAudio
         ? { mode: "imported", url: importedAudio.url, name: importedAudio.name, timings: importedAudio.timings }
         : { mode: "reciter" },
@@ -242,7 +287,20 @@ export const useAppStore = create<AppState>((set) => ({
   setEmphasisStyle: (style) => set({ emphasisStyle: style }),
   setEmphasisColor: (color) => set({ emphasisColor: color }),
   setWordHighlight: (on) => set({ wordHighlight: on }),
+  setHighlightEnabled: (v) => set({ highlightEnabled: v }),
+  setHighlightColor: (v) => set({ highlightColor: v }),
+  setHighlightOpacity: (v) => set({ highlightOpacity: v }),
+  setHighlightRadius: (v) => set({ highlightRadius: v }),
+  setHighlightPadding: (v) => set({ highlightPadding: v }),
   setActiveWordIndex: (index) => set({ activeWordIndex: index }),
+  setVerseParts: (verseNumber, boundaries) =>
+    set((state) => {
+      const next = { ...state.verseParts };
+      if (boundaries.length === 0) delete next[verseNumber];
+      else next[verseNumber] = [...boundaries].sort((a, b) => a - b);
+      return { verseParts: next, activePartIndex: 0 };
+    }),
+  setActivePartIndex: (index) => set({ activePartIndex: index }),
   setVerseIntro: (v) => set({ verseIntro: v }),
   setVerseIntroMs: (ms) => set({ verseIntroMs: ms }),
   setImportedAudio: (url, name, timings) =>
