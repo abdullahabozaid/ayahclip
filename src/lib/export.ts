@@ -56,6 +56,12 @@ interface ExportOptions {
   emphasis: Record<string, VerseEmphasis>;
   emphasisStyle: "color" | "underline";
   emphasisColor: string;
+  /** Continuous rounded bar behind each Arabic line. */
+  highlightEnabled?: boolean;
+  highlightColor?: string;
+  highlightOpacity?: number;
+  highlightRadius?: number;
+  highlightPadding?: number;
   /** When set, use this single uploaded track (sliced per verse) instead of EveryAyah. */
   importedAudio?: { url: string; timings: VerseTiming[] };
   /** Reciter (library) clips: manual word-part boundaries per verse + the data

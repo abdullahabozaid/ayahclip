@@ -6,7 +6,17 @@ import { reciters } from "@/lib/reciters";
 import { exportVideo } from "@/lib/export";
 import { getTranslationLanguage } from "@/lib/translations";
 
-function downloadFile(file: File) {
+async function saveFile(file: File) {
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/save-export", { method: "POST", body: form });
+    if (res.ok) {
+      const { saved } = await res.json();
+      alert(`Saved to ~/Documents/AyahClip/Exports/${saved}`);
+      return;
+    }
+  } catch {}
   const url = URL.createObjectURL(file);
   const a = document.createElement("a");
   a.href = url;
@@ -48,6 +58,7 @@ export function ExportButton() {
         arabicFont: store.arabicFont,
         arabicFontWeight: store.arabicFontWeight,
         arabicVerseNumber: store.arabicVerseNumber,
+        translationVerseNumber: store.translationVerseNumber,
         translationEnabled: store.translationEnabled,
         translationFontSize: store.translationFontSize,
         translationFont: store.translationFont,
@@ -55,6 +66,8 @@ export function ExportButton() {
         translationDirection: getTranslationLanguage(store.translationLanguage).direction,
         textColor: store.textColor,
         lineHeight: store.lineHeight,
+        translationLineHeight: store.translationLineHeight,
+        arabicTranslationGap: store.arabicTranslationGap,
         textPosition: store.textPosition,
         overlayOpacity: store.overlayOpacity,
         overlayColor: store.overlayColor,
@@ -63,10 +76,19 @@ export function ExportButton() {
         emphasis: store.emphasis,
         emphasisStyle: store.emphasisStyle,
         emphasisColor: store.emphasisColor,
+        highlightEnabled: store.highlightEnabled,
+        highlightColor: store.highlightColor,
+        highlightOpacity: store.highlightOpacity,
+        highlightRadius: store.highlightRadius,
+        highlightPadding: store.highlightPadding,
         importedAudio:
           store.audioSource.mode === "imported"
             ? { url: store.audioSource.url, timings: store.audioSource.timings }
             : undefined,
+        // Reciter clips: manual word-parts + the data to time them to the reciter.
+        verseParts: store.audioSource.mode === "reciter" ? store.verseParts : undefined,
+        recitationId: reciter?.quranComRecitationId,
+        translationResourceId: getTranslationLanguage(store.translationLanguage).resourceId,
         background: store.background,
         backgroundFit: store.backgroundFit,
         fitBackdrop: store.fitBackdrop,
@@ -93,7 +115,7 @@ export function ExportButton() {
       if (isTouch && navigator.canShare?.({ files: [file] })) {
         setPendingFile(file);
       } else {
-        downloadFile(file);
+        saveFile(file);
       }
     } catch (err) {
       console.error("Export failed:", err);
@@ -117,7 +139,7 @@ export function ExportButton() {
       // User dismissed the sheet — leave the button so they can try again.
       if ((err as Error)?.name === "AbortError") return;
       // Sharing genuinely failed — fall back to a download so the clip isn't lost.
-      downloadFile(pendingFile);
+      saveFile(pendingFile);
       setPendingFile(null);
     }
   };
@@ -139,7 +161,7 @@ export function ExportButton() {
         </button>
         <div className="flex items-center justify-between px-1 text-[11px] text-[var(--muted)]">
           <span>Choose “Save Video” in the share sheet.</span>
-          <button onClick={() => { downloadFile(pendingFile); setPendingFile(null); }} className="text-gold-soft hover:underline">
+          <button onClick={() => { saveFile(pendingFile); setPendingFile(null); }} className="text-gold-soft hover:underline">
             Download instead
           </button>
         </div>

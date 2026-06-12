@@ -164,6 +164,11 @@ export function drawScene(
     introStyle: style.verseIntro,
     introProgress: content.introProgress,
     qcfWords: content.qcfWords,
+    highlightEnabled: style.highlightEnabled,
+    highlightColor: style.highlightColor,
+    highlightOpacity: style.highlightOpacity,
+    highlightRadius: style.highlightRadius,
+    highlightPadding: style.highlightPadding,
   };
 
   const paintRegion = (rw: number, rh: number) => {
