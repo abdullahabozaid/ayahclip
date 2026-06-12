@@ -1,4 +1,5 @@
-import { TextShadow, LetterboxConfig } from "@/types";
+import { TextShadow, LetterboxConfig, QcfWord } from "@/types";
+import { qcfFontFamily } from "./qcf-font-loader";
 
 export type SafeAreaTarget = "none" | "tiktok" | "reels";
 
@@ -32,9 +33,7 @@ export function safeInsetFor(
 }
 
 export const ARABIC_FONTS: Record<string, string> = {
-  "amiri-quran": '"Amiri Quran", "Noto Naskh Arabic", serif',
-  scheherazade: '"Scheherazade New", "Noto Naskh Arabic", serif',
-  "noto-naskh": '"Noto Naskh Arabic", serif',
+  "uthmanic-hafs": '"UthmanicHafs", serif',
 };
 
 export const TRANSLATION_FONTS: Record<string, string> = {
@@ -47,8 +46,7 @@ export const TRANSLATION_FONTS: Record<string, string> = {
 };
 
 export function getArabicFontFamily(font: string): string {
-  // Unknown / legacy ids (e.g. the old broken "uthmanic") fall back to Amiri Quran.
-  return ARABIC_FONTS[font] ?? '"Amiri Quran", "Noto Naskh Arabic", serif';
+  return ARABIC_FONTS[font] ?? '"UthmanicHafs", serif';
 }
 
 export function getTranslationFontFamily(font: string): string {
@@ -61,9 +59,7 @@ export function getTranslationFontFamily(font: string): string {
 // mis-places Quranic marks (e.g. a stray small-meem) — unacceptable for Quran
 // text. See ensureFontsReady.
 const ARABIC_PRIMARY: Record<string, string> = {
-  "amiri-quran": '"Amiri Quran"',
-  scheherazade: '"Scheherazade New"',
-  "noto-naskh": '"Noto Naskh Arabic"',
+  "uthmanic-hafs": '"UthmanicHafs"',
 };
 const TRANSLATION_PRIMARY: Record<string, string> = {
   serif: "Georgia",
@@ -85,7 +81,7 @@ export async function ensureFontsReady(
   translationFont: string
 ): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
-  const ar = ARABIC_PRIMARY[arabicFont] ?? '"Amiri Quran"';
+  const ar = ARABIC_PRIMARY[arabicFont] ?? '"UthmanicHafs"';
   const tr = TRANSLATION_PRIMARY[translationFont] ?? "Georgia";
   const sample = "بِسْمِ ٱللَّهِ ﴿١﴾";
   try {
@@ -112,6 +108,15 @@ export function rgbaFromHex(hex: string, alpha: number): string {
 // (e.g. the small high three dots ۛ U+06DB). In Uthmani text these are written as
 // space-separated tokens, but they MUST stay glued to their word — letting one
 // wrap onto a new line corrupts the recitation.
+
+// U+06DF renders as a large circle in UthmanicHafs instead of a tiny combining
+// mark. Strip before display — supplementary recitation mark, not essential.
+const FONT_UNSUPPORTED = /۟/g;
+
+export function sanitizeArabic(text: string): string {
+  return text.replace(FONT_UNSUPPORTED, "");
+}
+
 const MARK_ONLY =
   /^[ؐ-ًؚ-ٰٟۖ-ۭ࣓-ࣿﹰ-ﹿ]+$/u;
 
@@ -333,8 +338,10 @@ export interface DrawVerseOptions {
   translationDirection?: "ltr" | "rtl";
   textColor: string;
   textShadow: TextShadow;
-  /** Line-height multiplier applied to the base 1.8 (Arabic) / 1.6 (translation). Default 1. */
+  /** Line-height multiplier applied to the base 1.8 Arabic. Default 1. */
   lineHeight?: number;
+  /** Line-height multiplier applied to the base 1.6 translation. Falls back to lineHeight. */
+  translationLineHeight?: number;
   /** Vertical placement of the text block: 0 = top, 50 = center, 100 = bottom. Default 50. */
   verticalPosition?: number;
   /** When set, text is laid out within this inset box (fractions of w/h) to dodge platform UI. */
@@ -351,9 +358,23 @@ export interface DrawVerseOptions {
   emphasisColor?: string;
   /** Append the ayah number (in ornate brackets, Mushaf-style) to the Arabic line. */
   arabicVerseNumber?: boolean;
+  /** Prepend the verse number (e.g. "1.") to the translation line. */
+  translationVerseNumber?: boolean;
+  /** Gap between Arabic and translation blocks as a multiplier of arabicFontSize. Default 0.6. */
+  arabicTranslationGap?: number;
   /** Entrance animation for the text as a verse appears, plus its progress (0..1). */
   introStyle?: VerseIntro;
   introProgress?: number;
+  /** QCF v2 word glyphs for pixel-perfect Mushaf rendering. */
+  qcfWords?: QcfWord[];
+  /** Continuous rounded bar behind each Arabic line. */
+  highlightEnabled?: boolean;
+  highlightColor?: string;
+  highlightOpacity?: number;
+  /** 0..1 of the bar's half-height; 1 = full pill. */
+  highlightRadius?: number;
+  /** Extra reach beyond the text, as a multiplier of arabicFontSize. */
+  highlightPadding?: number;
 }
 
 export type VerseIntro = "none" | "fade" | "blur" | "slide" | "scale";
@@ -361,6 +382,128 @@ export type VerseIntro = "none" | "fade" | "blur" | "slide" | "scale";
 const ARABIC_DIGITS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
 function toArabicDigits(n: number): string {
   return String(n).replace(/\d/g, (d) => ARABIC_DIGITS[Number(d)]);
+}
+
+// --------------- QCF v2 word-by-word rendering ---------------
+
+interface QcfUnit {
+  word: QcfWord;
+  wordIndex: number;
+}
+
+function measureQcfWord(
+  ctx: CanvasRenderingContext2D,
+  word: QcfWord,
+  fontSize: number
+): number {
+  ctx.font = `400 ${fontSize}px ${qcfFontFamily(word.page_number)}`;
+  return ctx.measureText(word.code_v2).width;
+}
+
+function wrapQcfWords(
+  ctx: CanvasRenderingContext2D,
+  words: QcfWord[],
+  fontSize: number,
+  maxWidth: number
+): QcfUnit[][] {
+  const lines: QcfUnit[][] = [];
+  let cur: QcfUnit[] = [];
+  let curWidth = 0;
+  let wordIdx = 0;
+
+  for (const word of words) {
+    const w = measureQcfWord(ctx, word, fontSize);
+    const gap = cur.length > 0 ? fontSize * 0.15 : 0;
+    if (cur.length > 0 && curWidth + gap + w > maxWidth) {
+      lines.push(cur);
+      cur = [{ word, wordIndex: wordIdx }];
+      curWidth = w;
+    } else {
+      cur.push({ word, wordIndex: wordIdx });
+      curWidth += gap + w;
+    }
+    if (word.char_type_name === "word") wordIdx++;
+  }
+  if (cur.length > 0) lines.push(cur);
+  return lines;
+}
+
+function measureQcfLines(
+  ctx: CanvasRenderingContext2D,
+  words: QcfWord[],
+  fontSize: number,
+  maxWidth: number
+): number {
+  return wrapQcfWords(ctx, words, fontSize, maxWidth).length;
+}
+
+function qcfLineWidths(
+  ctx: CanvasRenderingContext2D,
+  words: QcfWord[],
+  fontSize: number,
+  maxWidth: number
+): number[] {
+  const gap = fontSize * 0.15;
+  return wrapQcfWords(ctx, words, fontSize, maxWidth).map((line) => {
+    const ws = line.map((u) => measureQcfWord(ctx, u.word, fontSize));
+    return ws.reduce((a, b) => a + b, 0) + gap * (line.length - 1);
+  });
+}
+
+function drawQcfBlock(
+  ctx: CanvasRenderingContext2D,
+  words: QcfWord[],
+  centerX: number,
+  startY: number,
+  maxWidth: number,
+  lineHeight: number,
+  fontSize: number,
+  emphasis?: EmphasisOpts
+) {
+  const lines = wrapQcfWords(ctx, words, fontSize, maxWidth);
+  const gap = fontSize * 0.15;
+  const prevAlign = ctx.textAlign;
+  ctx.textAlign = "left";
+
+  let y = startY;
+  for (const line of lines) {
+    const widths = line.map((u) => measureQcfWord(ctx, u.word, fontSize));
+    const lineW = widths.reduce((a, b) => a + b, 0) + gap * (line.length - 1);
+
+    let x = centerX + lineW / 2;
+    for (let i = 0; i < line.length; i++) {
+      x -= widths[i];
+      const u = line[i];
+      ctx.font = `400 ${fontSize}px ${qcfFontFamily(u.word.page_number)}`;
+
+      const isWord = u.word.char_type_name === "word";
+      const emph = isWord && emphasis?.indices.has(u.wordIndex);
+      if (emph && emphasis!.style === "color") {
+        ctx.fillStyle = emphasis!.color;
+      } else {
+        ctx.fillStyle = emphasis?.baseColor ?? ctx.fillStyle;
+      }
+
+      ctx.fillText(u.word.code_v2, x, y);
+
+      if (emph && emphasis!.style === "underline") {
+        ctx.save();
+        ctx.strokeStyle = emphasis!.color;
+        ctx.lineWidth = Math.max(1, fontSize * 0.05);
+        const uy = y + fontSize * 0.46;
+        ctx.beginPath();
+        ctx.moveTo(x, uy);
+        ctx.lineTo(x + widths[i], uy);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      x -= gap;
+    }
+    y += lineHeight;
+  }
+
+  ctx.textAlign = prevAlign;
 }
 
 export function drawVerseText(
@@ -378,19 +521,24 @@ export function drawVerseText(
   const arabicWeight = options.arabicFontWeight ?? 400;
   const transWeight = options.translationFontWeight ?? 400;
 
-  // Mushaf-style ayah marker appended as the final (RTL-trailing) token.
+  const useQcf = options.qcfWords && options.qcfWords.length > 0;
+  const qcfWords = options.qcfWords ?? [];
+  const qcfRenderWords = useQcf
+    ? (options.arabicVerseNumber
+        ? qcfWords
+        : qcfWords.filter((w) => w.char_type_name !== "end"))
+    : [];
+
+  const cleanArabic = sanitizeArabic(arabicText);
   const arabicDisplay = options.arabicVerseNumber
-    ? `${arabicText} ﴿${toArabicDigits(verseNumber)}﴾`
-    : arabicText;
+    ? `${cleanArabic} ﴿${toArabicDigits(verseNumber)}﴾`
+    : cleanArabic;
 
   ctx.fillStyle = options.textColor;
   ctx.font = `${arabicWeight} ${arabicSize}px ${arabicFamily}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // Layout box. Text stays horizontally centered in the FULL frame; when a safe
-  // inset is given we only narrow the width (and clamp the vertical band) so the
-  // text never reaches into the platform's danger zones.
   const inset = options.safeInset;
   const boxTop = h * (inset?.top ?? 0);
   const boxH = h - boxTop - h * (inset?.bottom ?? 0);
@@ -399,26 +547,30 @@ export function drawVerseText(
     ? w * (1 - 2 * Math.max(inset.left, inset.right))
     : w * 0.85;
 
-  const lh = options.lineHeight ?? 1;
-  const arabicLineH = arabicSize * 1.8 * lh;
-  const transLineH = options.translationFontSize * scale * 1.6 * lh;
+  const arLh = options.lineHeight ?? 1;
+  const trLh = options.translationLineHeight ?? arLh;
+  const arabicLineH = arabicSize * 1.8 * arLh;
+  const transLineH = options.translationFontSize * scale * 1.6 * trLh;
 
-  const arabicLines = measureLines(ctx, arabicDisplay, maxWidth);
-  const arabicBlockHeight = arabicLines.length * arabicLineH;
+  const arabicLineCount = useQcf
+    ? measureQcfLines(ctx, qcfRenderWords, arabicSize, maxWidth)
+    : measureLines(ctx, arabicDisplay, maxWidth).length;
+  const arabicBlockHeight = arabicLineCount * arabicLineH;
 
   let transLines: string[] = [];
   let transSize = 0;
   let transBlockHeight = 0;
+  const showTransNum = options.translationVerseNumber !== false;
   if (options.translationEnabled && translation) {
     transSize = options.translationFontSize * scale;
     const fontFamily = getTranslationFontFamily(options.translationFont);
     ctx.font = `${transWeight} ${transSize}px ${fontFamily}`;
-    const translationText = `${verseNumber}. ${translation}`;
+    const translationText = showTransNum ? `${verseNumber}. ${translation}` : translation;
     transLines = measureLines(ctx, translationText, maxWidth);
     transBlockHeight = transLines.length * transLineH;
   }
 
-  const gap = transLines.length > 0 ? arabicSize * 0.6 : 0;
+  const gap = transLines.length > 0 ? arabicSize * (options.arabicTranslationGap ?? 0.6) : 0;
   const totalHeight = arabicBlockHeight + gap + transBlockHeight;
 
   // Vertical placement within the layout box: 0 = top, 50 = center, 100 = bottom.
@@ -436,12 +588,75 @@ export function drawVerseText(
   const paintText = (tctx: CanvasRenderingContext2D) => {
     tctx.textAlign = "center";
     tctx.textBaseline = "middle";
+
+    // Continuous highlight bar behind each Arabic line. Drawn first (no shadow),
+    // purely behind the glyphs — text layout/shaping is untouched. Reveals
+    // right-to-left (reading direction) while the verse intro plays.
+    if (options.highlightEnabled) {
+      const introPNow = options.introProgress ?? 1;
+      const hasIntroAnim = (options.introStyle ?? "none") !== "none";
+      const reveal = hasIntroAnim ? 1 - Math.pow(1 - Math.min(1, introPNow), 3) : 1;
+      tctx.save();
+      clearShadow(tctx);
+      tctx.font = `${arabicWeight} ${arabicSize}px ${arabicFamily}`;
+      let lineWidths: number[];
+      if (useQcf) {
+        lineWidths = qcfLineWidths(tctx, qcfRenderWords, arabicSize, maxWidth);
+      } else {
+        tctx.direction = "rtl";
+        lineWidths = measureLines(tctx, arabicDisplay, maxWidth).map(
+          (l) => tctx.measureText(l).width
+        );
+        tctx.direction = "ltr";
+      }
+      const pad = arabicSize * (options.highlightPadding ?? 0.25);
+      const boxH = arabicSize * 1.25 + pad;
+      const radius = (boxH / 2) * Math.min(1, Math.max(0, options.highlightRadius ?? 1));
+      tctx.fillStyle = rgbaFromHex(
+        options.highlightColor ?? "#1f2a44",
+        options.highlightOpacity ?? 1
+      );
+      lineWidths.forEach((lw, i) => {
+        const fullW = lw + pad * 2;
+        const revealedW = fullW * reveal;
+        if (revealedW < 1) return;
+        const yC = startY + i * arabicLineH; // textBaseline is middle
+        const x = centerX + fullW / 2 - revealedW; // anchored right, grows leftward
+        tctx.beginPath();
+        if (typeof tctx.roundRect === "function") {
+          tctx.roundRect(x, yC - boxH / 2, revealedW, boxH, radius);
+        } else {
+          tctx.rect(x, yC - boxH / 2, revealedW, boxH);
+        }
+        tctx.fill();
+      });
+      tctx.restore();
+    }
+
     applyShadow(tctx, options.textShadow, scale);
 
     tctx.fillStyle = options.textColor;
     tctx.font = `${arabicWeight} ${arabicSize}px ${arabicFamily}`;
-    tctx.direction = "rtl"; // base direction so waqf marks order correctly
-    if (options.arabicEmphasis && options.arabicEmphasis.length > 0) {
+    tctx.direction = "rtl";
+
+    if (useQcf) {
+      const qcfEmph =
+        options.arabicEmphasis && options.arabicEmphasis.length > 0
+          ? {
+              indices: new Set(options.arabicEmphasis),
+              style: emphasisStyle,
+              color: emphasisColor,
+              baseColor: options.textColor,
+              indexOffset: 0,
+              fontSize: arabicSize,
+              rtl: true,
+            }
+          : undefined;
+      drawQcfBlock(
+        tctx, qcfRenderWords, centerX, startY, maxWidth, arabicLineH,
+        arabicSize, qcfEmph
+      );
+    } else if (options.arabicEmphasis && options.arabicEmphasis.length > 0) {
       drawEmphasizedBlock(tctx, arabicDisplay, centerX, startY, maxWidth, arabicLineH, {
         indices: new Set(options.arabicEmphasis),
         style: emphasisStyle,
@@ -464,14 +679,14 @@ export function drawVerseText(
       tctx.fillStyle = transBase;
       const transRtl = options.translationDirection === "rtl";
       if (transRtl) tctx.direction = "rtl";
-      const translationText = `${verseNumber}. ${translation}`;
+      const translationText = showTransNum ? `${verseNumber}. ${translation}` : translation;
       if (options.translationEmphasis && options.translationEmphasis.length > 0) {
         drawEmphasizedBlock(tctx, translationText, centerX, transY, maxWidth, transLineH, {
           indices: new Set(options.translationEmphasis),
           style: emphasisStyle,
           color: emphasisColor,
           baseColor: transBase,
-          indexOffset: 1, // skip the "12." verse-number prefix unit
+          indexOffset: showTransNum ? 1 : 0,
           fontSize: transSize,
           rtl: transRtl,
         });
