@@ -7,30 +7,33 @@ import { preloadVerseAudios } from "@/lib/audio";
 import { getTranslationLanguage } from "@/lib/translations";
 import {
   TextSegment,
-  loadVerseSegments,
   findCurrentSegmentIndex,
+  loadVerseWords,
+  buildPartsFromBoundaries,
 } from "@/lib/playback-engine";
+import { ensureFontsReady, splitWords } from "@/lib/canvas-utils";
 import {
-  drawBackground,
-  drawBgImage,
-  drawVideoFrame,
-  drawVerseText,
-  drawLetterboxBars,
-  getLetterboxContentArea,
-  rgbaFromHex,
-  safeInsetFor,
-  ensureFontsReady,
-} from "@/lib/canvas-utils";
+  FORMAT_SIZES,
+  drawScene,
+  sliceQcfForDisplay,
+  type SceneContent,
+} from "@/lib/render-core";
 import { FrameMode } from "./PlatformChrome";
 import { DevicePreview } from "./DevicePreview";
 import { importedPlayer } from "@/lib/imported-player";
+import { verseTextAt } from "@/lib/audio-import";
+import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 
-const FORMAT_RATIOS: Record<string, { w: number; h: number }> = {
-  "16:9": { w: 640, h: 360 },
-  "9:16": { w: 360, h: 640 },
-  "1:1": { w: 480, h: 480 },
-  "4:5": { w: 400, h: 500 },
-};
+// One segment spanning a whole verse — used when a reciter verse has no manual
+// word-parts, so playback simply shows the full verse.
+function fullVerseSegment(verse: { text_uthmani: string; translation?: string }): TextSegment {
+  return {
+    arabicText: verse.text_uthmani,
+    translationText: verse.translation ?? "",
+    startMs: 0,
+    endMs: Number.MAX_SAFE_INTEGER,
+  };
+}
 
 interface StudioPreviewProps {
   frameMode?: FrameMode;
@@ -45,7 +48,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.selectedVerseNumbers.includes(v.verse_number)
   );
   const currentVerse = selectedVerses[store.currentVerseIndex] ?? selectedVerses[0];
-  const ratio = FORMAT_RATIOS[store.videoFormat];
+  const size = FORMAT_SIZES[store.videoFormat];
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioMap, setAudioMap] = useState<Map<number, HTMLAudioElement>>(new Map());
@@ -64,7 +67,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   const verseShownAtRef = useRef(0);
   useEffect(() => {
     verseShownAtRef.current = performance.now();
-  }, [store.currentVerseIndex, store.verseIntro, store.verseIntroMs]);
+  }, [store.currentVerseIndex, store.activePartIndex, store.playbackSegmentArabic, store.verseIntro, store.verseIntroMs]);
 
   const reciterFolder = reciters.find((r) => r.id === store.reciterId)?.folder ?? "Alafasy_128kbps";
 
@@ -132,10 +135,16 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   }, [store.background.type, store.background.value, store.backgroundVideoSync, store.audioSource.mode, store.videoLoopMode]);
 
   // Imported audio plays through the shared player (also used by the timeline and
-  // fullscreen) so there is only ever one track and one playhead.
+  // fullscreen) so there is only ever one track and one playhead. We also use
+  // its emit on every seek/play frame to drive a preview-tick — this keeps the
+  // canvas in sync with the playhead even when the user edits while paused.
+  const [, setPreviewTick] = useState(0);
   useEffect(() => {
     return importedPlayer.subscribe((_t, isP) => {
-      if (useAppStore.getState().audioSource.mode === "imported") setIsPlaying(isP);
+      if (useAppStore.getState().audioSource.mode === "imported") {
+        setIsPlaying(isP);
+        setPreviewTick((n) => (n + 1) & 0xffff);
+      }
     });
   }, []);
   useEffect(
@@ -185,15 +194,32 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     const lang = getTranslationLanguage(useAppStore.getState().translationLanguage);
     let segMap = verseSegments;
     if (segMap.size === 0) {
+      // Build per-verse parts: where the user has manually split a verse, time
+      // the parts to the reciter's real words; otherwise show the whole verse as
+      // one part. This matches the verse editor exactly (no split = full verse).
+      const partsState = useAppStore.getState().verseParts;
       const newMap = new Map<number, TextSegment[]>();
       for (const verse of selectedVerses) {
-        const segs = await loadVerseSegments(
-          reciter.quranComRecitationId,
-          store.surah!.id,
-          verse.verse_number,
-          lang.resourceId
-        );
-        if (segs.length > 0) newMap.set(verse.verse_number, segs);
+        const boundaries = partsState[verse.verse_number];
+        if (boundaries && boundaries.length > 0) {
+          try {
+            const words = await loadVerseWords(
+              reciter.quranComRecitationId,
+              store.surah!.id,
+              verse.verse_number,
+              lang.resourceId
+            );
+            const segs = buildPartsFromBoundaries(words, boundaries, verse.translation);
+            newMap.set(
+              verse.verse_number,
+              segs.length > 0 ? segs : [fullVerseSegment(verse)]
+            );
+            continue;
+          } catch {
+            /* fall through to full verse */
+          }
+        }
+        newMap.set(verse.verse_number, [fullVerseSegment(verse)]);
       }
       setVerseSegments(newMap);
       segMap = newMap;
@@ -218,7 +244,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         setActiveSegmentIndex(0);
         useAppStore.getState().setPlaybackSegment(
           segments[0].arabicText,
-          segments[0].translationText
+          segments[0].translationText,
+          segments.length === 1
         );
       }
 
@@ -241,7 +268,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
               setActiveSegmentIndex(idx);
               useAppStore.getState().setPlaybackSegment(
                 segments[idx].arabicText,
-                segments[idx].translationText
+                segments[idx].translationText,
+                idx === segments.length - 1
               );
             }
 
@@ -277,9 +305,10 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const s = useAppStore.getState();
-    const r = FORMAT_RATIOS[s.videoFormat];
-    if (canvas.width !== r.w * 2) canvas.width = r.w * 2;
-    if (canvas.height !== r.h * 2) canvas.height = r.h * 2;
+    const sz = FORMAT_SIZES[s.videoFormat];
+    // The preview canvas IS the export frame: same resolution, same renderer.
+    if (canvas.width !== sz.w) canvas.width = sz.w;
+    if (canvas.height !== sz.h) canvas.height = sz.h;
 
     const verses = s.verses.filter((v) => s.selectedVerseNumbers.includes(v.verse_number));
     const cv = verses[s.currentVerseIndex] ?? verses[0];
@@ -289,15 +318,53 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     const playing = isPlayingRef.current;
     const useSegments = !!(playing && segments && segments.length > 1);
     const segIdx = activeSegmentIndexRef.current;
-    // Imported playback pushes the current intra-verse segment via the store; it
-    // overrides everything else so the on-screen text follows the user's splits.
-    const displayArabic =
-      s.playbackSegmentArabic ??
-      (useSegments ? segments![segIdx]?.arabicText ?? cv.text_uthmani : cv.text_uthmani);
-    const displayTranslation =
-      s.playbackSegmentTranslation ??
-      (useSegments ? segments![segIdx]?.translationText ?? cv.translation : cv.translation);
-    const transDir = getTranslationLanguage(s.translationLanguage).direction as "ltr" | "rtl";
+    // Imported mode: compute the on-screen text directly from the verse's
+    // timing (splits + word-trim) at the current playhead. This is what makes
+    // edits *visible* while paused — the player only pushes playbackSegment*
+    // during play, so anything we read from the store goes stale the moment the
+    // user pauses to edit. Reciter mode keeps the segments-map flow below.
+    let displayArabic: string;
+    let displayTranslation: string | undefined;
+    let isLastPart = true;
+    if (s.audioSource.mode === "imported") {
+      const seg = s.audioSource.timings[s.currentVerseIndex];
+      const t = importedPlayer.currentTime();
+      displayArabic = seg ? verseTextAt(seg, cv.text_uthmani, t) : cv.text_uthmani;
+      displayTranslation =
+        seg && cv.translation ? verseTextAt(seg, cv.translation, t) : cv.translation;
+      if (seg?.splits?.length) {
+        let partIdx = 0;
+        for (const sp of seg.splits) { if (t >= sp) partIdx++; else break; }
+        isLastPart = partIdx === seg.splits.length;
+      }
+    } else if (playing && useSegments) {
+      displayArabic = segments![segIdx]?.arabicText ?? cv.text_uthmani;
+      displayTranslation = segments![segIdx]?.translationText ?? cv.translation;
+      isLastPart = segIdx === segments!.length - 1;
+    } else {
+      const boundaries = s.verseParts[cv.verse_number] ?? [];
+      if (boundaries.length > 0) {
+        const words = splitWords(cv.text_uthmani);
+        const sorted = [...boundaries].sort((a, b) => a - b);
+        const cuts = [0, ...sorted.map((b) => Math.min(b, words.length)), words.length];
+        const pi = Math.min(s.activePartIndex, cuts.length - 2);
+        const lo = cuts[pi];
+        const hi = cuts[pi + 1];
+        displayArabic = words.slice(lo, hi).join(" ");
+        if (cv.translation) {
+          const tWords = cv.translation.split(/\s+/).filter(Boolean);
+          const tLo = Math.floor((lo / words.length) * tWords.length);
+          const tHi = Math.floor((hi / words.length) * tWords.length);
+          displayTranslation = tWords.slice(tLo, tHi).join(" ");
+        } else {
+          displayTranslation = cv.translation;
+        }
+        isLastPart = pi === cuts.length - 2;
+      } else {
+        displayArabic = cv.text_uthmani;
+        displayTranslation = cv.translation;
+      }
+    }
 
     // Word emphasis applies to the static full-verse view (not mid-playback segments).
     const verseEmphasis = s.emphasis[cv.verse_key];
@@ -309,69 +376,37 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       s.audioSource.mode === "imported" && playing && s.wordHighlight && s.activeWordIndex != null
         ? s.activeWordIndex
         : null;
-    const arabicEmphasis = wordHi != null ? [wordHi] : manualArabicEmphasis;
-    const effEmphasisStyle = wordHi != null ? "color" : s.emphasisStyle;
-    const effEmphasisColor = wordHi != null ? s.emphasisColor || "#c9a24b" : s.emphasisColor;
     const introProgress =
       s.verseIntro === "none"
         ? 1
         : Math.min(1, (performance.now() - verseShownAtRef.current) / s.verseIntroMs);
 
-    const bgVideo = s.background.type === "video" ? videoRef.current ?? undefined : undefined;
-    const bgImage = s.background.type === "image" ? bgImageElRef.current ?? undefined : undefined;
-
-    const textOpts = {
-      arabicFont: s.arabicFont,
-      arabicFontSize: s.arabicFontSize,
-      translationEnabled: s.translationEnabled,
-      translationFontSize: s.translationFontSize,
-      translationFont: s.translationFont,
-      translationDirection: transDir,
-      textColor: s.textColor,
-      textShadow: s.textShadow,
-      lineHeight: s.lineHeight,
-      verticalPosition: s.textPosition,
-      safeInset: safeInsetFor(s.safeAreaTarget, s.safePadding / 100),
-      arabicFontWeight: s.arabicFontWeight,
-      arabicVerseNumber: s.arabicVerseNumber,
-      translationFontWeight: s.translationFontWeight,
-      arabicEmphasis,
+    const content: SceneContent = {
+      arabicText: displayArabic,
+      verseNumber: cv.verse_number,
+      translation: displayTranslation ?? undefined,
+      isLastPart,
+      qcfWords: sliceQcfForDisplay(cv, displayArabic, isLastPart),
+      arabicEmphasis: wordHi != null ? [wordHi] : manualArabicEmphasis,
       translationEmphasis,
-      emphasisStyle: effEmphasisStyle,
-      emphasisColor: effEmphasisColor,
-      introStyle: s.verseIntro,
+      emphasisStyleOverride: wordHi != null ? "color" : undefined,
+      emphasisColorOverride: wordHi != null ? s.emphasisColor || "#c9a24b" : undefined,
       introProgress,
     };
 
-    ctx.save();
-    ctx.scale(2, 2);
-
-    const useLetterbox = s.letterbox.enabled && s.videoFormat === "9:16";
-    if (useLetterbox) {
-      drawLetterboxBars(ctx, r.w, r.h, s.letterbox);
-      const content = getLetterboxContentArea(r.w, r.h);
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(content.x, content.y, content.w, content.h);
-      ctx.clip();
-      ctx.translate(0, content.y);
-      if (bgVideo) drawVideoFrame(ctx, bgVideo, content.w, content.h, s.backgroundFit, s.fitBackdrop);
-      else if (bgImage) drawBgImage(ctx, bgImage, content.w, content.h, s.backgroundFit, s.fitBackdrop);
-      else drawBackground(ctx, content.w, content.h, s.background);
-      ctx.fillStyle = rgbaFromHex(s.overlayColor, s.overlayOpacity / 100);
-      ctx.fillRect(0, 0, content.w, content.h);
-      drawVerseText(ctx, content.w, content.h, displayArabic, cv.verse_number, displayTranslation, textOpts);
-      ctx.restore();
-    } else {
-      if (bgVideo) drawVideoFrame(ctx, bgVideo, r.w, r.h, s.backgroundFit, s.fitBackdrop);
-      else if (bgImage) drawBgImage(ctx, bgImage, r.w, r.h, s.backgroundFit, s.fitBackdrop);
-      else drawBackground(ctx, r.w, r.h, s.background);
-      ctx.fillStyle = rgbaFromHex(s.overlayColor, s.overlayOpacity / 100);
-      ctx.fillRect(0, 0, r.w, r.h);
-      drawVerseText(ctx, r.w, r.h, displayArabic, cv.verse_number, displayTranslation, textOpts);
-    }
-
-    ctx.restore();
+    drawScene(
+      ctx,
+      {
+        ...s,
+        translationDirection: getTranslationLanguage(s.translationLanguage)
+          .direction as "ltr" | "rtl",
+      },
+      content,
+      {
+        image: s.background.type === "image" ? bgImageElRef.current ?? undefined : undefined,
+        video: s.background.type === "video" ? videoRef.current ?? undefined : undefined,
+      }
+    );
   };
 
   // Load an image background into a ref so the draw loop can paint it synchronously.
@@ -405,13 +440,19 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     ensureFontsReady(store.arabicFont, store.translationFont).then(() => {
       if (!cancelled) drawRef.current();
     });
+    const allQcf = store.verses.flatMap((v) => v.qcfWords ?? []);
+    if (allQcf.length > 0) {
+      ensureQcfFontsReady(allQcf).then(() => {
+        if (!cancelled) drawRef.current();
+      });
+    }
     document.fonts?.ready.then(() => {
       if (!cancelled) drawRef.current();
     });
     return () => {
       cancelled = true;
     };
-  }, [store.arabicFont, store.translationFont]);
+  }, [store.arabicFont, store.translationFont, store.verses]);
 
   // Unified redraw: paints once on any settings/verse change, and runs a single
   // rAF loop while animating (playing, video background, or a verse intro in
@@ -443,6 +484,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.textPosition,
     store.arabicFontWeight,
     store.arabicVerseNumber,
+    store.translationVerseNumber,
     store.translationFontWeight,
     store.emphasis,
     store.emphasisStyle,
@@ -462,6 +504,11 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.currentVerseIndex,
     store.playbackSegmentArabic,
     store.playbackSegmentTranslation,
+    // For imported mode: edits to timings (splits / wordRange / boundaries)
+    // must rerun the draw effect so the preview reflects them immediately.
+    store.audioSource.mode === "imported" ? store.audioSource.timings : null,
+    store.verseParts,
+    store.activePartIndex,
     currentVerse,
     isPlaying,
     verseSegments,
@@ -469,14 +516,14 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   ]);
 
   const framed = frameMode !== "studio";
-  const displayWidth = framed ? 348 : Math.min(ratio.w, 460);
+  const displayWidth = framed ? 348 : size.w >= size.h ? 460 : 360;
 
   return (
     <div className="flex flex-col items-center gap-6">
       <DevicePreview
         frameMode={frameMode}
         width={displayWidth}
-        aspect={`${ratio.w} / ${ratio.h}`}
+        aspect={`${size.w} / ${size.h}`}
         showSafeZones={showSafeZones}
         safePadding={store.safePadding / 100}
       >
@@ -488,6 +535,14 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
           <button
             onClick={() => {
               const i = Math.max(0, store.currentVerseIndex - 1);
+              if (isPlaying && store.audioSource.mode === "reciter") {
+                stoppedRef.current = true;
+                currentAudioRef.current?.pause();
+                cancelAnimationFrame(animFrameRef.current);
+                setIsPlaying(false);
+                setVerseSegments(new Map());
+              }
+              store.setPlaybackSegment(null, null);
               store.setCurrentVerseIndex(i);
               const src = store.audioSource;
               if (src.mode === "imported" && src.timings[i]) importedPlayer.seek(src.url, src.timings[i].start);
@@ -524,6 +579,14 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
           <button
             onClick={() => {
               const i = Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1);
+              if (isPlaying && store.audioSource.mode === "reciter") {
+                stoppedRef.current = true;
+                currentAudioRef.current?.pause();
+                cancelAnimationFrame(animFrameRef.current);
+                setIsPlaying(false);
+                setVerseSegments(new Map());
+              }
+              store.setPlaybackSegment(null, null);
               store.setCurrentVerseIndex(i);
               const src = store.audioSource;
               if (src.mode === "imported" && src.timings[i]) importedPlayer.seek(src.url, src.timings[i].start);
