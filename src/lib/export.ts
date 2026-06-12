@@ -1,27 +1,22 @@
-import { Verse, VideoFormat, Background, TextShadow, LetterboxConfig } from "@/types";
+import { Verse, VideoFormat, Background, TextShadow, LetterboxConfig, QcfWord } from "@/types";
 import type { VerseEmphasis } from "./store";
 import { getAudioUrl } from "./api";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
+import { ensureFontsReady, SafeAreaTarget } from "./canvas-utils";
 import {
-  drawBackground,
-  drawBgImage,
-  drawVideoFrame,
-  drawVerseText,
-  drawLetterboxBars,
-  getLetterboxContentArea,
-  rgbaFromHex,
-  safeInsetFor,
-  ensureFontsReady,
-  SafeAreaTarget,
-} from "./canvas-utils";
+  FORMAT_SIZES,
+  drawScene,
+  sliceQcfForDisplay,
+  type SceneContent,
+} from "./render-core";
 import { verseTextAt, type VerseTiming } from "./audio-import";
-
-const FORMAT_SIZES: Record<VideoFormat, { w: number; h: number }> = {
-  "16:9": { w: 1920, h: 1080 },
-  "9:16": { w: 1080, h: 1920 },
-  "1:1": { w: 1080, h: 1080 },
-  "4:5": { w: 1080, h: 1350 },
-};
+import { ensureQcfFontsReady } from "./qcf-font-loader";
+import {
+  loadVerseWords,
+  buildPartsFromBoundaries,
+  findCurrentSegmentIndex,
+  type TextSegment,
+} from "./playback-engine";
 
 interface ExportOptions {
   verses: Verse[];
@@ -32,6 +27,7 @@ interface ExportOptions {
   arabicFont: string;
   arabicFontWeight: number;
   arabicVerseNumber: boolean;
+  translationVerseNumber: boolean;
   translationEnabled: boolean;
   translationFontSize: number;
   translationFont: string;
@@ -39,6 +35,8 @@ interface ExportOptions {
   translationDirection?: "ltr" | "rtl";
   textColor: string;
   lineHeight: number;
+  translationLineHeight: number;
+  arabicTranslationGap: number;
   textPosition: number;
   overlayOpacity: number;
   overlayColor: string;
@@ -60,7 +58,54 @@ interface ExportOptions {
   emphasisColor: string;
   /** When set, use this single uploaded track (sliced per verse) instead of EveryAyah. */
   importedAudio?: { url: string; timings: VerseTiming[] };
+  /** Reciter (library) clips: manual word-part boundaries per verse + the data
+   *  needed to time them to the reciter's real words. */
+  verseParts?: Record<number, number[]>;
+  recitationId?: number;
+  translationResourceId?: number;
   onProgress: (current: number, total: number) => void;
+}
+
+// For reciter clips with manual word-parts, build per-verse TextSegment[] timed
+// to the reciter's real words. Only verses the user actually split get an entry.
+async function buildReciterSegments(
+  options: ExportOptions
+): Promise<Map<number, TextSegment[]>> {
+  const map = new Map<number, TextSegment[]>();
+  if (options.importedAudio || !options.verseParts || options.recitationId == null) {
+    return map;
+  }
+  for (const verse of options.verses) {
+    const b = options.verseParts[verse.verse_number];
+    if (!b || b.length === 0) continue;
+    try {
+      const words = await loadVerseWords(
+        options.recitationId,
+        options.surahNumber,
+        verse.verse_number,
+        options.translationResourceId ?? 20
+      );
+      const segs = buildPartsFromBoundaries(words, b, verse.translation);
+      if (segs.length > 1) map.set(verse.verse_number, segs);
+    } catch {
+      /* leave unsplit on failure */
+    }
+  }
+  return map;
+}
+
+// Pick the on-screen text for a reciter verse at `elapsedSec` into its audio,
+// honoring manual word-parts. No parts → the whole verse.
+function reciterTextAt(
+  verse: Verse,
+  segs: TextSegment[] | undefined,
+  elapsedSec: number
+): { ar: string; tr: string | null | undefined; isLast: boolean } {
+  if (!segs || segs.length === 0) {
+    return { ar: verse.text_uthmani, tr: verse.translation, isLast: true };
+  }
+  const idx = findCurrentSegmentIndex(segs, elapsedSec * 1000);
+  return { ar: segs[idx].arabicText, tr: segs[idx].translationText, isLast: idx === segs.length - 1 };
 }
 
 // Pick the slice of a verse's text + translation to show at `sourceTime` based
@@ -69,16 +114,20 @@ function segmentFor(
   verse: Verse,
   tm: VerseTiming | undefined,
   sourceTime: number
-): { ar: string; tr: string | null | undefined } {
+): { ar: string; tr: string | null | undefined; isLast: boolean } {
   if (!tm?.splits?.length) {
-    return { ar: verse.text_uthmani, tr: verse.translation };
+    return { ar: verse.text_uthmani, tr: verse.translation, isLast: true };
   }
+  let segIdx = 0;
+  for (const sp of tm.splits) { if (sourceTime >= sp) segIdx++; else break; }
+  const isLast = segIdx === tm.splits.length;
   return {
     ar: verseTextAt(tm, verse.text_uthmani, sourceTime),
     tr:
       verse.translation != null
         ? verseTextAt(tm, verse.translation, sourceTime)
         : verse.translation,
+    isLast,
   };
 }
 
@@ -102,6 +151,8 @@ export async function exportVideo(options: ExportOptions): Promise<Blob> {
   // Guarantee the Arabic web font is loaded before any frame is drawn — a system
   // fallback would corrupt the Quranic text in the exported file.
   await ensureFontsReady(options.arabicFont, options.translationFont);
+  const allQcf = options.verses.flatMap((v) => v.qcfWords ?? []);
+  if (allQcf.length > 0) await ensureQcfFontsReady(allQcf);
 
   const webCodecs =
     typeof VideoEncoder !== "undefined" &&
@@ -235,6 +286,9 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
   const introAt = (verseStart: number) =>
     hasIntro ? Math.min(1, (performance.now() - verseStart) / introMs) : 1;
 
+  // Reciter clips: per-verse word-parts timed to the reciter (empty for uploads).
+  const reciterSegs = await buildReciterSegments(options);
+
   for (let i = 0; i < options.verses.length; i++) {
     const verse = options.verses[i];
     options.onProgress(i + 1, options.verses.length);
@@ -243,17 +297,22 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
     // intra-verse segment that drives on-screen text.
     const tm = options.importedAudio?.timings.find((t) => t.verseNumber === verse.verse_number);
     const sourceStart = tm?.start ?? 0;
+    const vSegs = reciterSegs.get(verse.verse_number);
 
-    const verseStart = performance.now();
-    const seg0 = segmentFor(verse, tm, sourceStart);
+    let segStart = performance.now();
+    let prevSegAr = "";
+    const seg0 = vSegs
+      ? reciterTextAt(verse, vSegs, 0)
+      : segmentFor(verse, tm, sourceStart);
+    prevSegAr = seg0.ar;
     drawFrame(
       ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      introAt(verseStart), seg0.ar, seg0.tr
+      introAt(segStart), seg0.ar, seg0.tr, seg0.isLast
     );
 
     try {
       const source = audioCtx.createBufferSource();
-      let renderWhilePlaying = !!bgVideo || hasIntro || !!tm?.splits?.length;
+      let renderWhilePlaying = !!bgVideo || hasIntro || !!tm?.splits?.length || !!vSegs;
 
       if (importedBuffer && options.importedAudio) {
         const start = sourceStart;
@@ -262,7 +321,6 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
         source.connect(destination);
         source.connect(audioCtx.destination);
         source.start(0, start, dur);
-        // Lip-sync the background video: position it at this verse's audio start.
         if (bgVideo && options.backgroundVideoSync) {
           try {
             bgVideo.currentTime = start;
@@ -271,7 +329,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
           }
           bgVideo.play().catch(() => {});
         }
-        renderWhilePlaying = true; // keep redrawing for the slice duration
+        renderWhilePlaying = true;
       } else {
         const audioUrl = getAudioUrl(options.reciterFolder, options.surahNumber, verse.verse_number);
         const response = await fetch(audioUrl);
@@ -283,6 +341,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
       }
 
       if (renderWhilePlaying) {
+        const verseStartTime = segStart;
         await new Promise<void>((resolve) => {
           let frameId: number;
           source.onended = () => {
@@ -290,11 +349,17 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
             resolve();
           };
           const renderLoop = () => {
-            const elapsed = (performance.now() - verseStart) / 1000;
-            const seg = segmentFor(verse, tm, sourceStart + elapsed);
+            const elapsed = (performance.now() - verseStartTime) / 1000;
+            const seg = vSegs
+              ? reciterTextAt(verse, vSegs, elapsed)
+              : segmentFor(verse, tm, sourceStart + elapsed);
+            if (seg.ar !== prevSegAr) {
+              prevSegAr = seg.ar;
+              segStart = performance.now();
+            }
             drawFrame(
               ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-              introAt(verseStart), seg.ar, seg.tr
+              introAt(segStart), seg.ar, seg.tr, seg.isLast
             );
             frameId = requestAnimationFrame(renderLoop);
           };
@@ -473,6 +538,8 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   const scale = size.w / 480;
   const introMs = options.verseIntro && options.verseIntro !== "none" ? options.verseIntroMs ?? 450 : 0;
   const totalFrames = Math.max(1, Math.ceil(totalDur * FAST_FPS));
+  // Reciter clips: per-verse word-parts timed to the reciter (empty for uploads).
+  const reciterSegs = await buildReciterSegments(options);
 
   // Map an output-timeline time to a time in the background video. Synced clips
   // (lip-sync) follow each verse's audio start; otherwise the video loops or
@@ -493,24 +560,32 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     return Math.min(t, lastFrameTime); // freeze: hold last frame past the end
   };
 
+  let prevSegText = "";
+  let segStartT = 0;
   for (let f = 0; f < totalFrames; f++) {
     if (encodeError) throw encodeError;
     const t = f / FAST_FPS;
     let vi = 0;
     while (vi < cum.length - 1 && t >= cum[vi + 1]) vi++;
     const verse = options.verses[vi];
-    const introProgress = introMs > 0 ? Math.min(1, ((t - cum[vi]) * 1000) / introMs) : 1;
     if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(t, vi));
-    // Intra-verse split segment: derive source time within the imported track,
-    // then look up which text chunk should be on-screen at this frame.
     const tmFast = options.importedAudio?.timings.find(
       (x) => x.verseNumber === verse.verse_number
     );
+    const vSegsFast = reciterSegs.get(verse.verse_number);
     const sourceTime = (tmFast?.start ?? 0) + (t - cum[vi]);
-    const segFast = segmentFor(verse, tmFast, sourceTime);
+    const segFast = vSegsFast
+      ? reciterTextAt(verse, vSegsFast, t - cum[vi])
+      : segmentFor(verse, tmFast, sourceTime);
+    const segKey = `${vi}:${segFast.ar}`;
+    if (segKey !== prevSegText) {
+      prevSegText = segKey;
+      segStartT = t;
+    }
+    const introProgress = introMs > 0 ? Math.min(1, ((t - segStartT) * 1000) / introMs) : 1;
     drawFrame(
       ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      introProgress, segFast.ar, segFast.tr
+      introProgress, segFast.ar, segFast.tr, segFast.isLast
     );
 
     const frame = new VideoFrame(canvas, {
@@ -573,125 +648,38 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
 
 function drawFrame(
   ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
+  _w: number,
+  _h: number,
   verse: Verse,
   options: ExportOptions,
-  scale: number,
+  _scale: number,
   bgImage?: HTMLImageElement,
   bgVideo?: HTMLVideoElement,
   introProgress = 1,
   /** Override Arabic text (intra-verse split segment). Falls back to verse.text_uthmani. */
   displayArabic?: string,
   /** Override translation. Falls back to verse.translation. */
-  displayTranslation?: string | null
+  displayTranslation?: string | null,
+  isLastPart = true
 ) {
   // When showing a mid-verse segment, manual word emphasis indices wouldn't
   // line up with the partial text — so emphasis only applies on the full verse.
   const showingFullVerse =
-    (displayArabic == null || displayArabic === verse.text_uthmani);
+    displayArabic == null || displayArabic === verse.text_uthmani;
   const ve = showingFullVerse ? options.emphasis[verse.verse_key] : undefined;
   const arText = displayArabic ?? verse.text_uthmani;
   const trText =
     displayTranslation === undefined ? verse.translation : displayTranslation ?? undefined;
-  const useLetterbox = options.letterbox.enabled && options.videoFormat === "9:16";
 
-  if (useLetterbox) {
-    drawLetterboxBars(ctx, w, h, options.letterbox);
-
-    const content = getLetterboxContentArea(w, h);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(content.x, content.y, content.w, content.h);
-    ctx.clip();
-    ctx.translate(0, content.y);
-
-    if (bgVideo) {
-      drawVideoFrame(ctx, bgVideo, content.w, content.h, options.backgroundFit, options.fitBackdrop);
-    } else if (bgImage) {
-      drawBgImage(ctx, bgImage, content.w, content.h, options.backgroundFit, options.fitBackdrop);
-    } else {
-      drawBackground(ctx, content.w, content.h, options.background);
-    }
-
-    ctx.fillStyle = rgbaFromHex(options.overlayColor, options.overlayOpacity / 100);
-    ctx.fillRect(0, 0, content.w, content.h);
-
-    drawVerseText(
-      ctx,
-      content.w,
-      content.h,
-      arText,
-      verse.verse_number,
-      trText,
-      {
-        arabicFont: options.arabicFont,
-        arabicFontSize: options.arabicFontSize,
-        translationEnabled: options.translationEnabled,
-        translationFontSize: options.translationFontSize,
-        translationFont: options.translationFont,
-        translationDirection: options.translationDirection,
-        textColor: options.textColor,
-        textShadow: options.textShadow,
-        lineHeight: options.lineHeight,
-        verticalPosition: options.textPosition,
-        safeInset: safeInsetFor(options.safeAreaTarget, options.safePadding / 100),
-        arabicFontWeight: options.arabicFontWeight,
-        arabicVerseNumber: options.arabicVerseNumber,
-        introStyle: options.verseIntro,
-        introProgress,
-        translationFontWeight: options.translationFontWeight,
-        arabicEmphasis: ve?.arabic,
-        translationEmphasis: ve?.translation,
-        emphasisStyle: options.emphasisStyle,
-        emphasisColor: options.emphasisColor,
-      },
-      scale
-    );
-
-    ctx.restore();
-  } else {
-    if (bgVideo) {
-      drawVideoFrame(ctx, bgVideo, w, h, options.backgroundFit, options.fitBackdrop);
-    } else if (bgImage) {
-      drawBgImage(ctx, bgImage, w, h, options.backgroundFit, options.fitBackdrop);
-    } else {
-      drawBackground(ctx, w, h, options.background);
-    }
-
-    ctx.fillStyle = rgbaFromHex(options.overlayColor, options.overlayOpacity / 100);
-    ctx.fillRect(0, 0, w, h);
-
-    drawVerseText(
-      ctx,
-      w,
-      h,
-      arText,
-      verse.verse_number,
-      trText,
-      {
-        arabicFont: options.arabicFont,
-        arabicFontSize: options.arabicFontSize,
-        translationEnabled: options.translationEnabled,
-        translationFontSize: options.translationFontSize,
-        translationFont: options.translationFont,
-        translationDirection: options.translationDirection,
-        textColor: options.textColor,
-        textShadow: options.textShadow,
-        lineHeight: options.lineHeight,
-        verticalPosition: options.textPosition,
-        safeInset: safeInsetFor(options.safeAreaTarget, options.safePadding / 100),
-        arabicFontWeight: options.arabicFontWeight,
-        arabicVerseNumber: options.arabicVerseNumber,
-        introStyle: options.verseIntro,
-        introProgress,
-        translationFontWeight: options.translationFontWeight,
-        arabicEmphasis: ve?.arabic,
-        translationEmphasis: ve?.translation,
-        emphasisStyle: options.emphasisStyle,
-        emphasisColor: options.emphasisColor,
-      },
-      scale
-    );
-  }
+  const content: SceneContent = {
+    arabicText: arText,
+    verseNumber: verse.verse_number,
+    translation: trText ?? undefined,
+    isLastPart,
+    qcfWords: sliceQcfForDisplay(verse, arText, isLastPart),
+    arabicEmphasis: ve?.arabic,
+    translationEmphasis: ve?.translation,
+    introProgress,
+  };
+  drawScene(ctx, options, content, { image: bgImage, video: bgVideo });
 }
