@@ -6,6 +6,7 @@ import { useAppStore } from "./store";
 import { reciters } from "./reciters";
 import { exportVideo } from "./export";
 import { getTranslationLanguage } from "./translations";
+import { getBlob } from "./projects";
 import {
   saveClip,
   captureThumbnail,
@@ -13,10 +14,49 @@ import {
   type LibraryClip,
 } from "./clip-library";
 
+/** True when the URL still serves bytes (blob: URLs die on reload/restore). */
+async function urlAlive(url: string): Promise<boolean> {
+  try {
+    const r = await fetch(url);
+    r.body?.cancel().catch(() => {});
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Imported audio (and uploaded background video) live behind blob: URLs that
+ * die when the page reloads or a project is restored in a new session. The
+ * underlying blobs ARE persisted with the project in IndexedDB — so before an
+ * export, check the URLs and quietly re-mint them from storage. Without this,
+ * the fast exporter's fetch fails and export silently degrades to the
+ * real-time recorder (slow) or produces a broken file.
+ */
+async function healDeadMediaUrls(): Promise<void> {
+  const s = useAppStore.getState();
+  if (s.audioSource.mode === "imported" && !(await urlAlive(s.audioSource.url))) {
+    if (!s.projectId) throw new Error("Imported audio is no longer available — re-import the clip.");
+    const blob = await getBlob(`audio:${s.projectId}`);
+    if (!blob) throw new Error("Imported audio is no longer available — re-import the clip.");
+    const url = URL.createObjectURL(blob);
+    s.setImportedAudio(url, s.audioSource.name, s.audioSource.timings);
+  }
+  const bg = s.background;
+  if (bg.type === "video" && bg.value.startsWith("blob:") && !(await urlAlive(bg.value))) {
+    const blob = s.projectId ? await getBlob(`video:${s.projectId}`) : undefined;
+    if (blob) {
+      s.setBackground({ ...bg, value: URL.createObjectURL(blob) });
+    }
+    // No stored copy → leave it; the exporter falls back to a plain background.
+  }
+}
+
 /** Encode the current clip to its final video file. Null when nothing is selected. */
 export async function renderClipFile(
   onProgress: (current: number, total: number) => void
 ): Promise<File | null> {
+  await healDeadMediaUrls();
   const s = useAppStore.getState();
   const selectedVerses = s.verses.filter((v) =>
     s.selectedVerseNumbers.includes(v.verse_number)
