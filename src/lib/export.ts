@@ -237,6 +237,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
 
   const stream = canvas.captureStream(30);
   const audioCtx = new AudioContext();
+  try {
   // iOS starts the AudioContext suspended; without resuming, the recorded track
   // is silent. Safe to call everywhere.
   if (audioCtx.state === "suspended") {
@@ -376,7 +377,10 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
           source.onended = () => resolve();
         });
       }
-    } catch {
+    } catch (err) {
+      // Don't abort the whole export for one bad verse, but say which one
+      // failed — a silent skip produces an incomplete video with no clue why.
+      console.warn(`[export] verse ${verse.verse_key} failed; skipping`, err);
       await new Promise((r) => setTimeout(r, 2000));
     }
   }
@@ -391,8 +395,12 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
     recorder.onstop = () => resolve();
   });
 
-  audioCtx.close();
   return new Blob(chunks, { type: mimeType });
+  } finally {
+    // AudioContexts are a capped system resource (~6 per tab) — leak them on a
+    // failed export and the app goes silent until reload.
+    audioCtx.close().catch(() => {});
+  }
 }
 
 const FAST_FPS = 30;
