@@ -3,16 +3,22 @@
 // Clip library + content calendar: every export lands here as a draft; clips
 // can be scheduled to a date/platform (storage only — no actual posting),
 // browsed by reciter, previewed, downloaded, and marked posted.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   LibraryClip,
   ClipStatus,
   ClipPlatform,
   listClips,
+  saveClip,
   updateClip,
   deleteClip,
   getClipBlob,
   libraryTotalBytes,
+  listFolders,
+  createFolder,
+  deleteFolder,
+  captureThumbnail,
+  generateClipId,
 } from "@/lib/clip-library";
 
 const PLATFORM_LABELS: Record<ClipPlatform, string> = {
@@ -52,13 +58,62 @@ export default function LibraryPage() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [folders, setFolders] = useState<string[]>([]);
+  const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [uploading, setUploading] = useState(false);
+  // iOS WebKit only opens the picker reliably from a real <input> the button forwards to.
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    listClips().then((c) => {
+    Promise.all([listClips(), listFolders()]).then(([c, f]) => {
       setClips(c);
+      setFolders(f);
       setLoaded(true);
     });
   }, []);
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        const meta: LibraryClip = {
+          id: generateClipId(),
+          title: file.name.replace(/\.\w+$/, ""),
+          surahName: "—",
+          verseRange: "—",
+          reciterName: "Uploaded",
+          videoFormat: "—",
+          mimeType: file.type || "video/mp4",
+          size: file.size,
+          createdAt: Date.now(),
+          thumbnail: await captureThumbnail(file),
+          status: "draft",
+          folder: folderFilter !== "all" && folderFilter !== "none" ? folderFilter : undefined,
+        };
+        const ok = await saveClip(meta, file);
+        if (ok) setClips((cs) => [meta, ...cs]);
+        else alert(`Could not store "${file.name}" — storage may be full.`);
+      }
+    } finally {
+      setUploading(false);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  };
+
+  const addFolder = async () => {
+    const name = prompt("Folder name");
+    if (!name?.trim()) return;
+    setFolders(await createFolder(name));
+    setFolderFilter(name.trim());
+  };
+
+  const removeFolder = async (name: string) => {
+    if (!confirm(`Delete folder "${name}"? Clips inside move back to the library.`)) return;
+    setFolders(await deleteFolder(name));
+    setClips((cs) => cs.map((c) => (c.folder === name ? { ...c, folder: undefined } : c)));
+    if (folderFilter === name) setFolderFilter("all");
+  };
 
   useEffect(() => {
     return () => {
@@ -74,7 +129,9 @@ export default function LibraryPage() {
   const filtered = clips.filter(
     (c) =>
       (reciterFilter === "all" || c.reciterName === reciterFilter) &&
-      (statusFilter === "all" || c.status === statusFilter)
+      (statusFilter === "all" || c.status === statusFilter) &&
+      (folderFilter === "all" ||
+        (folderFilter === "none" ? !c.folder : c.folder === folderFilter))
   );
 
   const counts = {
@@ -151,6 +208,21 @@ export default function LibraryPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="video/*"
+            multiple
+            className="sr-only"
+            onChange={(e) => handleUpload(e.target.files)}
+          />
+          <button
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={uploading}
+            className="btn-gold rounded-full px-4 py-2 text-sm disabled:opacity-50"
+          >
+            {uploading ? "Storing…" : "+ Upload clips"}
+          </button>
           <select
             value={reciterFilter}
             onChange={(e) => setReciterFilter(e.target.value)}
@@ -191,6 +263,51 @@ export default function LibraryPage() {
         </div>
       </div>
 
+      {/* Folder chips */}
+      <div className="mb-5 flex flex-wrap items-center gap-1.5">
+        {[
+          { id: "all", label: "All" },
+          { id: "none", label: "No folder" },
+        ].map((f) => (
+          <button
+            key={f.id}
+            onClick={() => setFolderFilter(f.id)}
+            className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+              folderFilter === f.id
+                ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                : "border border-[var(--hairline-soft)] text-[var(--muted)] hover:text-parchment"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+        {folders.map((f) => (
+          <span
+            key={f}
+            className={`group flex items-center gap-1 rounded-full px-3 py-1.5 text-xs transition-colors ${
+              folderFilter === f
+                ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                : "border border-[var(--hairline-soft)] text-[var(--muted)] hover:text-parchment"
+            }`}
+          >
+            <button onClick={() => setFolderFilter(f)}>📁 {f}</button>
+            <button
+              onClick={() => removeFolder(f)}
+              aria-label={`Delete folder ${f}`}
+              className="opacity-40 transition-opacity hover:opacity-100"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <button
+          onClick={addFolder}
+          className="rounded-full border border-dashed border-[var(--hairline)] px-3 py-1.5 text-xs text-gold-soft/80 transition-colors hover:border-gold hover:text-gold"
+        >
+          + New folder
+        </button>
+      </div>
+
       {loaded && clips.length === 0 && (
         <div className="rounded-2xl border border-[var(--hairline-soft)] py-20 text-center">
           <p className="font-display text-xl text-parchment">No clips yet</p>
@@ -206,6 +323,7 @@ export default function LibraryPage() {
             <ClipCard
               key={clip.id}
               clip={clip}
+              folders={folders}
               playing={playingId === clip.id ? playingUrl : null}
               scheduling={schedulingId === clip.id}
               onToggleSchedule={() =>
@@ -238,6 +356,7 @@ export default function LibraryPage() {
                   <ClipCard
                     key={clip.id}
                     clip={clip}
+                    folders={folders}
                     playing={playingId === clip.id ? playingUrl : null}
                     scheduling={schedulingId === clip.id}
                     onToggleSchedule={() =>
@@ -262,6 +381,7 @@ export default function LibraryPage() {
                   <ClipCard
                     key={clip.id}
                     clip={clip}
+                    folders={folders}
                     playing={playingId === clip.id ? playingUrl : null}
                     scheduling={schedulingId === clip.id}
                     onToggleSchedule={() =>
@@ -284,6 +404,7 @@ export default function LibraryPage() {
 
 function ClipCard({
   clip,
+  folders,
   playing,
   scheduling,
   onToggleSchedule,
@@ -293,6 +414,7 @@ function ClipCard({
   onDelete,
 }: {
   clip: LibraryClip;
+  folders: string[];
   playing: string | null;
   scheduling: boolean;
   onToggleSchedule: () => void;
@@ -341,7 +463,7 @@ function ClipCard({
           <div className="min-w-0">
             <p className="truncate text-sm text-parchment">{clip.title}</p>
             <p className="truncate text-[11px] text-[var(--muted)]">
-              {clip.reciterName} · {clip.videoFormat} · {fmtBytes(clip.size)}
+              {clip.folder ? `📁 ${clip.folder} · ` : ""}{clip.reciterName} · {clip.videoFormat} · {fmtBytes(clip.size)}
             </p>
           </div>
           <span
@@ -382,6 +504,18 @@ function ClipCard({
               {Object.entries(PLATFORM_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
+                </option>
+              ))}
+            </select>
+            <select
+              value={clip.folder ?? ""}
+              onChange={(e) => onPatch({ folder: e.target.value || undefined })}
+              className="field w-full px-2 py-1.5 text-xs"
+            >
+              <option value="">No folder</option>
+              {folders.map((f) => (
+                <option key={f} value={f}>
+                  📁 {f}
                 </option>
               ))}
             </select>

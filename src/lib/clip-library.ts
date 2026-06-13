@@ -26,6 +26,8 @@ export interface LibraryClip {
   scheduledFor?: string;
   platform?: ClipPlatform;
   notes?: string;
+  /** User folder the clip lives in; undefined = top level. */
+  folder?: string;
 }
 
 const META_PREFIX = "clip:";
@@ -97,6 +99,50 @@ export async function getClipBlob(id: string): Promise<Blob | undefined> {
   }
 }
 
+// ---- Folders ----
+// Stored as a plain name list so empty folders persist; a clip's membership
+// lives on its own metadata (`folder` field).
+const FOLDERS_KEY = "clipfolders:list";
+
+export async function listFolders(): Promise<string[]> {
+  try {
+    return ((await get(FOLDERS_KEY)) as string[] | undefined) ?? [];
+  } catch (err) {
+    warn("listFolders", err);
+    return [];
+  }
+}
+
+export async function createFolder(name: string): Promise<string[]> {
+  const trimmed = name.trim();
+  const folders = await listFolders();
+  if (!trimmed || folders.includes(trimmed)) return folders;
+  const next = [...folders, trimmed].sort((a, b) => a.localeCompare(b));
+  try {
+    await set(FOLDERS_KEY, next);
+  } catch (err) {
+    warn("createFolder", err);
+  }
+  return next;
+}
+
+/** Remove a folder; clips inside it move back to the top level. */
+export async function deleteFolder(name: string): Promise<string[]> {
+  const folders = (await listFolders()).filter((f) => f !== name);
+  try {
+    await set(FOLDERS_KEY, folders);
+    const clips = await listClips();
+    await Promise.all(
+      clips
+        .filter((c) => c.folder === name)
+        .map((c) => updateClip(c.id, { folder: undefined }))
+    );
+  } catch (err) {
+    warn("deleteFolder", err);
+  }
+  return folders;
+}
+
 /** Total bytes of stored clip videos — surfaced in the library so the user
  *  knows when IndexedDB quota is getting eaten. */
 export function libraryTotalBytes(clips: LibraryClip[]): number {
@@ -111,8 +157,8 @@ export function libraryTotalBytes(clips: LibraryClip[]): number {
 export async function captureThumbnail(video: Blob): Promise<string | undefined> {
   if (typeof document === "undefined") return undefined;
   const url = URL.createObjectURL(video);
+  const el = document.createElement("video");
   try {
-    const el = document.createElement("video");
     el.muted = true;
     el.playsInline = true;
     el.preload = "auto";
@@ -154,6 +200,10 @@ export async function captureThumbnail(video: Blob): Promise<string | undefined>
     warn("captureThumbnail", err);
     return undefined;
   } finally {
+    // Detach before revoking, or the element keeps retrying the dead blob URL
+    // and spams ERR_FILE_NOT_FOUND in the console.
+    el.removeAttribute("src");
+    el.load();
     URL.revokeObjectURL(url);
   }
 }
