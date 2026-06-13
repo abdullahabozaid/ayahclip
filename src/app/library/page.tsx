@@ -115,6 +115,33 @@ export default function LibraryPage() {
     if (folderFilter === name) setFolderFilter("all");
   };
 
+  // Multi-select for bulk move/delete.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const bulkMove = async (folder: string) => {
+    const ids = [...selected];
+    await Promise.all(ids.map((id) => updateClip(id, { folder: folder || undefined })));
+    setClips((cs) =>
+      cs.map((c) => (selected.has(c.id) ? { ...c, folder: folder || undefined } : c))
+    );
+    setSelected(new Set());
+  };
+
+  const bulkDelete = async () => {
+    if (!confirm(`Delete ${selected.size} clip(s)? Their stored videos are removed too.`)) return;
+    const ids = [...selected];
+    await Promise.all(ids.map((id) => deleteClip(id)));
+    setClips((cs) => cs.filter((c) => !selected.has(c.id)));
+    setSelected(new Set());
+  };
+
   useEffect(() => {
     return () => {
       if (playingUrl) URL.revokeObjectURL(playingUrl);
@@ -308,6 +335,43 @@ export default function LibraryPage() {
         </button>
       </div>
 
+      {selected.size > 0 && (
+        <div className="sticky top-[72px] z-30 mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--gold)]/30 bg-[var(--ink-deep)]/95 px-4 py-2.5 backdrop-blur">
+          <span className="text-sm text-gold-soft">{selected.size} selected</span>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              if (e.target.value === "__none__") bulkMove("");
+              else if (e.target.value) bulkMove(e.target.value);
+              e.target.value = "";
+            }}
+            className="field px-3 py-1.5 text-xs"
+          >
+            <option value="" disabled>
+              Move to folder…
+            </option>
+            <option value="__none__">No folder</option>
+            {folders.map((f) => (
+              <option key={f} value={f}>
+                📁 {f}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={bulkDelete}
+            className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="ml-auto text-xs text-[var(--muted)] hover:text-parchment"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {loaded && clips.length === 0 && (
         <div className="rounded-2xl border border-[var(--hairline-soft)] py-20 text-center">
           <p className="font-display text-xl text-parchment">No clips yet</p>
@@ -324,6 +388,8 @@ export default function LibraryPage() {
               key={clip.id}
               clip={clip}
               folders={folders}
+              selected={selected.has(clip.id)}
+              onToggleSelect={() => toggleSelect(clip.id)}
               playing={playingId === clip.id ? playingUrl : null}
               scheduling={schedulingId === clip.id}
               onToggleSchedule={() =>
@@ -357,6 +423,8 @@ export default function LibraryPage() {
                     key={clip.id}
                     clip={clip}
                     folders={folders}
+                    selected={selected.has(clip.id)}
+                    onToggleSelect={() => toggleSelect(clip.id)}
                     playing={playingId === clip.id ? playingUrl : null}
                     scheduling={schedulingId === clip.id}
                     onToggleSchedule={() =>
@@ -382,6 +450,8 @@ export default function LibraryPage() {
                     key={clip.id}
                     clip={clip}
                     folders={folders}
+                    selected={selected.has(clip.id)}
+                    onToggleSelect={() => toggleSelect(clip.id)}
                     playing={playingId === clip.id ? playingUrl : null}
                     scheduling={schedulingId === clip.id}
                     onToggleSchedule={() =>
@@ -405,6 +475,8 @@ export default function LibraryPage() {
 function ClipCard({
   clip,
   folders,
+  selected,
+  onToggleSelect,
   playing,
   scheduling,
   onToggleSchedule,
@@ -415,6 +487,8 @@ function ClipCard({
 }: {
   clip: LibraryClip;
   folders: string[];
+  selected: boolean;
+  onToggleSelect: () => void;
   playing: string | null;
   scheduling: boolean;
   onToggleSchedule: () => void;
@@ -423,40 +497,91 @@ function ClipCard({
   onDownload: () => void;
   onDelete: () => void;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // While previewing, freeze the current frame as the clip's thumbnail —
+  // scrub to the moment you want, then tap the camera.
+  const setThumbFromFrame = () => {
+    const v = videoRef.current;
+    if (!v || v.videoWidth === 0) return;
+    const w = 180;
+    const h = Math.round((v.videoHeight / v.videoWidth) * w);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(v, 0, 0, w, h);
+    onPatch({ thumbnail: canvas.toDataURL("image/jpeg", 0.7) });
+  };
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--hairline-soft)] bg-[var(--surface)]">
-      <button
-        onClick={onPlay}
-        className="relative block aspect-[9/16] w-full bg-black"
-        aria-label={playing ? "Stop preview" : "Play preview"}
-      >
-        {playing ? (
-          <video
-            src={playing}
-            autoPlay
-            controls
-            playsInline
-            className="h-full w-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : clip.thumbnail ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={clip.thumbnail} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <span className="flex h-full items-center justify-center text-3xl text-gold/40">
-            ﷽
-          </span>
-        )}
-        {!playing && (
-          <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 backdrop-blur">
-              <svg viewBox="0 0 24 24" className="h-5 w-5 translate-x-0.5 text-white" fill="currentColor">
-                <path d="M8 5v14l11-7z" />
-              </svg>
+    <div
+      className={`overflow-hidden rounded-2xl border bg-[var(--surface)] transition-colors ${
+        selected ? "border-[var(--gold)]" : "border-[var(--hairline-soft)]"
+      }`}
+    >
+      <div className="relative">
+        <button
+          onClick={onPlay}
+          className="relative block aspect-[9/16] w-full bg-black"
+          aria-label={playing ? "Stop preview" : "Play preview"}
+        >
+          {playing ? (
+            <video
+              ref={videoRef}
+              src={playing}
+              autoPlay
+              controls
+              playsInline
+              className="h-full w-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : clip.thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={clip.thumbnail} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full items-center justify-center text-3xl text-gold/40">
+              ﷽
             </span>
-          </span>
+          )}
+          {!playing && (
+            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 backdrop-blur">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 translate-x-0.5 text-white" fill="currentColor">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </span>
+            </span>
+          )}
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          aria-label={selected ? "Deselect clip" : "Select clip"}
+          className={`absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border text-[11px] backdrop-blur transition-colors ${
+            selected
+              ? "border-[var(--gold)] bg-[var(--gold)] text-[var(--ink-deep)]"
+              : "border-white/40 bg-black/40 text-transparent hover:border-white"
+          }`}
+        >
+          ✓
+        </button>
+        {playing && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setThumbFromFrame();
+            }}
+            className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1.5 text-[11px] text-white backdrop-blur transition-colors hover:bg-black/80"
+            title="Use the current frame as this clip's thumbnail"
+          >
+            📷 Set thumbnail
+          </button>
         )}
-      </button>
+      </div>
 
       <div className="space-y-2 p-3">
         <div className="flex items-start justify-between gap-2">
