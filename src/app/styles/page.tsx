@@ -16,11 +16,56 @@ import {
 import { drawScene, FORMAT_SIZES, SceneStyleSource } from "@/lib/render-core";
 import { ensureFontsReady, TRANSLATION_FONTS } from "@/lib/canvas-utils";
 import { useAppStore } from "@/lib/store";
+import { fetchVerses } from "@/lib/api";
 
-// Sample verse shown in every preview (Al-Fatihah 1:1).
-const SAMPLE_ARABIC = "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ";
-const SAMPLE_TRANSLATION =
-  "In the name of Allah, the Entirely Merciful, the Especially Merciful.";
+// Sample verses for previews, in three lengths so multi-line layout (gaps,
+// highlight bars, verse numbers) can be checked. The short one is inlined as
+// an instant fallback; all texts are replaced by the REAL Quran.com text on
+// load — sample text is never hand-typed beyond the basmala.
+export interface SampleVerse {
+  label: string;
+  arabicText: string;
+  translation?: string;
+  verseNumber: number;
+}
+
+const FALLBACK_SAMPLE: SampleVerse = {
+  label: "Short",
+  arabicText: "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ",
+  translation: "In the name of Allah, the Entirely Merciful, the Especially Merciful.",
+  verseNumber: 1,
+};
+
+// surah:verse to use for each length tier.
+const SAMPLE_SOURCES: { label: string; surah: number; verse: number }[] = [
+  { label: "Short", surah: 1, verse: 1 },   // basmala — one line
+  { label: "Medium", surah: 1, verse: 7 },  // ~two lines at default size
+  { label: "Long", surah: 59, verse: 23 },  // ~three+ lines at default size
+];
+
+let samplesPromise: Promise<SampleVerse[]> | null = null;
+function loadSamples(): Promise<SampleVerse[]> {
+  if (!samplesPromise) {
+    samplesPromise = Promise.all(
+      SAMPLE_SOURCES.map(async (src) => {
+        const verses = await fetchVerses(src.surah);
+        const v = verses.find((x) => x.verse_number === src.verse);
+        if (!v) throw new Error(`sample ${src.surah}:${src.verse} missing`);
+        return {
+          label: src.label,
+          arabicText: v.text_uthmani,
+          translation: v.translation,
+          verseNumber: v.verse_number,
+        };
+      })
+    ).catch((err) => {
+      console.warn("Could not load sample verses; falling back to basmala", err);
+      samplesPromise = null;
+      return [FALLBACK_SAMPLE];
+    });
+  }
+  return samplesPromise;
+}
 
 const DEFAULT_STYLE: StyleSettings = {
   arabicFont: "uthmanic-hafs",
@@ -72,12 +117,27 @@ function toScene(style: StyleSettings): SceneStyleSource {
   };
 }
 
-function StylePreview({ style, className }: { style: StyleSettings; className?: string }) {
+function StylePreview({
+  style,
+  sample,
+  replayToken = 0,
+  className,
+  onDoubleClick,
+}: {
+  style: StyleSettings;
+  sample?: SampleVerse;
+  /** Bump to replay the verse-intro animation in the preview. */
+  replayToken?: number;
+  className?: string;
+  onDoubleClick?: () => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const verse = sample ?? FALLBACK_SAMPLE;
 
   useEffect(() => {
     let cancelled = false;
-    const draw = () => {
+    let raf = 0;
+    const drawAt = (introProgress: number) => {
       const canvas = canvasRef.current;
       if (!canvas || cancelled) return;
       const size = FORMAT_SIZES["9:16"];
@@ -86,28 +146,82 @@ function StylePreview({ style, className }: { style: StyleSettings; className?: 
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       drawScene(ctx, toScene(style), {
-        arabicText: SAMPLE_ARABIC,
-        verseNumber: 1,
-        translation: style.translationEnabled ? SAMPLE_TRANSLATION : undefined,
+        arabicText: verse.arabicText,
+        verseNumber: verse.verseNumber,
+        translation: style.translationEnabled ? verse.translation : undefined,
         isLastPart: true,
-        introProgress: 1,
+        introProgress,
       });
     };
-    ensureFontsReady(style.arabicFont, style.translationFont).then(draw);
-    draw();
+    const start = () => {
+      // Animate the intro (fade/blur/slide/scale) whenever the style or replay
+      // token changes, so the user actually SEES the entrance they configured.
+      if ((style.verseIntro ?? "none") === "none") {
+        drawAt(1);
+        return;
+      }
+      const ms = style.verseIntroMs ?? 450;
+      const t0 = performance.now();
+      const tick = () => {
+        if (cancelled) return;
+        const p = Math.min(1, (performance.now() - t0) / ms);
+        drawAt(p);
+        if (p < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    };
+    ensureFontsReady(style.arabicFont, style.translationFont).then(() => {
+      if (!cancelled) start();
+    });
+    drawAt((style.verseIntro ?? "none") === "none" ? 1 : 0);
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf);
     };
-  }, [style]);
+  }, [style, verse, replayToken]);
 
-  return <canvas ref={canvasRef} className={className ?? "h-full w-full"} />;
+  return (
+    <canvas
+      ref={canvasRef}
+      onDoubleClick={onDoubleClick}
+      className={className ?? "h-full w-full"}
+    />
+  );
 }
 
 export default function StylesPage() {
   const router = useRouter();
   const applyStyle = useAppStore((s) => s.applyStyle);
-  const [styles, setStyles] = useState<SavedStyle[]>(() => getSavedStyles());
+  // Saved styles live in localStorage; reading them during render would make
+  // the server HTML differ from the client (hydration error). Load after mount.
+  const [styles, setStyles] = useState<SavedStyle[]>([]);
+  const [stylesLoaded, setStylesLoaded] = useState(false);
   const [editing, setEditing] = useState<{ id: string | null; name: string; style: StyleSettings } | null>(null);
+  const [samples, setSamples] = useState<SampleVerse[]>([FALLBACK_SAMPLE]);
+  const [sampleIdx, setSampleIdx] = useState(0);
+  const [replay, setReplay] = useState(0);
+  const [fullscreenStyle, setFullscreenStyle] = useState<StyleSettings | null>(null);
+
+  useEffect(() => {
+    let on = true;
+    // Microtask defer keeps this out of the synchronous effect body (lint) and
+    // off the hydration pass.
+    Promise.resolve().then(() => {
+      if (!on) return;
+      setStyles(getSavedStyles());
+      setStylesLoaded(true);
+    });
+    loadSamples().then((sv) => {
+      if (on && sv.length > 0) setSamples(sv);
+    });
+    return () => {
+      on = false;
+    };
+  }, []);
+  const sample = samples[Math.min(sampleIdx, samples.length - 1)];
+
+  const duplicate = (sty: SavedStyle) =>
+    setStyles(saveStyle(`${sty.name} copy`, { ...sty.settings }));
 
   const startNew = () =>
     setEditing({ id: null, name: "", style: { ...DEFAULT_STYLE } });
@@ -133,10 +247,57 @@ export default function StylesPage() {
   const set = <K extends keyof StyleSettings>(key: K, value: StyleSettings[K]) =>
     setEditing((e) => (e ? { ...e, style: { ...e.style, [key]: value } } : e));
 
+  // Full-screen look at any style — double-click a preview or use the ⛶ button.
+  const fullscreenOverlay = fullscreenStyle && (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/95 p-4"
+      onClick={() => setFullscreenStyle(null)}
+    >
+      <div
+        className="h-[85vh] overflow-hidden rounded-2xl border border-[var(--hairline-soft)]"
+        style={{ aspectRatio: "9 / 16" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <StylePreview style={fullscreenStyle} sample={sample} replayToken={replay} />
+      </div>
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {samples.length > 1 &&
+          samples.map((sv, i) => (
+            <button
+              key={sv.label}
+              onClick={() => setSampleIdx(i)}
+              className={`rounded-full px-3 py-1.5 text-xs ${
+                i === sampleIdx
+                  ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                  : "bg-white/10 text-white/70 hover:text-white"
+              }`}
+            >
+              {sv.label}
+            </button>
+          ))}
+        {(fullscreenStyle.verseIntro ?? "none") !== "none" && (
+          <button
+            onClick={() => setReplay((n) => n + 1)}
+            className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/70 hover:text-white"
+          >
+            ↺ Replay intro
+          </button>
+        )}
+        <button
+          onClick={() => setFullscreenStyle(null)}
+          className="rounded-full bg-white/10 px-3 py-1.5 text-xs text-white/70 hover:text-white"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  );
+
   if (editing) {
     const st = editing.style;
     return (
       <main className="mx-auto max-w-5xl px-5 pb-24 pt-8">
+        {fullscreenOverlay}
         <div className="mb-6 flex items-center justify-between">
           <h1 className="font-display text-3xl text-parchment">
             {editing.id ? "Edit style" : "New style"}
@@ -156,12 +317,47 @@ export default function StylesPage() {
 
         <div className="grid gap-8 md:grid-cols-[320px_1fr]">
           {/* Live preview */}
-          <div className="mx-auto w-full max-w-[320px]">
+          <div className="mx-auto w-full max-w-[320px] md:sticky md:top-24 md:self-start">
             <div className="overflow-hidden rounded-2xl border border-[var(--hairline-soft)]">
-              <StylePreview style={st} className="block aspect-[9/16] w-full" />
+              <StylePreview
+                style={st}
+                sample={sample}
+                replayToken={replay}
+                className="block aspect-[9/16] w-full cursor-zoom-in"
+                onDoubleClick={() => setFullscreenStyle(st)}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+              {samples.map((sv, i) => (
+                <button
+                  key={sv.label}
+                  onClick={() => setSampleIdx(i)}
+                  className={`rounded-full px-3 py-1 text-[11px] ${
+                    i === sampleIdx
+                      ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                      : "border border-[var(--hairline-soft)] text-[var(--muted)] hover:text-parchment"
+                  }`}
+                >
+                  {sv.label}
+                </button>
+              ))}
+              {(st.verseIntro ?? "none") !== "none" && (
+                <button
+                  onClick={() => setReplay((n) => n + 1)}
+                  className="rounded-full border border-[var(--hairline-soft)] px-3 py-1 text-[11px] text-gold-soft hover:text-gold"
+                >
+                  ↺ Replay
+                </button>
+              )}
+              <button
+                onClick={() => setFullscreenStyle(st)}
+                className="rounded-full border border-[var(--hairline-soft)] px-3 py-1 text-[11px] text-[var(--muted)] hover:text-parchment"
+              >
+                ⛶ Full screen
+              </button>
             </div>
             <p className="mt-2 text-center text-[11px] text-[var(--muted)]">
-              Live preview — rendered by the exact export pipeline
+              Real export renderer · double-click for full screen
             </p>
           </div>
 
@@ -189,6 +385,31 @@ export default function StylesPage() {
             <ColorRow label="Text Color" value={st.textColor} onChange={(v) => set("textColor", v)} />
             <ToggleRow label="Text Shadow" checked={st.textShadow.enabled}
               onChange={() => set("textShadow", { ...st.textShadow, enabled: !st.textShadow.enabled })} />
+            <ToggleRow label="Verse Number (Arabic ﴿١﴾)" checked={!!st.arabicVerseNumber}
+              onChange={() => set("arabicVerseNumber", !st.arabicVerseNumber)} />
+            <ToggleRow label="Verse Number (Translation)" checked={st.translationVerseNumber !== false}
+              onChange={() => set("translationVerseNumber", st.translationVerseNumber === false)} />
+
+            <div>
+              <label className="mb-2 block text-xs text-[var(--muted)]">Verse Intro</label>
+              <select
+                value={st.verseIntro ?? "none"}
+                onChange={(e) => set("verseIntro", e.target.value as StyleSettings["verseIntro"])}
+                className="field w-full px-3 py-2.5 text-sm"
+              >
+                <option value="none">None</option>
+                <option value="fade">Fade in</option>
+                <option value="blur">Blur in</option>
+                <option value="slide">Slide up</option>
+                <option value="scale">Scale in</option>
+              </select>
+            </div>
+            {(st.verseIntro ?? "none") !== "none" && (
+              <Row label="Intro Speed" v={`${st.verseIntroMs ?? 450}ms`}>
+                <input type="range" min={150} max={1200} step={50} value={st.verseIntroMs ?? 450}
+                  onChange={(e) => set("verseIntroMs", Number(e.target.value))} className="slider-gold w-full" />
+              </Row>
+            )}
 
             <ToggleRow label="Translation" checked={st.translationEnabled}
               onChange={() => set("translationEnabled", !st.translationEnabled)} />
@@ -251,6 +472,7 @@ export default function StylesPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-24 pt-8">
+      {fullscreenOverlay}
       <div className="mb-6 flex items-end justify-between">
         <div>
           <h1 className="font-display text-3xl text-parchment">My Styles</h1>
@@ -263,7 +485,7 @@ export default function StylesPage() {
         </button>
       </div>
 
-      {styles.length === 0 ? (
+      {stylesLoaded && styles.length === 0 ? (
         <div className="rounded-2xl border border-[var(--hairline-soft)] py-20 text-center">
           <p className="font-display text-xl text-parchment">No styles yet</p>
           <p className="mt-2 text-sm text-[var(--muted)]">
@@ -275,8 +497,13 @@ export default function StylesPage() {
           {styles.map((s) => (
             <div key={s.id}
               className="overflow-hidden rounded-2xl border border-[var(--hairline-soft)] bg-[var(--surface)]">
-              <button onClick={() => startEdit(s)} className="block aspect-[9/16] w-full" aria-label={`Edit ${s.name}`}>
-                <StylePreview style={{ ...DEFAULT_STYLE, ...s.settings }} />
+              <button
+                onClick={() => startEdit(s)}
+                onDoubleClick={() => setFullscreenStyle({ ...DEFAULT_STYLE, ...s.settings })}
+                className="block aspect-[9/16] w-full"
+                aria-label={`Edit ${s.name}`}
+              >
+                <StylePreview style={{ ...DEFAULT_STYLE, ...s.settings }} sample={sample} />
               </button>
               <div className="space-y-2 p-3">
                 <p className="truncate text-sm text-parchment">{s.name}</p>
@@ -288,6 +515,14 @@ export default function StylesPage() {
                   <button onClick={() => startEdit(s)}
                     className="rounded-lg border border-[var(--hairline)] px-2.5 py-1.5 text-[11px] text-[var(--muted)] hover:text-parchment">
                     Edit
+                  </button>
+                  <button onClick={() => duplicate(s)} title="Duplicate style"
+                    className="rounded-lg border border-[var(--hairline)] px-2.5 py-1.5 text-[11px] text-[var(--muted)] hover:text-parchment">
+                    ⧉
+                  </button>
+                  <button onClick={() => setFullscreenStyle({ ...DEFAULT_STYLE, ...s.settings })} title="Full screen"
+                    className="rounded-lg border border-[var(--hairline)] px-2.5 py-1.5 text-[11px] text-[var(--muted)] hover:text-parchment">
+                    ⛶
                   </button>
                   <button
                     onClick={() => {
