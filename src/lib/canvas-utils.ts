@@ -506,6 +506,17 @@ function drawQcfBlock(
   ctx.textAlign = prevAlign;
 }
 
+// Shared offscreen layer for the intro animation. drawVerseText runs every rAF
+// frame while a verse animates in — allocating a fresh 1080×1920 canvas per
+// frame churns GPU memory for nothing. Use is synchronous (paint → composite
+// within one call), so a single cached canvas is safe.
+let introCanvas: HTMLCanvasElement | null = null;
+function getIntroCanvas(): HTMLCanvasElement | null {
+  if (typeof document === "undefined") return null;
+  if (!introCanvas) introCanvas = document.createElement("canvas");
+  return introCanvas;
+}
+
 export function drawVerseText(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -713,16 +724,19 @@ export function drawVerseText(
   }
 
   const tm = ctx.getTransform();
-  const off =
-    typeof document !== "undefined" ? document.createElement("canvas") : null;
+  const off = getIntroCanvas();
   const octx = off?.getContext("2d") ?? null;
   if (!off || !octx) {
     // No offscreen available — draw directly (correctness over animation).
     paintText(ctx);
     return;
   }
-  off.width = Math.max(1, Math.ceil(w * tm.a));
-  off.height = Math.max(1, Math.ceil(h * tm.d));
+  const offW = Math.max(1, Math.ceil(w * tm.a));
+  const offH = Math.max(1, Math.ceil(h * tm.d));
+  if (off.width !== offW) off.width = offW;
+  if (off.height !== offH) off.height = offH;
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.clearRect(0, 0, offW, offH);
   octx.scale(tm.a, tm.d); // match the caller's logical coordinate system
   paintText(octx);
 
