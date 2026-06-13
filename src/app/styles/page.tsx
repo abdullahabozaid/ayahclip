@@ -5,7 +5,7 @@
 // export resolution, so what you see here is exactly what a clip will look like.
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StyleSettings } from "@/lib/style";
+import { StyleSettings, stripBackgroundKeys } from "@/lib/style";
 import {
   SavedStyle,
   getSavedStyles,
@@ -231,16 +231,18 @@ export default function StylesPage() {
 
   const saveEditing = () => {
     if (!editing) return;
+    const settings = stripBackgroundKeys(editing.style);
     if (editing.id) {
-      setStyles(updateSavedStyle(editing.id, { name: editing.name || "Untitled", settings: editing.style }));
+      setStyles(updateSavedStyle(editing.id, { name: editing.name || "Untitled", settings }));
     } else {
-      setStyles(saveStyle(editing.name, editing.style));
+      setStyles(saveStyle(editing.name, settings));
     }
     setEditing(null);
   };
 
   const applyToStudio = (settings: Partial<StyleSettings>) => {
-    applyStyle(settings);
+    // Strip defensively too: styles saved before this rule carried a background.
+    applyStyle(stripBackgroundKeys(settings));
     router.push("/studio");
   };
 

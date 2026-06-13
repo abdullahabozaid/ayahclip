@@ -95,6 +95,21 @@ export const PRESET_KEYS: (keyof StyleSettings)[] = [
   "letterbox",
 ];
 
+/**
+ * A style describes the WORDS, never the clip's background — applying one must
+ * not replace the background the user chose/uploaded for the current clip.
+ */
+export function stripBackgroundKeys(
+  style: Partial<StyleSettings>
+): Partial<StyleSettings> {
+  const rest = { ...style };
+  delete rest.background;
+  delete rest.backgroundFit;
+  delete rest.fitBackdrop;
+  delete rest.videoLoopMode;
+  return rest;
+}
+
 /** Pull just the style fields out of a larger state object. */
 export function extractStyle(state: StyleSettings): StyleSettings {
   return STYLE_KEYS.reduce((acc, key) => {
