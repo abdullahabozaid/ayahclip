@@ -12,22 +12,25 @@ export async function POST(req: NextRequest) {
   // Only the local dev origin (or a device on the LAN, e.g. the phone) may write
   // to disk. Parse the hostname — a startsWith check matches evil lookalikes
   // like http://localhost.attacker.com.
-  const origin = req.headers.get("origin") ?? "";
-  if (origin) {
-    let host: string;
-    try {
-      host = new URL(origin).hostname;
-    } catch {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-    const isLan =
-      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
-      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-      /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host);
-    if (!isLocal && !isLan) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+  // Browsers always send Origin on POST (including same-origin fetch), so a
+  // missing Origin means a non-browser client — deny rather than skip the check.
+  const origin = req.headers.get("origin");
+  if (!origin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  let host: string;
+  try {
+    host = new URL(origin).hostname;
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const isLan =
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host);
+  if (!isLocal && !isLan) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const formData = await req.formData();
