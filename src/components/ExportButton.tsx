@@ -5,6 +5,12 @@ import { useAppStore } from "@/lib/store";
 import { reciters } from "@/lib/reciters";
 import { exportVideo } from "@/lib/export";
 import { getTranslationLanguage } from "@/lib/translations";
+import {
+  saveClip,
+  captureThumbnail,
+  generateClipId,
+  type LibraryClip,
+} from "@/lib/clip-library";
 
 async function saveFile(file: File) {
   try {
@@ -107,6 +113,33 @@ export function ExportButton() {
         `ayahclip-${store.surah.name_simple}-${store.videoFormat}.${ext}`,
         { type: blob.type }
       );
+
+      // Keep every export in the clip library (IndexedDB) so it can be
+      // scheduled from /library. Best-effort — never blocks the download.
+      try {
+        const nums = selectedVerses.map((v) => v.verse_number);
+        const range =
+          nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : `${nums[0]}`;
+        const meta: LibraryClip = {
+          id: generateClipId(),
+          title: `${store.surah.name_simple} ${range}`,
+          surahName: store.surah.name_simple,
+          verseRange: `${store.surah.id}:${range}`,
+          reciterName:
+            store.audioSource.mode === "imported"
+              ? "Imported audio"
+              : reciter?.name ?? "Unknown reciter",
+          videoFormat: store.videoFormat,
+          mimeType: blob.type,
+          size: blob.size,
+          createdAt: Date.now(),
+          thumbnail: await captureThumbnail(blob),
+          status: "draft",
+        };
+        await saveClip(meta, blob);
+      } catch (err) {
+        console.warn("Could not save clip to library:", err);
+      }
 
       // Touch devices that can share files: surface the OS share sheet so the
       // user can save straight to Photos/Gallery. Desktop keeps the download.

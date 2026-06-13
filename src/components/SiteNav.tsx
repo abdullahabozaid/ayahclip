@@ -23,6 +23,11 @@ export function SiteNav() {
             label="Browse"
             active={pathname?.startsWith("/browse") || pathname?.startsWith("/surah")}
           />
+          <NavLink
+            href="/library"
+            label="Library"
+            active={pathname?.startsWith("/library")}
+          />
           <Link
             href="/browse"
             className="btn-gold ml-2 rounded-full px-4 py-2 text-sm"
