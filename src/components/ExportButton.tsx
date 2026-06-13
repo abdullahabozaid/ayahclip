@@ -25,15 +25,17 @@ export function ExportButton() {
 
   const hasSelection = store.selectedVerseNumbers.length > 0 && !!store.surah;
 
-  const run = async (after: (file: File) => Promise<void> | void) => {
+  const run = async (
+    after: (file: File, fallbackReason?: string) => Promise<void> | void
+  ) => {
     setExporting(true);
     setError(null);
     setPendingFile(null);
     try {
-      const file = await renderClipFile((current, total) =>
+      const rendered = await renderClipFile((current, total) =>
         setProgress({ current, total })
       );
-      if (file) await after(file);
+      if (rendered) await after(rendered.file, rendered.fallbackReason);
     } catch (err) {
       console.error("Export failed:", err);
       setError(
@@ -61,8 +63,8 @@ export function ExportButton() {
 
   // Render the MP4 and open it in a real player BEFORE saving anything.
   const handlePreview = () =>
-    run((file) => {
-      setPreview({ file, url: URL.createObjectURL(file) });
+    run((file, fallbackReason) => {
+      setPreview({ file, url: URL.createObjectURL(file), fallbackReason });
     });
 
   const saveToPhotos = async () => {

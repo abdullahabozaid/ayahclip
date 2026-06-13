@@ -4,7 +4,7 @@
 // Export button and the studio's "see the final MP4" preview.
 import { useAppStore } from "./store";
 import { reciters } from "./reciters";
-import { exportVideo } from "./export";
+import { exportVideoWithInfo } from "./export";
 import { getTranslationLanguage } from "./translations";
 import { getBlob } from "./projects";
 import {
@@ -52,10 +52,16 @@ async function healDeadMediaUrls(): Promise<void> {
   }
 }
 
+export interface RenderedFile {
+  file: File;
+  /** Present when the slow real-time recorder had to be used — tell the user why. */
+  fallbackReason?: string;
+}
+
 /** Encode the current clip to its final video file. Null when nothing is selected. */
 export async function renderClipFile(
   onProgress: (current: number, total: number) => void
-): Promise<File | null> {
+): Promise<RenderedFile | null> {
   await healDeadMediaUrls();
   const s = useAppStore.getState();
   const selectedVerses = s.verses.filter((v) =>
@@ -64,7 +70,7 @@ export async function renderClipFile(
   if (selectedVerses.length === 0 || !s.surah) return null;
   const reciter = reciters.find((r) => r.id === s.reciterId);
 
-  const blob = await exportVideo({
+  const { blob, fallbackReason } = await exportVideoWithInfo({
     verses: selectedVerses,
     reciterFolder: reciter?.folder ?? "Alafasy_128kbps",
     surahNumber: s.surah.id,
@@ -117,11 +123,12 @@ export async function renderClipFile(
   });
 
   const ext = blob.type.includes("mp4") ? "mp4" : "webm";
-  return new File(
+  const file = new File(
     [blob],
     `ayahclip-${s.surah.name_simple}-${s.videoFormat}.${ext}`,
     { type: blob.type }
   );
+  return { file, fallbackReason };
 }
 
 /** Keep an encoded clip in the library (IndexedDB) so it can be scheduled

@@ -154,7 +154,17 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
  * (faster-than-real-time). Any failure falls back to the real-time MediaRecorder
  * path, so export always works.
  */
+export interface ExportResult {
+  blob: Blob;
+  /** Set when the fast encoder couldn't be used — explains the slow path. */
+  fallbackReason?: string;
+}
+
 export async function exportVideo(options: ExportOptions): Promise<Blob> {
+  return (await exportVideoWithInfo(options)).blob;
+}
+
+export async function exportVideoWithInfo(options: ExportOptions): Promise<ExportResult> {
   // Guarantee the Arabic web font is loaded before any frame is drawn — a system
   // fallback would corrupt the Quranic text in the exported file.
   await ensureFontsReady(options.arabicFont, options.translationFont);
@@ -166,14 +176,18 @@ export async function exportVideo(options: ExportOptions): Promise<Blob> {
     typeof AudioEncoder !== "undefined" &&
     typeof VideoFrame !== "undefined" &&
     typeof AudioData !== "undefined";
+  let fallbackReason: string | undefined;
   if (webCodecs) {
     try {
-      return await exportVideoFast(options);
+      return { blob: await exportVideoFast(options) };
     } catch (e) {
+      fallbackReason = e instanceof Error ? e.message : String(e);
       console.warn("Fast export failed; falling back to real-time recorder.", e);
     }
+  } else {
+    fallbackReason = "This browser lacks WebCodecs (fast encoding) — using the real-time recorder.";
   }
-  return exportRealtime(options);
+  return { blob: await exportRealtime(options), fallbackReason };
 }
 
 /** Seek a video to a time and resolve once the frame is ready. A short timeout
