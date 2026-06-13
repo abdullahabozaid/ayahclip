@@ -46,16 +46,15 @@ export function ExportButton() {
     store.selectedVerseNumbers.includes(v.verse_number)
   );
 
-  const handleExport = async () => {
-    if (selectedVerses.length === 0 || !store.surah) return;
+  // The rendered-but-not-yet-saved MP4 for the pre-download preview: the user
+  // watches the EXACT file (real scrubber, real pause, real pixels) and then
+  // saves or discards it — no re-encode on save.
+  const [preview, setPreview] = useState<{ file: File; url: string } | null>(null);
 
-    setExporting(true);
-    setError(null);
-    setPendingFile(null);
+  const encodeClip = async (): Promise<File | null> => {
+    if (selectedVerses.length === 0 || !store.surah) return null;
     const reciter = reciters.find((r) => r.id === store.reciterId);
-
-    try {
-      const blob = await exportVideo({
+    const blob = await exportVideo({
         verses: selectedVerses,
         reciterFolder: reciter?.folder ?? "Alafasy_128kbps",
         surahNumber: store.surah.id,
@@ -108,49 +107,64 @@ export function ExportButton() {
         onProgress: (current, total) => setProgress({ current, total }),
       });
 
-      const ext = blob.type.includes("mp4") ? "mp4" : "webm";
-      const file = new File(
-        [blob],
-        `ayahclip-${store.surah.name_simple}-${store.videoFormat}.${ext}`,
-        { type: blob.type }
-      );
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    return new File(
+      [blob],
+      `ayahclip-${store.surah.name_simple}-${store.videoFormat}.${ext}`,
+      { type: blob.type }
+    );
+  };
 
-      // Keep every export in the clip library (IndexedDB) so it can be
-      // scheduled from /library. Best-effort — never blocks the download.
-      try {
-        const nums = selectedVerses.map((v) => v.verse_number);
-        const range =
-          nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : `${nums[0]}`;
-        const meta: LibraryClip = {
-          id: generateClipId(),
-          title: `${store.surah.name_simple} ${range}`,
-          surahName: store.surah.name_simple,
-          verseRange: `${store.surah.id}:${range}`,
-          reciterName:
-            store.audioSource.mode === "imported"
-              ? "Imported audio"
-              : reciter?.name ?? "Unknown reciter",
-          videoFormat: store.videoFormat,
-          mimeType: blob.type,
-          size: blob.size,
-          createdAt: Date.now(),
-          thumbnail: await captureThumbnail(blob),
-          status: "draft",
-        };
-        await saveClip(meta, blob);
-      } catch (err) {
-        console.warn("Could not save clip to library:", err);
-      }
+  // Keep every export in the clip library (IndexedDB) so it can be
+  // scheduled from /library. Best-effort — never blocks the download.
+  const saveToLibrary = async (file: File) => {
+    if (!store.surah) return;
+    try {
+      const reciter = reciters.find((r) => r.id === store.reciterId);
+      const nums = selectedVerses.map((v) => v.verse_number);
+      const range =
+        nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : `${nums[0]}`;
+      const meta: LibraryClip = {
+        id: generateClipId(),
+        title: `${store.surah.name_simple} ${range}`,
+        surahName: store.surah.name_simple,
+        verseRange: `${store.surah.id}:${range}`,
+        reciterName:
+          store.audioSource.mode === "imported"
+            ? "Imported audio"
+            : reciter?.name ?? "Unknown reciter",
+        videoFormat: store.videoFormat,
+        mimeType: file.type,
+        size: file.size,
+        createdAt: Date.now(),
+        thumbnail: await captureThumbnail(file),
+        status: "draft",
+      };
+      await saveClip(meta, file);
+    } catch (err) {
+      console.warn("Could not save clip to library:", err);
+    }
+  };
 
-      // Touch devices that can share files: surface the OS share sheet so the
-      // user can save straight to Photos/Gallery. Desktop keeps the download.
-      const isTouch =
-        typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
-      if (isTouch && navigator.canShare?.({ files: [file] })) {
-        setPendingFile(file);
-      } else {
-        saveFile(file);
-      }
+  // Touch devices that can share files: surface the OS share sheet so the
+  // user can save straight to Photos/Gallery. Desktop keeps the download.
+  const deliver = (file: File) => {
+    const isTouch =
+      typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+    if (isTouch && navigator.canShare?.({ files: [file] })) {
+      setPendingFile(file);
+    } else {
+      saveFile(file);
+    }
+  };
+
+  const run = async (after: (file: File) => Promise<void> | void) => {
+    setExporting(true);
+    setError(null);
+    setPendingFile(null);
+    try {
+      const file = await encodeClip();
+      if (file) await after(file);
     } catch (err) {
       console.error("Export failed:", err);
       setError("Export failed. Your browser may not support video encoding, or it ran out of memory. Try a shorter clip.");
@@ -158,6 +172,31 @@ export function ExportButton() {
       setExporting(false);
       setProgress({ current: 0, total: 0 });
     }
+  };
+
+  const handleExport = () =>
+    run(async (file) => {
+      await saveToLibrary(file);
+      deliver(file);
+    });
+
+  // Render the MP4 and open it in a real player BEFORE saving anything.
+  const handlePreview = () =>
+    run((file) => {
+      setPreview({ file, url: URL.createObjectURL(file) });
+    });
+
+  const closePreview = () => {
+    if (preview) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
+
+  const savePreviewed = async () => {
+    if (!preview) return;
+    const file = preview.file;
+    closePreview();
+    await saveToLibrary(file);
+    deliver(file);
   };
 
   const saveToPhotos = async () => {
@@ -203,6 +242,48 @@ export function ExportButton() {
     );
   }
 
+  // Full-screen player for the rendered file: this IS the MP4 that will be
+  // downloaded — true pixels, true timeline, true pause.
+  if (preview) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col bg-black/95" onClick={closePreview}>
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-sm text-white/80">
+            Final MP4 preview <span className="text-white/40">— exactly what gets saved</span>
+          </p>
+          <button onClick={closePreview} className="rounded-full bg-white/10 px-4 py-1.5 text-sm text-white/80 hover:text-white">
+            Close
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4" onClick={(e) => e.stopPropagation()}>
+          <video
+            src={preview.url}
+            controls
+            autoPlay
+            playsInline
+            className="max-h-full max-w-full rounded-xl"
+          />
+        </div>
+        <div
+          className="flex items-center justify-center gap-3 px-4 py-4"
+          style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button onClick={closePreview} className="rounded-full border border-white/20 px-6 py-2.5 text-sm text-white/70 hover:text-white">
+            Discard
+          </button>
+          <button onClick={savePreviewed} className="btn-gold rounded-full px-8 py-2.5 text-sm">
+            Save this video
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <button
@@ -228,6 +309,13 @@ export function ExportButton() {
             </>
           )}
         </span>
+      </button>
+      <button
+        onClick={handlePreview}
+        disabled={exporting || selectedVerses.length === 0}
+        className="w-full rounded-xl border border-[var(--hairline)] py-2.5 text-sm text-parchment transition-colors hover:border-gold disabled:opacity-50"
+      >
+        {exporting ? "Rendering…" : "Preview final MP4 first"}
       </button>
       {error && (
         <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] leading-relaxed text-red-200/90">
