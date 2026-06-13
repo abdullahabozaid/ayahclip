@@ -229,14 +229,22 @@ export default function StylesPage() {
   const startEdit = (s: SavedStyle) =>
     setEditing({ id: s.id, name: s.name, style: { ...DEFAULT_STYLE, ...s.settings } });
 
-  const saveEditing = () => {
+  // Save the edits as a brand-new style. This is the default when editing an
+  // existing preset, so tweaking a preset never silently overwrites it — you
+  // keep the original and get a variant.
+  const saveAsNew = () => {
     if (!editing) return;
     const settings = stripBackgroundKeys(editing.style);
-    if (editing.id) {
-      setStyles(updateSavedStyle(editing.id, { name: editing.name || "Untitled", settings }));
-    } else {
-      setStyles(saveStyle(editing.name, settings));
-    }
+    const base = editing.name?.trim() || (editing.id ? "Style copy" : "");
+    setStyles(saveStyle(base, settings));
+    setEditing(null);
+  };
+
+  // Explicitly overwrite the original preset — only when the user asks for it.
+  const updateOriginal = () => {
+    if (!editing?.id) return;
+    const settings = stripBackgroundKeys(editing.style);
+    setStyles(updateSavedStyle(editing.id, { name: editing.name || "Untitled", settings }));
     setEditing(null);
   };
 
@@ -311,8 +319,17 @@ export default function StylesPage() {
             >
               Cancel
             </button>
-            <button onClick={saveEditing} className="btn-gold rounded-full px-5 py-2 text-sm">
-              Save style
+            {editing.id && (
+              <button
+                onClick={updateOriginal}
+                className="rounded-full border border-[var(--hairline)] px-4 py-2 text-sm text-parchment transition-colors hover:border-gold"
+                title="Overwrite the original preset with these changes"
+              >
+                Update original
+              </button>
+            )}
+            <button onClick={saveAsNew} className="btn-gold rounded-full px-5 py-2 text-sm">
+              {editing.id ? "Save as new" : "Save style"}
             </button>
           </div>
         </div>

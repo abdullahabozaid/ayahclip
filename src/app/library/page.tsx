@@ -142,6 +142,61 @@ export default function LibraryPage() {
     setSelected(new Set());
   };
 
+  const [sharing, setSharing] = useState(false);
+  // Mass AirDrop / share: load every selected clip's video and hand them all to
+  // the OS share sheet at once. On macOS Safari / iOS that sheet includes
+  // AirDrop, so this is "select many → AirDrop them together". Browsers that
+  // can't share files (e.g. desktop Chrome) get a per-file download fallback.
+  const bulkShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const chosen = clips.filter((c) => selected.has(c.id));
+      const files: File[] = [];
+      for (const c of chosen) {
+        const blob = await getClipBlob(c.id);
+        if (!blob) continue;
+        const ext = c.mimeType.includes("mp4") ? "mp4" : "webm";
+        files.push(
+          new File([blob], `${c.title.replace(/[^\w\-– ]+/g, "")}.${ext}`, {
+            type: c.mimeType,
+          })
+        );
+      }
+      if (files.length === 0) {
+        alert("No video data found for the selected clips.");
+        return;
+      }
+      if (typeof navigator.canShare === "function" && navigator.canShare({ files })) {
+        try {
+          await navigator.share({ files, title: "AyahClip clips" });
+          setSelected(new Set());
+          return;
+        } catch (err) {
+          if ((err as Error)?.name === "AbortError") return; // user cancelled
+          // Otherwise fall through to download.
+        }
+      } else {
+        alert(
+          "AirDrop/Share needs Safari on Mac or iPhone. Downloading the clips instead — you can AirDrop them from Finder."
+        );
+      }
+      // Fallback: download each clip (small stagger so the browser allows them all).
+      for (const file of files) {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      setSelected(new Set());
+    } finally {
+      setSharing(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (playingUrl) URL.revokeObjectURL(playingUrl);
@@ -357,6 +412,17 @@ export default function LibraryPage() {
               </option>
             ))}
           </select>
+          <button
+            onClick={bulkShare}
+            disabled={sharing}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--gold)]/40 px-3 py-1.5 text-xs text-gold-soft transition-colors hover:bg-[var(--gold)]/10 disabled:opacity-50"
+            title="Share the selected clips via the OS sheet (AirDrop on Mac/iPhone)"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M16 6l-4-4-4 4M12 2v14" />
+            </svg>
+            {sharing ? "Preparing…" : "Share / AirDrop"}
+          </button>
           <button
             onClick={bulkDelete}
             className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
