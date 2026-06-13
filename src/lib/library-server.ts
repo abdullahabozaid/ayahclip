@@ -27,6 +27,22 @@ function safeId(id: string): string {
   return id;
 }
 
+/**
+ * Reduce a client-supplied content type to one of our two known-safe video
+ * types, ignoring any `;codecs=…` suffix. Returns null for anything else so the
+ * upload can be rejected — this prevents a stored clip from carrying an
+ * arbitrary Content-Type (e.g. text/html) that the video route would later echo
+ * back on the same origin (stored XSS).
+ */
+export function canonicalVideoType(
+  mimeType: string
+): "video/mp4" | "video/webm" | null {
+  const base = (mimeType || "").split(";")[0].trim().toLowerCase();
+  if (base === "video/mp4") return "video/mp4";
+  if (base === "video/webm") return "video/webm";
+  return null;
+}
+
 function videoExt(mimeType: string): string {
   return mimeType.includes("webm") ? "webm" : "mp4";
 }

@@ -6,6 +6,7 @@ import {
   writeMeta,
   writeVideo,
   originAllowed,
+  canonicalVideoType,
   MAX_VIDEO_BYTES,
 } from "@/lib/library-server";
 
@@ -48,6 +49,15 @@ export async function POST(req: NextRequest) {
   if (!meta.id || typeof meta.id !== "string") {
     return NextResponse.json({ error: "meta.id required" }, { status: 400 });
   }
+
+  // Only store known video types, and normalize the stored mimeType to the
+  // canonical base — so the video route can never echo an attacker-chosen
+  // Content-Type (e.g. text/html) back on this origin.
+  const canonType = canonicalVideoType(meta.mimeType);
+  if (!canonType) {
+    return NextResponse.json({ error: "Unsupported video type" }, { status: 415 });
+  }
+  meta.mimeType = canonType;
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
