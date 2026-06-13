@@ -19,6 +19,7 @@ import {
   deleteFolder,
   captureThumbnail,
   generateClipId,
+  migrateLegacyClips,
 } from "@/lib/clip-library";
 
 const PLATFORM_LABELS: Record<ClipPlatform, string> = {
@@ -65,11 +66,15 @@ export default function LibraryPage() {
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([listClips(), listFolders()]).then(([c, f]) => {
-      setClips(c);
-      setFolders(f);
-      setLoaded(true);
-    });
+    // Move any clips from the old per-browser IndexedDB store into the shared
+    // server store, then load everything from the server.
+    migrateLegacyClips()
+      .then(() => Promise.all([listClips(), listFolders()]))
+      .then(([c, f]) => {
+        setClips(c);
+        setFolders(f);
+        setLoaded(true);
+      });
   }, []);
 
   const handleUpload = async (files: FileList | null) => {
