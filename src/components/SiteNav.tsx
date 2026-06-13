@@ -28,6 +28,11 @@ export function SiteNav() {
             label="Library"
             active={pathname?.startsWith("/library")}
           />
+          <NavLink
+            href="/styles"
+            label="Styles"
+            active={pathname?.startsWith("/styles")}
+          />
           <Link
             href="/browse"
             className="btn-gold ml-2 rounded-full px-4 py-2 text-sm"

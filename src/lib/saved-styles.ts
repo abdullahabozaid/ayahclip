@@ -3,7 +3,7 @@ import { StyleSettings } from "./style";
 export interface SavedStyle {
   id: string;
   name: string;
-  settings: StyleSettings;
+  settings: Partial<StyleSettings>;
 }
 
 const KEY = "ayahclip:saved-styles";
@@ -22,7 +22,7 @@ function persist(styles: SavedStyle[]) {
   localStorage.setItem(KEY, JSON.stringify(styles));
 }
 
-export function saveStyle(name: string, settings: StyleSettings): SavedStyle[] {
+export function saveStyle(name: string, settings: Partial<StyleSettings>): SavedStyle[] {
   const styles = getSavedStyles();
   const style: SavedStyle = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -30,6 +30,15 @@ export function saveStyle(name: string, settings: StyleSettings): SavedStyle[] {
     settings,
   };
   const next = [style, ...styles];
+  persist(next);
+  return next;
+}
+
+export function updateSavedStyle(
+  id: string,
+  patch: Partial<Pick<SavedStyle, "name" | "settings">>
+): SavedStyle[] {
+  const next = getSavedStyles().map((s) => (s.id === id ? { ...s, ...patch } : s));
   persist(next);
   return next;
 }
