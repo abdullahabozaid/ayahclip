@@ -38,6 +38,7 @@ export function Mp4PreviewOverlay({
   onClose: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [libState, setLibState] = useState<"idle" | "saving" | "saved">("idle");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -63,10 +64,22 @@ export function Mp4PreviewOverlay({
     setSaving(true);
     try {
       await deliverFileInGesture(clip.file);
-      await saveRenderedToLibrary(clip.file);
+      if (libState !== "saved") await saveRenderedToLibrary(clip.file);
       close();
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Library-only save: keep the clip for scheduling without downloading it.
+  const saveToLibraryOnly = async () => {
+    if (libState !== "idle") return;
+    setLibState("saving");
+    try {
+      await saveRenderedToLibrary(clip.file);
+      setLibState("saved");
+    } catch {
+      setLibState("idle");
     }
   };
 
@@ -134,6 +147,21 @@ export function Mp4PreviewOverlay({
           className="rounded-full border border-white/20 px-6 py-2.5 text-sm text-white/70 hover:text-white"
         >
           Discard
+        </button>
+        <button
+          onClick={saveToLibraryOnly}
+          disabled={libState !== "idle"}
+          className={`rounded-full border px-6 py-2.5 text-sm transition-colors ${
+            libState === "saved"
+              ? "border-emerald-400/40 text-emerald-300"
+              : "border-white/20 text-white/80 hover:text-white"
+          }`}
+        >
+          {libState === "saved"
+            ? "In library ✓"
+            : libState === "saving"
+              ? "Saving…"
+              : "Save to library"}
         </button>
         <button
           onClick={save}

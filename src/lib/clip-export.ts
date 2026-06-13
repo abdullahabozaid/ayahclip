@@ -56,7 +56,14 @@ export interface RenderedFile {
   file: File;
   /** Present when the slow real-time recorder had to be used — tell the user why. */
   fallbackReason?: string;
+  /** True when this render was reused from the cache (nothing changed). */
+  fromCache?: boolean;
 }
+
+// The last render, keyed by every setting that affects the output. While the
+// clip is unchanged, previewing/exporting again returns the same file
+// instantly instead of re-encoding.
+let renderCache: { key: string; file: File; fallbackReason?: string } | null = null;
 
 /** Encode the current clip to its final video file. Null when nothing is selected. */
 export async function renderClipFile(
@@ -70,7 +77,7 @@ export async function renderClipFile(
   if (selectedVerses.length === 0 || !s.surah) return null;
   const reciter = reciters.find((r) => r.id === s.reciterId);
 
-  const { blob, fallbackReason } = await exportVideoWithInfo({
+  const exportOptions = {
     verses: selectedVerses,
     reciterFolder: reciter?.folder ?? "Alafasy_128kbps",
     surahNumber: s.surah.id,
@@ -119,6 +126,19 @@ export async function renderClipFile(
     verseIntroMs: s.verseIntroMs,
     textShadow: s.textShadow,
     letterbox: s.letterbox,
+  };
+
+  const key = JSON.stringify(exportOptions);
+  if (renderCache && renderCache.key === key) {
+    return {
+      file: renderCache.file,
+      fallbackReason: renderCache.fallbackReason,
+      fromCache: true,
+    };
+  }
+
+  const { blob, fallbackReason } = await exportVideoWithInfo({
+    ...exportOptions,
     onProgress,
   });
 
@@ -128,6 +148,7 @@ export async function renderClipFile(
     `ayahclip-${s.surah.name_simple}-${s.videoFormat}.${ext}`,
     { type: blob.type }
   );
+  renderCache = { key, file, fallbackReason };
   return { file, fallbackReason };
 }
 
