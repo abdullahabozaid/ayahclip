@@ -600,6 +600,14 @@ export function drawVerseText(
   // onto the given context. Kept as a unit so the entrance animation can render
   // it once and then composite the result — never drawing the complex Quranic
   // glyphs at partial alpha, which corrupts the marks on some renderers (iOS).
+  // All block-drawing below treats `startY`/`transY` as the BLOCK CENTER.
+  // wrapText already centers its lines; drawQcfBlock and drawEmphasizedBlock
+  // take the FIRST line's y and grow downward, so convert center → first-line
+  // here. Mixing the two conventions was the old bug where multi-line Arabic
+  // drifted down and the Arabic↔translation gap changed with line count.
+  const arabicFirstLineY = (centerYV: number) =>
+    centerYV - ((arabicLineCount - 1) * arabicLineH) / 2;
+
   const paintText = (tctx: CanvasRenderingContext2D) => {
     tctx.textAlign = "center";
     tctx.textBaseline = "middle";
@@ -640,7 +648,7 @@ export function drawVerseText(
         const fullW = lw + pad * 2;
         const revealedW = fullW * reveal;
         if (revealedW < 1) return;
-        const yC = startY + i * arabicLineH; // textBaseline is middle
+        const yC = arabicFirstLineY(startY) + i * arabicLineH; // textBaseline is middle
         const barTop = yC + fullBoxH / 2 - boxH; // bottom-anchored
         const x = centerX + fullW / 2 - revealedW; // anchored right, grows leftward
         tctx.beginPath();
@@ -674,11 +682,11 @@ export function drawVerseText(
             }
           : undefined;
       drawQcfBlock(
-        tctx, qcfRenderWords, centerX, startY, maxWidth, arabicLineH,
+        tctx, qcfRenderWords, centerX, arabicFirstLineY(startY), maxWidth, arabicLineH,
         arabicSize, qcfEmph
       );
     } else if (options.arabicEmphasis && options.arabicEmphasis.length > 0) {
-      drawEmphasizedBlock(tctx, arabicDisplay, centerX, startY, maxWidth, arabicLineH, {
+      drawEmphasizedBlock(tctx, arabicDisplay, centerX, arabicFirstLineY(startY), maxWidth, arabicLineH, {
         indices: new Set(options.arabicEmphasis),
         style: emphasisStyle,
         color: emphasisColor,
@@ -702,7 +710,8 @@ export function drawVerseText(
       if (transRtl) tctx.direction = "rtl";
       const translationText = showTransNum ? `${verseNumber}. ${translation}` : translation;
       if (options.translationEmphasis && options.translationEmphasis.length > 0) {
-        drawEmphasizedBlock(tctx, translationText, centerX, transY, maxWidth, transLineH, {
+        const transFirstLineY = transY - ((transLines.length - 1) * transLineH) / 2;
+        drawEmphasizedBlock(tctx, translationText, centerX, transFirstLineY, maxWidth, transLineH, {
           indices: new Set(options.translationEmphasis),
           style: emphasisStyle,
           color: emphasisColor,
