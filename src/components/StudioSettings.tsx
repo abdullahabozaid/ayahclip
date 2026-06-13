@@ -551,6 +551,15 @@ export function StudioSettings() {
                 onChange={store.setHighlightRadius}
               />
               <Slider
+                label="Highlight Height"
+                value={store.highlightHeight}
+                min={0.15}
+                max={1}
+                step={0.05}
+                display={(v) => (v >= 1 ? "Full" : `${Math.round(v * 100)}%`)}
+                onChange={store.setHighlightHeight}
+              />
+              <Slider
                 label="Highlight Padding"
                 value={store.highlightPadding}
                 min={0}

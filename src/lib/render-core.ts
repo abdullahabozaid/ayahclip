@@ -72,6 +72,7 @@ export interface SceneStyleSource {
   highlightOpacity?: number;
   highlightRadius?: number;
   highlightPadding?: number;
+  highlightHeight?: number;
 }
 
 /** Per-frame content: what text is on screen right now and its animation state. */
@@ -169,6 +170,7 @@ export function drawScene(
     highlightOpacity: style.highlightOpacity,
     highlightRadius: style.highlightRadius,
     highlightPadding: style.highlightPadding,
+    highlightHeight: style.highlightHeight,
   };
 
   const paintRegion = (rw: number, rh: number) => {

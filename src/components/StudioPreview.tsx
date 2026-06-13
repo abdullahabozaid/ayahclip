@@ -495,6 +495,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.highlightOpacity,
     store.highlightRadius,
     store.highlightPadding,
+    store.highlightHeight,
     store.verseIntro,
     store.verseIntroMs,
     store.textColor,

@@ -87,6 +87,7 @@ export function ExportButton() {
         highlightOpacity: store.highlightOpacity,
         highlightRadius: store.highlightRadius,
         highlightPadding: store.highlightPadding,
+        highlightHeight: store.highlightHeight,
         importedAudio:
           store.audioSource.mode === "imported"
             ? { url: store.audioSource.url, timings: store.audioSource.timings }

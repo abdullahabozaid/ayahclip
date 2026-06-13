@@ -62,6 +62,7 @@ interface AppState {
   highlightOpacity: number;
   highlightRadius: number;
   highlightPadding: number;
+  highlightHeight: number;
   verseIntro: VerseIntro;
   verseIntroMs: number;
   audioSource: AudioSource;
@@ -130,6 +131,7 @@ interface AppState {
   setHighlightOpacity: (v: number) => void;
   setHighlightRadius: (v: number) => void;
   setHighlightPadding: (v: number) => void;
+  setHighlightHeight: (v: number) => void;
   setActiveWordIndex: (index: number | null) => void;
   setVerseParts: (verseNumber: number, boundaries: number[]) => void;
   setActivePartIndex: (index: number) => void;
@@ -187,6 +189,7 @@ export const useAppStore = create<AppState>((set) => ({
   highlightOpacity: 1,
   highlightRadius: 1,
   highlightPadding: 0.25,
+  highlightHeight: 1,
   verseIntro: "none",
   verseIntroMs: 450,
   audioSource: { mode: "reciter" },
@@ -292,6 +295,7 @@ export const useAppStore = create<AppState>((set) => ({
   setHighlightOpacity: (v) => set({ highlightOpacity: v }),
   setHighlightRadius: (v) => set({ highlightRadius: v }),
   setHighlightPadding: (v) => set({ highlightPadding: v }),
+  setHighlightHeight: (v) => set({ highlightHeight: v }),
   setActiveWordIndex: (index) => set({ activeWordIndex: index }),
   setVerseParts: (verseNumber, boundaries) =>
     set((state) => {

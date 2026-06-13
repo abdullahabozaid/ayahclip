@@ -62,6 +62,7 @@ interface ExportOptions {
   highlightOpacity?: number;
   highlightRadius?: number;
   highlightPadding?: number;
+  highlightHeight?: number;
   /** When set, use this single uploaded track (sliced per verse) instead of EveryAyah. */
   importedAudio?: { url: string; timings: VerseTiming[] };
   /** Reciter (library) clips: manual word-part boundaries per verse + the data

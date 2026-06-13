@@ -27,6 +27,7 @@ export interface StyleSettings {
   highlightOpacity?: number;
   highlightRadius?: number;
   highlightPadding?: number;
+  highlightHeight?: number;
   background: Background;
   backgroundFit?: MediaFit;
   fitBackdrop?: FitBackdrop;
@@ -59,6 +60,7 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "highlightOpacity",
   "highlightRadius",
   "highlightPadding",
+  "highlightHeight",
   "background",
   "backgroundFit",
   "fitBackdrop",
@@ -87,6 +89,7 @@ export const PRESET_KEYS: (keyof StyleSettings)[] = [
   "highlightEnabled",
   "highlightRadius",
   "highlightPadding",
+  "highlightHeight",
   "verseIntro",
   "verseIntroMs",
   "letterbox",

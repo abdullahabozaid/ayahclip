@@ -375,6 +375,10 @@ export interface DrawVerseOptions {
   highlightRadius?: number;
   /** Extra reach beyond the text, as a multiplier of arabicFontSize. */
   highlightPadding?: number;
+  /** Bar height as a fraction of the full line box (0..1, default 1). The bar
+   *  is anchored to the BOTTOM of the line, so a low value reads as a marker
+   *  stroke across the lower part of the words. */
+  highlightHeight?: number;
 }
 
 export type VerseIntro = "none" | "fade" | "blur" | "slide" | "scale";
@@ -621,7 +625,12 @@ export function drawVerseText(
         tctx.direction = "ltr";
       }
       const pad = arabicSize * (options.highlightPadding ?? 0.25);
-      const boxH = arabicSize * 1.25 + pad;
+      const fullBoxH = arabicSize * 1.25 + pad;
+      // Height fraction, anchored to the bottom of the line box: at 1 the bar
+      // wraps the whole line; low values read as a marker stroke across the
+      // lower part of the words.
+      const heightFrac = Math.min(1, Math.max(0.1, options.highlightHeight ?? 1));
+      const boxH = fullBoxH * heightFrac;
       const radius = (boxH / 2) * Math.min(1, Math.max(0, options.highlightRadius ?? 1));
       tctx.fillStyle = rgbaFromHex(
         options.highlightColor ?? "#1f2a44",
@@ -632,12 +641,13 @@ export function drawVerseText(
         const revealedW = fullW * reveal;
         if (revealedW < 1) return;
         const yC = startY + i * arabicLineH; // textBaseline is middle
+        const barTop = yC + fullBoxH / 2 - boxH; // bottom-anchored
         const x = centerX + fullW / 2 - revealedW; // anchored right, grows leftward
         tctx.beginPath();
         if (typeof tctx.roundRect === "function") {
-          tctx.roundRect(x, yC - boxH / 2, revealedW, boxH, radius);
+          tctx.roundRect(x, barTop, revealedW, boxH, radius);
         } else {
-          tctx.rect(x, yC - boxH / 2, revealedW, boxH);
+          tctx.rect(x, barTop, revealedW, boxH);
         }
         tctx.fill();
       });
