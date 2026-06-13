@@ -591,60 +591,98 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     return Math.min(t, lastFrameTime); // freeze: hold last frame past the end
   };
 
-  let prevSegText = "";
-  let segStartT = 0;
-  let lastDrawKey = " never";
-  for (let f = 0; f < totalFrames; f++) {
-    if (encodeError) throw encodeError;
-    const t = f / FAST_FPS;
-    let vi = 0;
-    while (vi < cum.length - 1 && t >= cum[vi + 1]) vi++;
-    const verse = options.verses[vi];
-    if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(t, vi));
-    const tmFast = options.importedAudio?.timings.find(
-      (x) => x.verseNumber === verse.verse_number
-    );
-    const vSegsFast = reciterSegs.get(verse.verse_number);
-    const sourceTime = (tmFast?.start ?? 0) + (t - cum[vi]);
-    const segFast = vSegsFast
-      ? reciterTextAt(verse, vSegsFast, t - cum[vi])
-      : segmentFor(verse, tmFast, sourceTime);
-    const segKey = `${vi}:${segFast.ar}`;
-    if (segKey !== prevSegText) {
-      prevSegText = segKey;
-      segStartT = t;
-    }
-    const introProgress = introMs > 0 ? Math.min(1, ((t - segStartT) * 1000) / introMs) : 1;
-    // Most frames are pixel-identical to the previous one (static background,
-    // text unchanged, intro finished). Re-drawing the 1080×1920 scene is the
-    // expensive part of the loop — skip it when nothing on screen changed.
-    // Any background video forces a redraw every frame (its pixels move).
-    const drawKey = bgVideo
-      ? ""
-      : `${segKey}|${introProgress}|${segFast.isLast}`;
-    if (bgVideo || drawKey !== lastDrawKey) {
-      drawFrame(
-        ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-        introProgress, segFast.ar, segFast.tr, segFast.isLast
+  // Pre-compute what's on screen at every frame tick (pure arithmetic — cheap).
+  // Most of a clip is static: the same verse text, intro finished, no bg video.
+  // Instead of drawing + encoding 30 identical frames per second, we encode ONE
+  // frame per static run with a longer duration (H.264 and the muxer handle
+  // variable frame durations natively). Animated spans (intro in progress) and
+  // video backgrounds still get every frame.
+  interface FramePlan {
+    t: number;
+    vi: number;
+    ar: string;
+    tr: string | null | undefined;
+    isLast: boolean;
+    introProgress: number;
+    key: string;
+  }
+  const plan: FramePlan[] = new Array(totalFrames);
+  {
+    let prevSegText = "";
+    let segStartT = 0;
+    for (let f = 0; f < totalFrames; f++) {
+      const t = f / FAST_FPS;
+      let vi = 0;
+      while (vi < cum.length - 1 && t >= cum[vi + 1]) vi++;
+      const verse = options.verses[vi];
+      const tmFast = options.importedAudio?.timings.find(
+        (x) => x.verseNumber === verse.verse_number
       );
-      lastDrawKey = drawKey;
+      const vSegsFast = reciterSegs.get(verse.verse_number);
+      const sourceTime = (tmFast?.start ?? 0) + (t - cum[vi]);
+      const segFast = vSegsFast
+        ? reciterTextAt(verse, vSegsFast, t - cum[vi])
+        : segmentFor(verse, tmFast, sourceTime);
+      const segKey = `${vi}:${segFast.ar}`;
+      if (segKey !== prevSegText) {
+        prevSegText = segKey;
+        segStartT = t;
+      }
+      const introProgress = introMs > 0 ? Math.min(1, ((t - segStartT) * 1000) / introMs) : 1;
+      plan[f] = {
+        t, vi,
+        ar: segFast.ar,
+        tr: segFast.tr,
+        isLast: segFast.isLast,
+        introProgress,
+        key: `${segKey}|${introProgress}|${segFast.isLast}`,
+      };
+    }
+  }
+
+  // Keyframe at least once a second so players can seek.
+  let lastKeyT = -1;
+  let f = 0;
+  while (f < totalFrames) {
+    if (encodeError) throw encodeError;
+    const p = plan[f];
+    const verse = options.verses[p.vi];
+    if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(p.t, p.vi));
+
+    drawFrame(
+      ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
+      p.introProgress, p.ar, p.tr, p.isLast
+    );
+
+    // Length of the static run starting here (1 when a bg video animates,
+    // capped at 1s so keyframes stay regular).
+    let runLen = 1;
+    if (!bgVideo) {
+      while (
+        runLen < FAST_FPS &&
+        f + runLen < totalFrames &&
+        plan[f + runLen].key === p.key
+      ) {
+        runLen++;
+      }
     }
 
+    const keyFrame = p.t - lastKeyT >= 1 || f === 0;
+    if (keyFrame) lastKeyT = p.t;
     const frame = new VideoFrame(canvas, {
-      timestamp: Math.round(t * 1e6),
-      duration: Math.round(1e6 / FAST_FPS),
+      timestamp: Math.round(p.t * 1e6),
+      duration: Math.round((runLen / FAST_FPS) * 1e6),
     });
-    videoEncoder.encode(frame, { keyFrame: f % FAST_FPS === 0 });
+    videoEncoder.encode(frame, { keyFrame });
     frame.close();
+    f += runLen;
 
     // Backpressure + progress + yield so the UI stays responsive.
     if (videoEncoder.encodeQueueSize > 20) {
       while (videoEncoder.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
     }
-    if (f % 30 === 0) {
-      options.onProgress(Math.min(options.verses.length, vi + 1), options.verses.length);
-      await new Promise((r) => setTimeout(r, 0));
-    }
+    options.onProgress(Math.min(options.verses.length, p.vi + 1), options.verses.length);
+    await new Promise((r) => setTimeout(r, 0));
   }
 
   if (bgVideo) {
