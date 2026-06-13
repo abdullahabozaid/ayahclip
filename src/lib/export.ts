@@ -524,13 +524,29 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       encodeError = e;
     },
   });
-  videoEncoder.configure({
-    codec: await pickAvcCodec(size.w, size.h),
+  // Prefer the hardware encoder when available — often several times faster
+  // than software at 1080×1920. Fall back to the default (any) if the hint is
+  // unsupported for this codec/resolution.
+  const codec = await pickAvcCodec(size.w, size.h);
+  const baseVideoCfg = {
+    codec,
     width: size.w,
     height: size.h,
     bitrate: 8_000_000,
     framerate: FAST_FPS,
-  });
+  } as const;
+  let configured = false;
+  try {
+    const hw = { ...baseVideoCfg, hardwareAcceleration: "prefer-hardware" as const };
+    const { supported } = await VideoEncoder.isConfigSupported(hw);
+    if (supported) {
+      videoEncoder.configure(hw);
+      configured = true;
+    }
+  } catch {
+    /* hint unsupported — use default below */
+  }
+  if (!configured) videoEncoder.configure(baseVideoCfg);
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
@@ -577,6 +593,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
 
   let prevSegText = "";
   let segStartT = 0;
+  let lastDrawKey = " never";
   for (let f = 0; f < totalFrames; f++) {
     if (encodeError) throw encodeError;
     const t = f / FAST_FPS;
@@ -598,10 +615,20 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       segStartT = t;
     }
     const introProgress = introMs > 0 ? Math.min(1, ((t - segStartT) * 1000) / introMs) : 1;
-    drawFrame(
-      ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      introProgress, segFast.ar, segFast.tr, segFast.isLast
-    );
+    // Most frames are pixel-identical to the previous one (static background,
+    // text unchanged, intro finished). Re-drawing the 1080×1920 scene is the
+    // expensive part of the loop — skip it when nothing on screen changed.
+    // Any background video forces a redraw every frame (its pixels move).
+    const drawKey = bgVideo
+      ? ""
+      : `${segKey}|${introProgress}|${segFast.isLast}`;
+    if (bgVideo || drawKey !== lastDrawKey) {
+      drawFrame(
+        ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
+        introProgress, segFast.ar, segFast.tr, segFast.isLast
+      );
+      lastDrawKey = drawKey;
+    }
 
     const frame = new VideoFrame(canvas, {
       timestamp: Math.round(t * 1e6),
@@ -614,7 +641,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     if (videoEncoder.encodeQueueSize > 20) {
       while (videoEncoder.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
     }
-    if (f % 6 === 0) {
+    if (f % 30 === 0) {
       options.onProgress(Math.min(options.verses.length, vi + 1), options.verses.length);
       await new Promise((r) => setTimeout(r, 0));
     }
