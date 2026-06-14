@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { TimelineEditor } from "./TimelineEditor";
+import { ReciterVerseEditor } from "./ReciterVerseEditor";
 import { StudioPreview } from "./StudioPreview";
 import { verseTextAt } from "@/lib/audio-import";
 import { importedPlayer } from "@/lib/imported-player";
@@ -19,6 +20,7 @@ interface FullscreenTimelineProps {
 export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
   const surah = useAppStore((s) => s.surah);
   const selectedVerseNumbers = useAppStore((s) => s.selectedVerseNumbers);
+  const isImported = useAppStore((s) => s.audioSource.mode === "imported");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -28,14 +30,10 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Drive the preview while editing splits — when the audio is paused, the
-  // imported-player's frame loop doesn't run so the on-screen segment never
-  // changes. Subscribe to time updates here and push the segment matching the
-  // current playhead so the caption preview tracks the user's edits in real
-  // time, without needing them to press play.
   useEffect(() => {
+    if (!isImported) return;
     const unsub = importedPlayer.subscribe((time, playing) => {
-      if (playing) return; // active playback already drives segments
+      if (playing) return;
       const st = useAppStore.getState();
       if (st.audioSource.mode !== "imported") return;
       const timings = st.audioSource.timings;
@@ -52,18 +50,18 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
         const ar = verseTextAt(seg, verse.text_uthmani, time);
         const tr =
           verse.translation != null ? verseTextAt(seg, verse.translation, time) : null;
-        if (st.playbackSegmentArabic !== ar) st.setPlaybackSegment(ar, tr);
+        let segIdx = 0;
+        for (const sp of seg.splits) { if (time >= sp) segIdx++; else break; }
+        if (st.playbackSegmentArabic !== ar) st.setPlaybackSegment(ar, tr, segIdx === seg.splits.length);
       } else {
         if (st.playbackSegmentArabic !== null) st.setPlaybackSegment(null, null);
       }
     });
     return () => {
       unsub();
-      // Clear any lingering segment when the user exits the fullscreen editor
-      // so the studio preview falls back to the full verse on close.
       useAppStore.getState().setPlaybackSegment(null, null);
     };
-  }, []);
+  }, [isImported]);
 
   const verseRange =
     selectedVerseNumbers.length === 1
@@ -85,7 +83,7 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
       >
         <div className="flex items-baseline gap-3">
           <span className="text-[10px] uppercase tracking-[0.25em] text-gold-soft/80">
-            Verse Timeline
+            {isImported ? "Verse Timeline" : "Verse Editor"}
           </span>
           {surah && (
             <span className="text-sm text-[var(--muted)]">
@@ -121,7 +119,7 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
         </section>
 
         <section className="flex-1 overflow-y-auto px-5 py-5">
-          <TimelineEditor fullscreen />
+          {isImported ? <TimelineEditor fullscreen /> : <ReciterVerseEditor />}
         </section>
       </div>
     </div>

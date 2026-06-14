@@ -21,7 +21,7 @@ import {
 import { FrameMode } from "./PlatformChrome";
 import { DevicePreview } from "./DevicePreview";
 import { importedPlayer } from "@/lib/imported-player";
-import { verseTextAt } from "@/lib/audio-import";
+import { verseTextAt, snapToSentenceBoundary } from "@/lib/audio-import";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 
 // One segment spanning a whole verse — used when a reciter verse has no manual
@@ -167,6 +167,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       cancelAnimationFrame(animFrameRef.current);
       useAppStore.getState().setPlaybackSegment(null, null);
       setIsPlaying(false);
+      setVerseSegments(new Map());
       return;
     }
 
@@ -353,8 +354,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         displayArabic = words.slice(lo, hi).join(" ");
         if (cv.translation) {
           const tWords = cv.translation.split(/\s+/).filter(Boolean);
-          const tLo = Math.floor((lo / words.length) * tWords.length);
-          const tHi = Math.floor((hi / words.length) * tWords.length);
+          const tLo = snapToSentenceBoundary(tWords, Math.floor((lo / words.length) * tWords.length));
+          const tHi = snapToSentenceBoundary(tWords, Math.floor((hi / words.length) * tWords.length));
           displayTranslation = tWords.slice(tLo, tHi).join(" ");
         } else {
           displayTranslation = cv.translation;

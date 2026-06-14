@@ -50,3 +50,6 @@ next-env.d.ts
 
 # Large ASR model (host on CORS-enabled CDN/bucket for deploy; download for dev)
 public/asr/*.onnx
+
+# Local video assets (backgrounds + exports)
+/videos/

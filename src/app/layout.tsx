@@ -29,7 +29,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Marcellus&family=Outfit:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&family=Amiri+Quran&family=Scheherazade+New:wght@400;700&family=Noto+Naskh+Arabic:wght@400;700&family=Cinzel:wght@400;700&family=Lora:wght@400;700&family=Playfair+Display:wght@400;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Marcellus&family=Outfit:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&family=Cinzel:wght@400;700&family=Lora:wght@400;700&family=Playfair+Display:wght@400;700&display=swap"
           rel="stylesheet"
         />
       </head>

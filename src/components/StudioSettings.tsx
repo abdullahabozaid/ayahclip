@@ -19,13 +19,13 @@ function SetCoverButton() {
     if (!projectId) return;
     const canvas = document.querySelector("section canvas") as HTMLCanvasElement | null;
     if (!canvas || !canvas.width) return;
-    const w = 360;
+    const w = 480;
     const h = Math.round((canvas.height / canvas.width) * w);
     const off = document.createElement("canvas");
     off.width = w;
     off.height = h;
     off.getContext("2d")!.drawImage(canvas, 0, 0, w, h);
-    const thumbnail = off.toDataURL("image/jpeg", 0.7);
+    const thumbnail = off.toDataURL("image/jpeg", 0.85);
     const p = await getProject(projectId);
     if (!p) return;
     await saveProject({ ...p, thumbnail, updatedAt: Date.now() });

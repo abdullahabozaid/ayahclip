@@ -10,12 +10,22 @@ export interface Surah {
   };
 }
 
+export interface QcfWord {
+  position: number;
+  code_v2: string;
+  page_number: number;
+  line_number: number;
+  text_uthmani: string;
+  char_type_name: "word" | "end" | "pause";
+}
+
 export interface Verse {
   id: number;
   verse_number: number;
   verse_key: string;
   text_uthmani: string;
   translation?: string;
+  qcfWords?: QcfWord[];
 }
 
 export interface Reciter {
@@ -77,6 +87,8 @@ export interface Project {
     translationLanguage: string;
     textColor: string;
     lineHeight: number;
+    translationLineHeight?: number;
+    arabicTranslationGap?: number;
     textPosition: number;
     overlayOpacity: number;
     overlayColor: string;
@@ -98,9 +110,20 @@ export interface Project {
    *  separately in IndexedDB under `audio:<id>` / `video:<id>`. */
   imported?: {
     name: string;
-    timings: { verseNumber: number; start: number; end: number }[];
+    timings: {
+      verseNumber: number;
+      start: number;
+      end: number;
+      splits?: number[];
+      splitWords?: number[];
+      splitWordTotal?: number;
+      splitCharFractions?: number[];
+      wordRange?: { from: number; to: number };
+    }[];
     videoBg: boolean;
   };
+  /** Reciter (library) clips: manual word-part boundaries per verse. */
+  verseParts?: Record<number, number[]>;
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;

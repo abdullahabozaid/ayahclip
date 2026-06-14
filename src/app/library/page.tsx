@@ -395,51 +395,66 @@ export default function LibraryPage() {
         </button>
       </div>
 
-      {selected.size > 0 && (
+      {filtered.length > 0 && (
         <div className="sticky top-[72px] z-30 mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--gold)]/30 bg-[var(--ink-deep)]/95 px-4 py-2.5 backdrop-blur">
-          <span className="text-sm text-gold-soft">{selected.size} selected</span>
-          <select
-            defaultValue=""
-            onChange={(e) => {
-              if (e.target.value === "__none__") bulkMove("");
-              else if (e.target.value) bulkMove(e.target.value);
-              e.target.value = "";
+          <button
+            onClick={() => {
+              if (selected.size === filtered.length) setSelected(new Set());
+              else setSelected(new Set(filtered.map((c) => c.id)));
             }}
-            className="field px-3 py-1.5 text-xs"
+            className="rounded-lg border border-[var(--hairline)] px-3 py-1.5 text-xs text-parchment transition-colors hover:border-gold"
           >
-            <option value="" disabled>
-              Move to folder…
-            </option>
-            <option value="__none__">No folder</option>
-            {folders.map((f) => (
-              <option key={f} value={f}>
-                📁 {f}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={bulkShare}
-            disabled={sharing}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--gold)]/40 px-3 py-1.5 text-xs text-gold-soft transition-colors hover:bg-[var(--gold)]/10 disabled:opacity-50"
-            title="Share the selected clips via the OS sheet (AirDrop on Mac/iPhone)"
-          >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M16 6l-4-4-4 4M12 2v14" />
-            </svg>
-            {sharing ? "Preparing…" : "Share / AirDrop"}
+            {selected.size === filtered.length && filtered.length > 0 ? "Deselect All" : "Select All"}
           </button>
-          <button
-            onClick={bulkDelete}
-            className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
-          >
-            Delete
-          </button>
-          <button
-            onClick={() => setSelected(new Set())}
-            className="ml-auto text-xs text-[var(--muted)] hover:text-parchment"
-          >
-            Clear
-          </button>
+          {selected.size > 0 && (
+            <span className="text-sm text-gold-soft">{selected.size} selected</span>
+          )}
+          {selected.size > 0 && (
+            <>
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value === "__none__") bulkMove("");
+                  else if (e.target.value) bulkMove(e.target.value);
+                  e.target.value = "";
+                }}
+                className="field px-3 py-1.5 text-xs"
+              >
+                <option value="" disabled>
+                  Move to folder…
+                </option>
+                <option value="__none__">No folder</option>
+                {folders.map((f) => (
+                  <option key={f} value={f}>
+                    📁 {f}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={bulkShare}
+                disabled={sharing}
+                className="flex items-center gap-1.5 rounded-lg border border-[var(--gold)]/40 px-3 py-1.5 text-xs text-gold-soft transition-colors hover:bg-[var(--gold)]/10 disabled:opacity-50"
+                title="Share the selected clips via the OS sheet (AirDrop on Mac/iPhone)"
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M16 6l-4-4-4 4M12 2v14" />
+                </svg>
+                {sharing ? "Preparing…" : "Share / AirDrop"}
+              </button>
+              <button
+                onClick={bulkDelete}
+                className="rounded-lg border border-red-400/30 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setSelected(new Set())}
+                className="ml-auto text-xs text-[var(--muted)] hover:text-parchment"
+              >
+                Clear
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -575,7 +590,7 @@ function ClipCard({
   const setThumbFromFrame = () => {
     const v = videoRef.current;
     if (!v || v.videoWidth === 0) return;
-    const w = 180;
+    const w = 480;
     const h = Math.round((v.videoHeight / v.videoWidth) * w);
     const canvas = document.createElement("canvas");
     canvas.width = w;
@@ -583,7 +598,7 @@ function ClipCard({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(v, 0, 0, w, h);
-    onPatch({ thumbnail: canvas.toDataURL("image/jpeg", 0.7) });
+    onPatch({ thumbnail: canvas.toDataURL("image/jpeg", 0.85) });
   };
 
   return (

@@ -11,6 +11,79 @@ export interface VerseTiming {
    * Strictly increasing; each value must lie strictly between `start` and `end`.
    */
   splits?: number[];
+  /**
+   * Fixed word boundaries for each split (parallel to `splits`). Entry `i` is the
+   * word index where split `i` divides the text: words `[0, splitWords[0])` are
+   * part 1, `[splitWords[0], splitWords[1])` part 2, etc. Once set, dragging the
+   * split time in the timeline does NOT change which words belong to each part.
+   */
+  splitWords?: number[];
+  /** Total Arabic word count when splitWords was recorded. Used to scale
+   *  boundaries proportionally when applied to translation text. */
+  splitWordTotal?: number;
+  /** Character-weighted split fractions (parallel to `splits`). Each value is
+   *  the fraction (0-1) of Arabic characters covered by Part 1..N. Used to map
+   *  splits onto translation text more accurately than word-count proportion. */
+  splitCharFractions?: number[];
+  /**
+   * Contiguous word range to keep (0-indexed, inclusive). When set, only words
+   * [from..to] of the verse are displayed and audibly kept; everything outside
+   * is dropped from playback and export. Used to clip "half a verse" without
+   * touching the source recitation file. Word count is taken from the verse's
+   * uthmani text. When unset (default), the whole verse plays.
+   */
+  wordRange?: { from: number; to: number };
+}
+
+/**
+ * Compute the effective on-timeline audio bounds for a verse, applying its
+ * `wordRange` if set. Returns the original `[start, end]` if unset. Words are
+ * mapped proportionally to time within `[start, end]` (we don't have per-word
+ * timing — that would require ASR onsets — so proportional is the honest model).
+ */
+export function effectiveAudioBounds(
+  timing: VerseTiming,
+  wordCount: number
+): [number, number] {
+  if (!timing.wordRange || wordCount <= 0) return [timing.start, timing.end];
+  const { from, to } = timing.wordRange;
+  const dur = timing.end - timing.start;
+  if (dur <= 0) return [timing.start, timing.end];
+  const lo = timing.start + (Math.max(0, from) / wordCount) * dur;
+  const hi = timing.start + (Math.min(wordCount, to + 1) / wordCount) * dur;
+  return [lo, hi];
+}
+
+/**
+ * Return only the words inside `wordRange` (inclusive), or all words when the
+ * range is unset. Pure text helper — works on Arabic or translation.
+ */
+function applyWordRange(words: string[], wordRange?: { from: number; to: number }): string[] {
+  if (!wordRange) return words;
+  const lo = Math.max(0, wordRange.from);
+  const hi = Math.min(words.length - 1, wordRange.to);
+  if (hi < lo) return words;
+  return words.slice(lo, hi + 1);
+}
+
+/** Snap a translation word boundary to a nearby sentence break (. ? !) within
+ *  ±5 words. Quranic Arabic waqf marks almost always correspond to sentence-
+ *  ending punctuation in the translation, so this fixes the cases where pure
+ *  word-count proportional under/overshoots the sentence boundary. */
+export function snapToSentenceBoundary(words: string[], raw: number): number {
+  const WINDOW = 5;
+  let bestIdx = raw;
+  let bestDist = Infinity;
+  for (let b = Math.max(1, raw - WINDOW); b <= Math.min(words.length, raw + WINDOW); b++) {
+    if (/[.?!]['"'"’”)\]]*$/.test(words[b - 1])) {
+      const dist = Math.abs(b - raw);
+      if (dist < bestDist) {
+        bestIdx = b;
+        bestDist = dist;
+      }
+    }
+  }
+  return bestIdx;
 }
 
 /**
@@ -24,12 +97,12 @@ export function verseTextAt(
   fullText: string,
   t: number
 ): string {
+  const allWords = fullText.split(/\s+/).filter(Boolean);
+  const kept = applyWordRange(allWords, timing.wordRange);
+  const keptText = kept.join(" ");
   const splits = timing.splits;
-  if (!splits || splits.length === 0) return fullText;
-  const words = fullText.split(/\s+/).filter(Boolean);
-  if (words.length < 2) return fullText;
-  const dur = timing.end - timing.start;
-  if (dur <= 0) return fullText;
+  if (!splits || splits.length === 0) return keptText;
+  if (kept.length < 2) return keptText;
 
   let segIdx = 0;
   for (const sp of splits) {
@@ -37,15 +110,40 @@ export function verseTextAt(
     else break;
   }
 
+  // Fixed word boundaries: words are locked at split-creation time.
+  const sw = timing.splitWords;
+  if (sw && sw.length === splits.length) {
+    const ref = timing.splitWordTotal ?? allWords.length;
+    const isTranslation = allWords.length !== ref;
+    const scaled = !isTranslation
+      ? sw
+      : sw.map((w) => snapToSentenceBoundary(allWords, Math.round((w / ref) * allWords.length)));
+    const wordBounds = [0, ...scaled, allWords.length];
+    const wLo = wordBounds[segIdx];
+    const wHi = wordBounds[segIdx + 1];
+    const range = timing.wordRange;
+    const keepLo = range ? Math.max(wLo, range.from) : wLo;
+    const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
+    if (keepHi <= keepLo) return keptText;
+    return allWords.slice(keepLo, keepHi).join(" ");
+  }
+
+  // Legacy fallback: derive words from time proportion.
+  const dur = timing.end - timing.start;
+  if (dur <= 0) return keptText;
   const points = [timing.start, ...splits, timing.end];
   const lo = points[segIdx];
   const hi = points[segIdx + 1];
-  const wLo = Math.max(0, Math.floor(((lo - timing.start) / dur) * words.length));
+  const wLo = Math.max(0, Math.floor(((lo - timing.start) / dur) * allWords.length));
   const wHi = Math.min(
-    words.length,
-    Math.max(wLo + 1, Math.floor(((hi - timing.start) / dur) * words.length))
+    allWords.length,
+    Math.max(wLo + 1, Math.floor(((hi - timing.start) / dur) * allWords.length))
   );
-  return words.slice(wLo, wHi).join(" ");
+  const range = timing.wordRange;
+  const keepLo = range ? Math.max(wLo, range.from) : wLo;
+  const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
+  if (keepHi <= keepLo) return keptText;
+  return allWords.slice(keepLo, keepHi).join(" ");
 }
 
 /**
@@ -55,23 +153,46 @@ export function verseTextAt(
  * users can confirm the chunking without playing through.
  */
 export function verseSegments(timing: VerseTiming, fullText: string): string[] {
+  const allWords = fullText.split(/\s+/).filter(Boolean);
+  const kept = applyWordRange(allWords, timing.wordRange);
   const splits = timing.splits ?? [];
-  const words = fullText.split(/\s+/).filter(Boolean);
-  const dur = timing.end - timing.start;
-  if (splits.length === 0 || words.length < 2 || dur <= 0) return [fullText];
-  const points = [timing.start, ...splits, timing.end];
+  if (splits.length === 0 || kept.length < 2) return [kept.join(" ")];
+
+  const sw = timing.splitWords;
+  const range = timing.wordRange;
   const out: string[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const lo = points[i];
-    const hi = points[i + 1];
-    const wLo = Math.max(0, Math.floor(((lo - timing.start) / dur) * words.length));
-    const wHi = Math.min(
-      words.length,
-      Math.max(wLo + 1, Math.floor(((hi - timing.start) / dur) * words.length))
-    );
-    out.push(words.slice(wLo, wHi).join(" "));
+
+  if (sw && sw.length === splits.length) {
+    const ref = timing.splitWordTotal ?? allWords.length;
+    const scaled = allWords.length === ref
+      ? sw
+      : sw.map((w) => Math.round((w / ref) * allWords.length));
+    const wordBounds = [0, ...scaled, allWords.length];
+    for (let i = 0; i < wordBounds.length - 1; i++) {
+      const wLo = wordBounds[i];
+      const wHi = wordBounds[i + 1];
+      const keepLo = range ? Math.max(wLo, range.from) : wLo;
+      const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
+      if (keepHi > keepLo) out.push(allWords.slice(keepLo, keepHi).join(" "));
+    }
+  } else {
+    const dur = timing.end - timing.start;
+    if (dur <= 0) return [kept.join(" ")];
+    const points = [timing.start, ...splits, timing.end];
+    for (let i = 0; i < points.length - 1; i++) {
+      const lo = points[i];
+      const hi = points[i + 1];
+      const wLo = Math.max(0, Math.floor(((lo - timing.start) / dur) * allWords.length));
+      const wHi = Math.min(
+        allWords.length,
+        Math.max(wLo + 1, Math.floor(((hi - timing.start) / dur) * allWords.length))
+      );
+      const keepLo = range ? Math.max(wLo, range.from) : wLo;
+      const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
+      if (keepHi > keepLo) out.push(allWords.slice(keepLo, keepHi).join(" "));
+    }
   }
-  return out;
+  return out.length ? out : [kept.join(" ")];
 }
 
 /**

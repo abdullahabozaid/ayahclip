@@ -5,7 +5,7 @@
 // element must survive component mounts/unmounts (e.g. opening fullscreen).
 
 import { useAppStore } from "./store";
-import { verseTextAt } from "./audio-import";
+import { verseTextAt, effectiveAudioBounds } from "./audio-import";
 
 type Listener = (time: number, playing: boolean) => void;
 
@@ -67,13 +67,22 @@ function frame() {
   }
   const src = useAppStore.getState().audioSource;
   if (src.mode === "imported" && src.timings.length) {
+    // Compute the kept audio range for each verse once per frame, applying any
+    // per-verse word-range trim. The whole gap-skip and active-verse logic
+    // operates on these effective bounds so trimmed words never play.
+    const verseList = useAppStore.getState().verses;
+    const bounds: [number, number][] = src.timings.map((seg) => {
+      const verse = verseList.find((v) => v.verse_number === seg.verseNumber);
+      const wc = verse ? verse.text_uthmani.split(/\s+/).filter(Boolean).length : 0;
+      return effectiveAudioBounds(seg, wc);
+    });
     // Gap-skip only when NOT looping. When the user has Loop verse on, they want
     // to stay inside the chosen region — don't jump them to the next verse's start.
     if (loopEnd == null) {
-      const inBlock = src.timings.some((s) => t >= s.start && t < s.end);
+      const inBlock = bounds.some(([s, e]) => t >= s && t < e);
       if (!inBlock) {
-        const nextStart = src.timings
-          .map((s) => s.start)
+        const nextStart = bounds
+          .map(([s]) => s)
           .filter((s) => s > t + 0.001)
           .sort((a, b) => a - b)[0];
         if (nextStart !== undefined) {
@@ -95,7 +104,7 @@ function frame() {
       }
     }
 
-    const idx = src.timings.findIndex((s) => t >= s.start && t < s.end);
+    const idx = bounds.findIndex(([s, e]) => t >= s && t < e);
     if (idx >= 0 && idx !== useAppStore.getState().currentVerseIndex) {
       useAppStore.getState().setCurrentVerseIndex(idx);
     }
@@ -141,7 +150,7 @@ function frame() {
           const ar = verseTextAt(seg, verse.text_uthmani, t);
           const tr =
             verse.translation != null ? verseTextAt(seg, verse.translation, t) : null;
-          st.setPlaybackSegment(ar, tr);
+          st.setPlaybackSegment(ar, tr, segIdx === seg.splits!.length);
         }
       } else if (lastSegKey !== null) {
         clearPlaybackSegment();

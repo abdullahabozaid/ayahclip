@@ -3,6 +3,7 @@ import { Surah, Verse, VideoFormat, Background, TextShadow, LetterboxConfig, Pro
 import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro } from "./canvas-utils";
 import { StyleSettings } from "./style";
 import { VerseTiming } from "./audio-import";
+import { sanitizeArabic } from "./canvas-utils";
 import { backgroundPresets } from "./backgrounds";
 
 export interface VerseEmphasis {
@@ -259,7 +260,25 @@ export const useAppStore = create<AppState>((set) => ({
   setPlaybackSegment: (arabic, translation, isLast = true) =>
     set({ playbackSegmentArabic: arabic, playbackSegmentTranslation: translation, playbackSegmentIsLast: isLast }),
   applyStyle: (style) => set(style),
-  restoreProject: (surah, verses, selectedVerseNumbers, settings, projectId, importedAudio, verseParts) =>
+  restoreProject: (surah, verses, selectedVerseNumbers, settings, projectId, importedAudio, verseParts) => {
+    let timings = importedAudio?.timings;
+    if (timings) {
+      timings = timings.map((t) => {
+        if (!t.splits?.length || t.splitWords?.length) return t;
+        const verse = verses.find((v) => v.verse_number === t.verseNumber);
+        if (!verse) return t;
+        const total = sanitizeArabic(verse.text_uthmani).split(/\s+/).filter(Boolean).length;
+        const dur = t.end - t.start;
+        if (dur <= 0 || total < 2) return t;
+        return {
+          ...t,
+          splitWords: t.splits.map((sp) =>
+            Math.max(1, Math.min(total - 1, Math.round(((sp - t.start) / dur) * total)))
+          ),
+          splitWordTotal: total,
+        };
+      });
+    }
     set({
       surah,
       verses,
@@ -267,11 +286,12 @@ export const useAppStore = create<AppState>((set) => ({
       currentVerseIndex: 0,
       projectId,
       verseParts: verseParts ?? {},
-      audioSource: importedAudio
-        ? { mode: "imported", url: importedAudio.url, name: importedAudio.name, timings: importedAudio.timings }
+      audioSource: importedAudio && timings
+        ? { mode: "imported", url: importedAudio.url, name: importedAudio.name, timings }
         : { mode: "reciter" },
       ...settings,
-    }),
+    });
+  },
   toggleEmphasisWord: (verseKey, which, index) =>
     set((state) => {
       const cur = state.emphasis[verseKey] ?? { arabic: [], translation: [] };

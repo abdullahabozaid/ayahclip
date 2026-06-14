@@ -245,15 +245,15 @@ export async function captureThumbnail(video: Blob): Promise<string | undefined>
     } catch {
       /* draw whatever frame we have */
     }
-    const w = 180;
-    const h = Math.round((el.videoHeight / Math.max(1, el.videoWidth)) * w) || 320;
+    const w = 480;
+    const h = Math.round((el.videoHeight / Math.max(1, el.videoWidth)) * w) || 854;
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d");
     if (!ctx) return undefined;
     ctx.drawImage(el, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.7);
+    return canvas.toDataURL("image/jpeg", 0.85);
   } catch (err) {
     warn("captureThumbnail", err);
     return undefined;

@@ -1,4 +1,6 @@
 import { WordTiming, WordData, fetchChapterTimings, fetchWordsByVerse } from "./api";
+import { sanitizeArabic } from "./canvas-utils";
+import { snapToSentenceBoundary } from "./audio-import";
 
 export interface TextSegment {
   arabicText: string;
@@ -118,4 +120,99 @@ export function findCurrentSegmentIndex(
     }
   }
   return 0;
+}
+
+// ── Manual word-parts for reciter clips ─────────────────────────────────────
+// Library (reciter) clips have no single timeline, so a verse's parts are
+// defined by WORD boundaries and timed from the reciter's real per-word
+// timestamps (Quran.com). These helpers load the word data and turn a set of
+// boundaries into TextSegment[] that the preview and export consume directly.
+
+export interface VerseWord {
+  position: number;
+  text: string;
+  translation: string;
+  startMs: number | null;
+  endMs: number | null;
+}
+
+// Chapter timings are the same for every verse of a chapter, so fetch once.
+const chapterTimingsCache = new Map<string, Promise<Awaited<ReturnType<typeof fetchChapterTimings>>>>();
+function cachedChapterTimings(recitationId: number, chapter: number) {
+  const key = `${recitationId}:${chapter}`;
+  let p = chapterTimingsCache.get(key);
+  if (!p) {
+    p = fetchChapterTimings(recitationId, chapter);
+    chapterTimingsCache.set(key, p);
+  }
+  return p;
+}
+
+/** Load a verse's words with the reciter's per-word timestamps. */
+export async function loadVerseWords(
+  recitationId: number,
+  chapter: number,
+  verse: number,
+  translationResourceId: number = 20
+): Promise<VerseWord[]> {
+  const [timingsAll, words] = await Promise.all([
+    cachedChapterTimings(recitationId, chapter),
+    fetchWordsByVerse(chapter, verse, translationResourceId),
+  ]);
+  const vt = timingsAll.find((t) => t.verseKey === `${chapter}:${verse}`);
+  return words.map((w) => {
+    const t = vt?.wordTimings.find((x) => x.wordPosition === w.position);
+    return {
+      position: w.position,
+      text: sanitizeArabic(w.textUthmani),
+      translation: w.translation ?? "",
+      startMs: t ? t.startMs : null,
+      endMs: t ? t.endMs : null,
+    };
+  });
+}
+
+/**
+ * Group a verse's words into parts at the given word boundaries (indices AFTER
+ * which a new part begins) and time each part from the real word timestamps.
+ * No boundaries → one segment covering the whole verse.
+ */
+export function buildPartsFromBoundaries(
+  words: VerseWord[],
+  boundaries: number[],
+  verseTranslation?: string
+): TextSegment[] {
+  if (words.length === 0) return [];
+  const cuts = [...boundaries]
+    .filter((b) => b > 0 && b < words.length)
+    .sort((a, b) => a - b);
+  const points = [0, ...cuts, words.length];
+  const transWords = verseTranslation
+    ? verseTranslation.split(/\s+/).filter(Boolean)
+    : null;
+  const total = words.length;
+  const segs: TextSegment[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const lo = points[i];
+    const hi = points[i + 1];
+    const grp = words.slice(lo, hi);
+    if (grp.length === 0) continue;
+    const firstTimed = grp.find((w) => w.startMs != null);
+    const lastTimed = [...grp].reverse().find((w) => w.endMs != null);
+    let translationText: string;
+    if (transWords) {
+      const tLo = snapToSentenceBoundary(transWords, Math.floor((lo / total) * transWords.length));
+      const tHi = Math.max(tLo, snapToSentenceBoundary(transWords, Math.floor((hi / total) * transWords.length)));
+      translationText = transWords.slice(tLo, tHi).join(" ");
+    } else {
+      translationText = grp.map((w) => w.translation).filter(Boolean).join(" ");
+    }
+    segs.push({
+      arabicText: grp.map((w) => w.text).join(" "),
+      translationText,
+      startMs: firstTimed?.startMs ?? (segs.length ? segs[segs.length - 1].endMs : 0),
+      endMs: lastTimed?.endMs ?? 0,
+    });
+  }
+  return segs;
 }

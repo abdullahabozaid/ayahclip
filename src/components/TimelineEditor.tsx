@@ -78,6 +78,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const [viewport, setViewport] = useState({ left: 0, width: 100 });
   const [toolsOpen, setToolsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [wordTrimOpen, setWordTrimOpen] = useState(false);
 
   // ---- Undo / redo history for verse-timing edits ------------------------
   // Bounded stack; each entry is a deep copy of timings (splits is the only
@@ -93,7 +94,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const bumpHistory = () => setHistoryTick((n) => n + 1);
 
   const cloneTimings = (timings: readonly VerseTiming[]): VerseTiming[] =>
-    timings.map((t) => ({ ...t, splits: t.splits ? [...t.splits] : undefined }));
+    timings.map((t) => ({ ...t, splits: t.splits ? [...t.splits] : undefined, splitWords: t.splitWords ? [...t.splitWords] : undefined }));
 
   const pushHistory = (snapshot: readonly VerseTiming[]) => {
     historyRef.current.push(cloneTimings(snapshot));
@@ -133,6 +134,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     bumpHistory();
   };
   const scrubWasPlaying = useRef(false);
+  const scrubMoved = useRef(false);
 
   durationRef.current = duration;
   headTimeRef.current = headTime;
@@ -401,16 +403,26 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     return () => window.removeEventListener("keydown", onKey);
   }, [url, setHead]);
 
-  // ---- Audio scrubbing: drag on the track to seek + hear the audio ----
+  // ---- Click / scrub on the track ----------------------------------------
+  // A plain click just parks the playhead and stays paused (so you can mark a
+  // break without a half-second of playback). Only an actual drag scrubs with
+  // audio, and that audio stops again on release if you were paused.
   const onScrubMove = useCallback((e: PointerEvent) => {
     const cur = useAppStore.getState().audioSource;
     if (cur.mode !== "imported") return;
     const t = pxToTime(e.clientX);
     importedPlayer.seek(cur.url, t);
     setHead(t);
+    if (!scrubMoved.current) {
+      scrubMoved.current = true;
+      // Started dragging — play so the user can scrub by ear.
+      if (!scrubWasPlaying.current) importedPlayer.play(cur.url);
+    }
   }, [pxToTime, setHead]);
   const onScrubEnd = useCallback(() => {
-    if (!scrubWasPlaying.current) importedPlayer.pause();
+    // Pause only if we actually scrubbed-to-hear from a paused state. A pure
+    // click never started playback, so it simply stays paused at the new spot.
+    if (scrubMoved.current && !scrubWasPlaying.current) importedPlayer.pause();
     window.removeEventListener("pointermove", onScrubMove);
     window.removeEventListener("pointerup", onScrubEnd);
   }, [onScrubMove]);
@@ -418,10 +430,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     const cur = useAppStore.getState().audioSource;
     if (cur.mode !== "imported") return;
     scrubWasPlaying.current = importedPlayer.isPlaying();
+    scrubMoved.current = false;
     const t = pxToTime(clientX);
-    importedPlayer.seek(cur.url, t);
+    importedPlayer.seek(cur.url, t); // park the playhead; no playback on a click
     setHead(t);
-    if (!scrubWasPlaying.current) importedPlayer.play(cur.url); // hear audio while scrubbing
     window.addEventListener("pointermove", onScrubMove);
     window.addEventListener("pointerup", onScrubEnd);
   };
@@ -434,11 +446,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     if (!drag || !rect || dur <= 0) return;
     let t = Math.min(dur, Math.max(0, ((clientX - rect.left) / rect.width) * dur));
 
-    // Snap a dragged edge onto a nearby pause (within ~10px) for easy precision.
-    if (drag.kind !== "body" && pausesRef.current.length) {
+    // Snap a dragged edge onto a nearby pause OR the playhead (within ~10px) for
+    // easy precision. The playhead lets you click the exact break point first,
+    // then drag the boundary and it locks onto your cursor mark.
+    if (drag.kind !== "body") {
       const tolSec = (10 / rect.width) * dur;
       let bd = tolSec;
-      for (const p of pausesRef.current) {
+      const candidates = [...pausesRef.current, headTimeRef.current];
+      for (const p of candidates) {
         const d = Math.abs(p - t);
         if (d < bd) {
           bd = d;
@@ -594,9 +609,20 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     if (existingWIdx.includes(wIdx)) return;
 
     const snappedTime = seg.start + (wIdx / words.length) * dur;
-    const splits = [...(seg.splits ?? []), snappedTime].sort((a, b) => a - b);
+    const oldSplits = seg.splits ?? [];
+    const oldWords = seg.splitWords ?? oldSplits.map((sp) =>
+      Math.round(((sp - seg.start) / dur) * words.length)
+    );
+    const combined = oldSplits.map((sp, j) => ({ t: sp, w: oldWords[j] }));
+    combined.push({ t: snappedTime, w: wIdx });
+    combined.sort((a, b) => a.t - b.t);
     const next = cur.timings.map((x) => ({ ...x }));
-    next[i] = { ...next[i], splits };
+    next[i] = {
+      ...next[i],
+      splits: combined.map((c) => c.t),
+      splitWords: combined.map((c) => c.w),
+      splitWordTotal: words.length,
+    };
     commit(next);
   };
 
@@ -609,8 +635,102 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     const target = next[verseIdx];
     if (!target?.splits) return;
     const remaining = target.splits.filter((_, j) => j !== splitIdx);
-    next[verseIdx] = { ...target, splits: remaining.length ? remaining : undefined };
+    const remainingWords = target.splitWords?.filter((_, j) => j !== splitIdx);
+    next[verseIdx] = {
+      ...target,
+      splits: remaining.length ? remaining : undefined,
+      splitWords: remainingWords?.length ? remainingWords : undefined,
+      splitWordTotal: remaining.length ? target.splitWordTotal : undefined,
+    };
     commit(next);
+  };
+
+  // ---- Word-range trim (pick a contiguous slice of the verse's words) -----
+  // Used to clip "half of the verse": the displayed text and the audio shrink
+  // to only the chosen word range, everything outside becomes a skipped gap.
+  const setVerseWordRange = (verseIdx: number, from: number, to: number) => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported") return;
+    const verses = useAppStore.getState().verses;
+    const target = cur.timings[verseIdx];
+    if (!target) return;
+    const verse = verses.find((v) => v.verse_number === target.verseNumber);
+    if (!verse) return;
+    const wc = verse.text_uthmani.split(/\s+/).filter(Boolean).length;
+    if (wc <= 0) return;
+    const lo = Math.max(0, Math.min(wc - 1, from));
+    const hi = Math.max(lo, Math.min(wc - 1, to));
+    const isFullRange = lo === 0 && hi === wc - 1;
+    const next = cur.timings.map((x) => ({ ...x }));
+    next[verseIdx] = {
+      ...next[verseIdx],
+      // Storing the full range would be noise — drop the field instead.
+      wordRange: isFullRange ? undefined : { from: lo, to: hi },
+    };
+    commit(next);
+  };
+
+  const clearVerseWordRange = (verseIdx: number) => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported") return;
+    const next = cur.timings.map((x) => ({ ...x }));
+    if (!next[verseIdx]) return;
+    next[verseIdx] = { ...next[verseIdx], wordRange: undefined };
+    commit(next);
+  };
+
+  // ---- Duplicate a verse so the same ayah appears twice on the timeline ----
+  // If there's free audio after the source (e.g. the recording says the verse
+  // twice), the copy fills that gap. Otherwise the source's own time is split
+  // in half and both copies sit side by side — combine with word-trim and you
+  // get "first half" + "second half" of a long ayah as separate cards.
+  const duplicateVerse = (verseIdx: number) => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported") return;
+    const dur = durationRef.current;
+    const source = cur.timings[verseIdx];
+    if (!source) return;
+    const sourceLen = source.end - source.start;
+    if (sourceLen < MIN_DUR * 2) return; // too short to host a copy
+
+    const nextStart =
+      verseIdx + 1 < cur.timings.length ? cur.timings[verseIdx + 1].start : dur;
+    const freeAfter = nextStart - source.end;
+
+    let newSource: VerseTiming;
+    let copy: VerseTiming;
+
+    if (freeAfter >= MIN_DUR * 2) {
+      // Plenty of free time after the source → put the copy there.
+      newSource = source;
+      copy = {
+        verseNumber: source.verseNumber,
+        start: source.end,
+        end: Math.min(dur, source.end + Math.min(sourceLen, freeAfter)),
+        wordRange: source.wordRange ? { ...source.wordRange } : undefined,
+      };
+    } else {
+      // No room → split the source's own time range in half. Splits are dropped
+      // on both copies because their original positions no longer make sense.
+      const mid = source.start + sourceLen / 2;
+      newSource = { ...source, end: mid, splits: undefined, splitWords: undefined, splitWordTotal: undefined };
+      copy = {
+        verseNumber: source.verseNumber,
+        start: mid,
+        end: source.end,
+        wordRange: source.wordRange ? { ...source.wordRange } : undefined,
+      };
+    }
+
+    const next = [
+      ...cur.timings.slice(0, verseIdx),
+      newSource,
+      copy,
+      ...cur.timings.slice(verseIdx + 1),
+    ];
+    commit(next);
+    // Activate the new copy so any follow-up edits land on it.
+    useAppStore.getState().setCurrentVerseIndex(verseIdx + 1);
   };
 
   // Snap the selected verse's start/end to the current playhead — play, pause at the
@@ -930,8 +1050,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         const len = Math.max(0, v.end - v.start);
         const splitCount = v.splits?.length ?? 0;
         const segCount = splitCount + 1;
+        const activeVerse = store.verses.find((vv) => vv.verse_number === v.verseNumber);
+        const totalWords = activeVerse
+          ? activeVerse.text_uthmani.split(/\s+/).filter(Boolean).length
+          : 0;
+        const range = v.wordRange ?? { from: 0, to: Math.max(0, totalWords - 1) };
+        const isTrimmed = !!v.wordRange;
         return (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-4 py-2.5">
+          <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-4 py-2.5">
             <span
               className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-md bg-[var(--gold)]/15 px-2 text-[12px] font-medium tabular-nums text-gold-soft ring-1 ring-inset ring-[var(--hairline)]"
               title={`Verse ${v.verseNumber} of this clip`}
@@ -974,6 +1100,105 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-soft" />
                 {segCount} segments
               </span>
+            )}
+
+            <button
+              onClick={() => setWordTrimOpen((o) => !o)}
+              disabled={totalWords < 2}
+              aria-expanded={wordTrimOpen}
+              className={`btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] disabled:opacity-40 ${
+                isTrimmed ? "ring-1 ring-emerald-soft/50 text-emerald-soft" : ""
+              }`}
+              title="Keep only a contiguous range of this verse's words"
+            >
+              ✂ Words {isTrimmed && `· ${range.to - range.from + 1}/${totalWords}`}
+            </button>
+
+            <button
+              onClick={() => duplicateVerse(activeIdx)}
+              className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px]"
+              title="Duplicate this verse so the same ayah appears twice on the timeline"
+            >
+              ⧉ Duplicate
+            </button>
+
+            {wordTrimOpen && totalWords >= 2 && (
+              <div
+                role="dialog"
+                aria-label="Trim verse words"
+                className="absolute top-full left-0 right-0 z-40 mt-1.5 rounded-xl border border-[var(--hairline)] bg-[var(--surface)] p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-gold-soft/80">
+                    Trim verse words
+                  </span>
+                  <span className="text-[10px] tabular-nums text-[var(--muted-deep)]">
+                    {totalWords} words total
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+                    From
+                    <input
+                      type="number"
+                      min={1}
+                      max={range.to + 1}
+                      value={range.from + 1}
+                      onChange={(e) => {
+                        const n = Math.max(1, Math.min(totalWords, parseInt(e.target.value) || 1));
+                        setVerseWordRange(activeIdx, n - 1, range.to);
+                      }}
+                      className="field h-7 w-14 px-2 text-center text-[12px] tabular-nums"
+                    />
+                  </label>
+                  <span className="text-[var(--muted-deep)]">→</span>
+                  <label className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
+                    To
+                    <input
+                      type="number"
+                      min={range.from + 1}
+                      max={totalWords}
+                      value={range.to + 1}
+                      onChange={(e) => {
+                        const n = Math.max(1, Math.min(totalWords, parseInt(e.target.value) || totalWords));
+                        setVerseWordRange(activeIdx, range.from, n - 1);
+                      }}
+                      className="field h-7 w-14 px-2 text-center text-[12px] tabular-nums"
+                    />
+                  </label>
+                  <span className="text-[11px] text-emerald-soft/80 tabular-nums">
+                    keeps {range.to - range.from + 1} of {totalWords}
+                  </span>
+                  {isTrimmed && (
+                    <button
+                      onClick={() => clearVerseWordRange(activeIdx)}
+                      className="text-[11px] text-[var(--muted)] underline-offset-4 hover:text-parchment hover:underline"
+                    >
+                      Reset to full verse
+                    </button>
+                  )}
+                </div>
+                <p
+                  dir="rtl"
+                  className="font-arabic mt-3 max-h-24 overflow-y-auto rounded-md bg-[var(--ink-deep)] p-3 text-[15px] leading-loose text-parchment ring-1 ring-[var(--hairline-soft)]"
+                >
+                  {(() => {
+                    if (!activeVerse) return null;
+                    const allWords = activeVerse.text_uthmani.split(/\s+/).filter(Boolean);
+                    return allWords.map((w, i) => {
+                      const kept = i >= range.from && i <= range.to;
+                      return (
+                        <span
+                          key={i}
+                          className={kept ? "text-parchment" : "text-[var(--muted-deep)] opacity-50"}
+                        >
+                          {w}{i < allWords.length - 1 ? " " : ""}
+                        </span>
+                      );
+                    });
+                  })()}
+                </p>
+              </div>
             )}
           </div>
         );
@@ -1033,141 +1258,93 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               className="pointer-events-none absolute inset-0 h-full w-full"
             />
 
-            {/* Verse cards */}
-            {timings.map((t, i) => {
-              const left = pct(t.start);
-              const width = Math.max(0.4, pct(t.end) - left);
-              const active = i === activeIdx;
-              return (
-                <div
-                  key={t.verseNumber}
-                  className={`group absolute top-1 bottom-1 rounded-lg border transition-colors ${
-                    active
-                      ? "z-[15] border-gold/70 bg-[rgba(201,162,75,0.06)]"
-                      : `border-[var(--hairline-soft)] hover:bg-[rgba(255,255,255,0.04)] ${
-                          i % 2 === 0 ? "bg-[rgba(255,255,255,0.025)]" : "bg-transparent"
-                        }`
-                  }`}
-                  style={{ left: `${left}%`, width: `${width}%` }}
-                >
-                  {/* verse-number chip (top-left, like a CapCut clip label) */}
-                  <span
-                    className={`pointer-events-none absolute left-1 top-1 z-[1] rounded px-1.5 py-px text-[10px] font-semibold tabular-nums ${
+            {/* Verse segment blocks — each split part is its own block.
+                Shared edges between parts of the same verse are split handles;
+                outer edges are the verse start/end. */}
+            {(() => {
+              const PART_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+              const segs: {
+                tIdx: number; pIdx: number; total: number;
+                vn: number; s: number; e: number;
+              }[] = [];
+              for (let i = 0; i < timings.length; i++) {
+                const t = timings[i];
+                const pts = [t.start, ...(t.splits ?? []), t.end];
+                for (let p = 0; p < pts.length - 1; p++) {
+                  segs.push({ tIdx: i, pIdx: p, total: pts.length - 1, vn: t.verseNumber, s: pts[p], e: pts[p + 1] });
+                }
+              }
+              return segs.map((seg, idx) => {
+                const left = pct(seg.s);
+                const width = Math.max(0.4, pct(seg.e) - left);
+                const active = seg.tIdx === activeIdx;
+                const isFirst = seg.pIdx === 0;
+                const isLast = seg.pIdx === seg.total - 1;
+                const multiPart = seg.total > 1;
+                const label = multiPart ? `${seg.vn}${PART_LETTERS[seg.pIdx] ?? seg.pIdx}` : `${seg.vn}`;
+                const leftDrag = isFirst ? "start" as DragKind : "split" as DragKind;
+                const leftSplitIdx = isFirst ? undefined : seg.pIdx - 1;
+                const rightDrag = isLast ? "end" as DragKind : "split" as DragKind;
+                const rightSplitIdx = isLast ? undefined : seg.pIdx;
+                return (
+                  <div
+                    key={`seg-${seg.tIdx}-${seg.pIdx}`}
+                    className={`group absolute top-1 bottom-1 transition-colors ${
+                      isFirst && isLast ? "rounded-md" : isFirst ? "rounded-l-md rounded-r-[2px]" : isLast ? "rounded-l-[2px] rounded-r-md" : "rounded-[2px]"
+                    } ${
                       active
-                        ? "bg-gold text-[var(--ink-deep)]"
-                        : "bg-[var(--ink)]/85 text-gold-soft ring-1 ring-[var(--hairline)]"
+                        ? `z-[15] border-2 bg-[rgba(201,162,75,0.04)] ${multiPart ? "border-emerald-soft/60" : "border-gold"}`
+                        : `border hover:border-gold/50 ${
+                            idx % 2 === 0 ? "bg-[rgba(255,255,255,0.02)]" : "bg-transparent"
+                          } ${multiPart ? "border-emerald-soft/20" : "border-[var(--hairline)]"}`
                     }`}
+                    style={{ left: `${left}%`, width: `${width}%` }}
                   >
-                    {t.verseNumber}
-                  </span>
-                  {/* left handle — kept inside the card edge so the first verse's
-                      handle is never clipped by the track (trim the head from here) */}
-                  <div
-                    onPointerDown={startDrag(i, "start")}
-                    className="absolute left-0 top-0 bottom-0 z-10 flex w-3.5 cursor-ew-resize items-center justify-start pl-px"
-                    title="Drag the verse start"
-                  >
-                    <span className="h-3/4 w-[3px] rounded bg-gold/70 group-hover:bg-gold" />
-                  </div>
-                  {/* body — drag to move · tap on the active verse to add a
-                      split at the tap position · tap a non-active verse to
-                      select it (cursor reflects which one). */}
-                  <div
-                    onPointerDown={startDrag(i, "body")}
-                    onPointerUp={onBodyPointerUp(i)}
-                    className={`h-full w-full ${
-                      active
-                        ? "cursor-cell active:cursor-grabbing"
-                        : "cursor-grab active:cursor-grabbing"
-                    }`}
-                    title={active ? "Tap to add a split here · drag to move the verse" : "Tap to select this verse"}
-                  />
-                  {/* right handle — inside the card edge (trim the tail from here) */}
-                  <div
-                    onPointerDown={startDrag(i, "end")}
-                    className="absolute right-0 top-0 bottom-0 z-10 flex w-3.5 cursor-ew-resize items-center justify-end pr-px"
-                    title="Drag the verse end"
-                  >
-                    <span className="h-3/4 w-[3px] rounded bg-gold/70 group-hover:bg-gold" />
-                  </div>
-                  {/* Segment preview labels: under the active verse, each split
-                      region shows the first words of the Arabic that segment will
-                      display on-screen — so you can confirm the chunking without
-                      playing through. */}
-                  {active && t.splits && t.splits.length > 0 && (() => {
-                    const verse = store.verses.find((v) => v.verse_number === t.verseNumber);
-                    if (!verse) return null;
-                    const segs = verseSegments(t, verse.text_uthmani);
-                    const span = t.end - t.start;
-                    if (span <= 0) return null;
-                    const points = [t.start, ...t.splits!, t.end];
-                    return segs.map((segText, si) => {
-                      const lo = points[si];
-                      const hi = points[si + 1];
-                      const leftPct = ((lo - t.start) / span) * 100;
-                      const widthPct = ((hi - lo) / span) * 100;
-                      return (
-                        <div
-                          key={`label-${si}`}
-                          className="pointer-events-none absolute bottom-1 z-[2] flex overflow-hidden px-1"
-                          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-                          dir="rtl"
-                        >
-                          <span
-                            className="font-arabic truncate rounded bg-[var(--ink-deep)]/85 px-1.5 py-0.5 text-[11px] leading-snug text-emerald-soft ring-1 ring-[var(--hairline)]/50"
-                            title={segText}
-                          >
-                            {segText}
-                          </span>
-                        </div>
-                      );
-                    });
-                  })()}
-
-                  {/* Intra-verse split markers (long-verse text breaks). Emerald
-                      to distinguish from the gold verse boundaries. Drag to move,
-                      tap × to remove (× only shows on the active verse). */}
-                  {t.splits?.map((sp, si) => {
-                    const span = t.end - t.start;
-                    if (span <= 0) return null;
-                    const localLeft = ((sp - t.start) / span) * 100;
-                    return (
-                      <div
-                        key={si}
-                        className="absolute top-0 bottom-0 z-[11]"
-                        style={{ left: `${localLeft}%`, transform: "translateX(-50%)" }}
+                    <span
+                      className={`pointer-events-none absolute left-1 top-1 z-[1] rounded px-1.5 py-px text-[10px] font-semibold tabular-nums ${
+                        active
+                          ? multiPart ? "bg-emerald-soft text-[var(--ink-deep)]" : "bg-gold text-[var(--ink-deep)]"
+                          : "bg-[var(--ink)]/85 text-gold-soft ring-1 ring-[var(--hairline)]"
+                      }`}
+                    >
+                      {label}
+                    </span>
+                    <div
+                      onPointerDown={startDrag(seg.tIdx, leftDrag, leftSplitIdx)}
+                      className={`absolute left-0 top-0 bottom-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/15 ${isFirst ? "rounded-l-md" : ""}`}
+                      title={isFirst ? "Drag the verse start" : "Drag to adjust split boundary"}
+                    />
+                    <div
+                      onPointerDown={startDrag(seg.tIdx, "body")}
+                      onPointerUp={onBodyPointerUp(seg.tIdx)}
+                      className={`h-full w-full ${
+                        active
+                          ? "cursor-cell active:cursor-grabbing"
+                          : "cursor-grab active:cursor-grabbing"
+                      }`}
+                      title={active ? "Tap to add a split here · drag to move the verse" : "Tap to select this verse"}
+                    />
+                    <div
+                      onPointerDown={startDrag(seg.tIdx, rightDrag, rightSplitIdx)}
+                      className={`absolute right-0 top-0 bottom-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/15 ${isLast ? "rounded-r-md" : ""}`}
+                      title={isLast ? "Drag the verse end" : "Drag to adjust split boundary"}
+                    />
+                    {active && !isLast && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeSplit(seg.tIdx, seg.pIdx);
+                        }}
+                        className="absolute -right-2 top-1/2 z-[16] flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-[10px] leading-none text-emerald-soft ring-1 ring-[var(--hairline)] hover:text-red-400"
+                        title="Merge with next part"
                       >
-                        {active && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeSplit(i, si);
-                            }}
-                            className="absolute -top-2 left-1/2 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-[10px] leading-none text-emerald-soft ring-1 ring-[var(--hairline)] hover:text-red-400"
-                            title="Remove split"
-                          >
-                            ×
-                          </button>
-                        )}
-                        <div
-                          onPointerDown={active ? startDrag(i, "split", si) : undefined}
-                          className={
-                            active
-                              ? "flex h-full w-2.5 cursor-ew-resize items-center justify-center"
-                              : "pointer-events-none flex h-full w-px items-center justify-center"
-                          }
-                          title={active ? "Drag to adjust · × to remove" : undefined}
-                        >
-                          <span
-                            className={`h-3/4 w-px ${active ? "bg-emerald-soft" : "bg-emerald-soft/60"}`}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              });
+            })()}
 
             {/* Trimmed head / tail — dimmed so it's clear they're deleted */}
             {timings[0].start > 0.02 && (
@@ -1214,6 +1391,49 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             >
               <span className="absolute -top-1 -left-[3px] h-0 w-0 border-x-4 border-t-4 border-x-transparent border-t-gold" />
             </div>
+          </div>
+
+          {/* Captions track — a CapCut-style row under the waveform where every
+              verse's on-screen text (broken into split-segments) is visible
+              inline with its time range. No playback needed to confirm what
+              will appear when. */}
+          <div className="relative mt-1.5 h-10 rounded-md bg-[var(--ink-deep)]/60 ring-1 ring-[var(--hairline-soft)]">
+            {timings.map((tg, i) => {
+              const verse = store.verses.find((v) => v.verse_number === tg.verseNumber);
+              if (!verse) return null;
+              const span = tg.end - tg.start;
+              if (span <= 0) return null;
+              const segs = verseSegments(tg, verse.text_uthmani);
+              const points = [tg.start, ...(tg.splits ?? []), tg.end];
+              const active = i === activeIdx;
+              return segs.map((segText, si) => {
+                const lo = points[si];
+                const hi = points[si + 1];
+                const leftPct = pct(lo);
+                const widthPct = Math.max(0.4, pct(hi) - pct(lo));
+                return (
+                  <div
+                    key={`cap-${i}-${si}`}
+                    className={`absolute top-1 bottom-1 flex items-center overflow-hidden rounded-md px-1.5 transition-colors ${
+                      active
+                        ? "z-[2] bg-[var(--surface)]/85 ring-1 ring-emerald-soft/40"
+                        : "z-[1] bg-[var(--surface)]/40 ring-1 ring-[var(--hairline-soft)]"
+                    }`}
+                    style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                    title={segText}
+                    dir="rtl"
+                  >
+                    <span
+                      className={`font-arabic w-full truncate text-right text-[12px] leading-tight ${
+                        active ? "text-parchment" : "text-parchment/65"
+                      }`}
+                    >
+                      {segText}
+                    </span>
+                  </div>
+                );
+              });
+            })}
           </div>
         </div>
       </div>

@@ -72,7 +72,7 @@ export default function Dashboard() {
       // clip reopens fully — playable, with an editable verse timeline.
       const settings = { ...project.settings };
       let importedAudio:
-        | { url: string; name: string; timings: { verseNumber: number; start: number; end: number }[] }
+        | { url: string; name: string; timings: import("@/lib/audio-import").VerseTiming[] }
         | undefined;
       if (project.imported) {
         const audioBlob = await getBlob(`audio:${project.id}`);
@@ -90,7 +90,7 @@ export default function Dashboard() {
       }
 
       const store = useAppStore.getState();
-      store.restoreProject(surah, verses, project.selectedVerseNumbers, settings, project.id, importedAudio);
+      store.restoreProject(surah, verses, project.selectedVerseNumbers, settings, project.id, importedAudio, project.verseParts);
       if (importedAudio && project.imported?.videoBg) store.setBackgroundVideoSync(true);
       router.push("/studio");
     } catch {

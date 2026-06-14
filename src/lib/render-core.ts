@@ -15,7 +15,6 @@ import {
   getLetterboxContentArea,
   rgbaFromHex,
   safeInsetFor,
-  splitWords,
   SafeAreaTarget,
   MediaFit,
   FitBackdrop,
@@ -106,17 +105,17 @@ export function sliceQcfForDisplay(
 ): QcfWord[] | undefined {
   const fullQcf = verse.qcfWords;
   if (!fullQcf || displayArabic === verse.text_uthmani) return fullQcf;
-  const allWords = splitWords(verse.text_uthmani);
-  const partWords = splitWords(displayArabic);
-  const justWords = fullQcf.filter((w) => w.char_type_name === "word");
-  let offset = 0;
-  for (let i = 0; i <= allWords.length - partWords.length; i++) {
-    if (allWords.slice(i, i + partWords.length).every((w, j) => w === partWords[j])) {
-      offset = i;
+  const allSimple = verse.text_uthmani.split(/\s+/).filter(Boolean);
+  const partSimple = displayArabic.split(/\s+/).filter(Boolean);
+  let simpleOffset = 0;
+  for (let i = 0; i <= allSimple.length - partSimple.length; i++) {
+    if (allSimple.slice(i, i + partSimple.length).every((w, j) => w === partSimple[j])) {
+      simpleOffset = i;
       break;
     }
   }
-  const sliced = justWords.slice(offset, offset + partWords.length);
+  const withoutEnd = fullQcf.filter((w) => w.char_type_name !== "end");
+  const sliced = withoutEnd.slice(simpleOffset, simpleOffset + partSimple.length);
   if (isLastPart) {
     const endGlyph = fullQcf.find((w) => w.char_type_name === "end");
     return endGlyph ? [...sliced, endGlyph] : sliced;

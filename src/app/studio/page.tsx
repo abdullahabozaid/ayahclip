@@ -477,7 +477,7 @@ export default function StudioPage() {
             )}
 
             <div className="ml-auto flex items-center gap-2">
-              {timelineOpen && store.audioSource.mode === "imported" && (
+              {timelineOpen && (
                 <button
                   onClick={() => setTimelineFullscreen(true)}
                   className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold"
