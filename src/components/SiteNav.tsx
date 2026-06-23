@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type NavItem = { href: string; label: string; match: (p: string) => boolean };
 
@@ -21,11 +21,7 @@ const LINKS: NavItem[] = [
 export function SiteNav() {
   const pathname = usePathname() ?? "";
   const [open, setOpen] = useState(false);
-
-  // Close the mobile menu whenever the route changes.
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  const closeMenu = () => setOpen(false);
 
   // The studio is a focused, full-bleed editor — it has its own chrome.
   if (pathname.startsWith("/studio")) return null;
@@ -35,6 +31,7 @@ export function SiteNav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4">
         <Link
           href="/"
+          onClick={closeMenu}
           className="font-display shrink-0 text-xl tracking-[0.12em] text-parchment"
         >
           Ayah<span className="text-gold">Clip</span>
@@ -52,7 +49,11 @@ export function SiteNav() {
 
         {/* Mobile: keep the primary CTA visible, tuck the rest behind a menu */}
         <div className="flex items-center gap-2 sm:hidden">
-          <Link href="/browse" className="btn-gold shrink-0 rounded-full px-3.5 py-2 text-sm">
+          <Link
+            href="/browse"
+            onClick={closeMenu}
+            className="btn-gold shrink-0 rounded-full px-3.5 py-2 text-sm"
+          >
             New clip
           </Link>
           <button
@@ -77,6 +78,7 @@ export function SiteNav() {
                 <Link
                   key={l.href}
                   href={l.href}
+                  onClick={closeMenu}
                   className={`rounded-xl px-4 py-3 text-base transition-colors ${
                     active
                       ? "bg-[rgba(201,162,75,0.08)] text-parchment"

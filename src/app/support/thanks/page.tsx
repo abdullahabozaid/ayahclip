@@ -21,8 +21,8 @@ export default function ThanksPage() {
           Thank you for your support
         </h1>
         <p className="mx-auto mt-5 max-w-[44ch] text-base leading-relaxed text-[var(--muted)]">
-          Your generosity keeps AyahClip free and funds what comes next, insha'Allah.
-          May Allah accept it from you and reward you abundantly.
+          Your generosity keeps AyahClip free and funds what comes next,
+          insha&rsquo;Allah. May Allah accept it from you and reward you abundantly.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
           <Link href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
