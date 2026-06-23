@@ -229,16 +229,20 @@ export default function Dashboard() {
             <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--hairline)] text-2xl text-gold-soft">
               ﷽
             </span>
-            <h2 className="font-display text-2xl text-parchment">No clips yet</h2>
-            <p className="mx-auto mt-2 max-w-xs text-sm text-[var(--muted)]">
-              Your saved projects will gather here. Begin by choosing a surah.
+            <h2 className="font-display text-2xl text-parchment">Begin your first clip</h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
+              Your saved projects will gather here. Start from the Quran with an
+              online reciter, or bring your own recitation and let AyahClip find
+              the verses for you.
             </p>
-            <Link
-              href="/browse"
-              className="btn-gold mt-7 inline-block rounded-full px-6 py-3 text-sm"
-            >
-              Browse the Quran
-            </Link>
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+              <Link href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
+                Choose a surah
+              </Link>
+              <Link href="/import" className="btn-ghost rounded-full px-6 py-3 text-sm">
+                Import a recitation
+              </Link>
+            </div>
           </div>
         )}
       </section>

@@ -4,6 +4,7 @@
 // can be scheduled to a date/platform (storage only — no actual posting),
 // browsed by reciter, previewed, downloaded, and marked posted.
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   LibraryClip,
   ClipStatus,
@@ -459,11 +460,18 @@ export default function LibraryPage() {
       )}
 
       {loaded && clips.length === 0 && (
-        <div className="rounded-2xl border border-[var(--hairline-soft)] py-20 text-center">
-          <p className="font-display text-xl text-parchment">No clips yet</p>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Every video you export is kept here automatically, ready to schedule.
+        <div className="panel mx-auto max-w-lg px-8 py-16 text-center">
+          <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--hairline)] text-2xl text-gold-soft">
+            ﷽
+          </span>
+          <h2 className="font-display text-2xl text-parchment">Your library is empty</h2>
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
+            Every clip you export is saved here automatically, ready to preview,
+            gather into folders, and schedule across TikTok, Reels, and Shorts.
           </p>
+          <Link href="/browse" className="btn-gold mt-7 inline-block rounded-full px-6 py-3 text-sm">
+            Make your first clip
+          </Link>
         </div>
       )}
 

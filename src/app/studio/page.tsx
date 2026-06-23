@@ -204,15 +204,22 @@ export default function StudioPage() {
 
   if (!surah || selectedVerseNumbers.length === 0) {
     return (
-      <main className="bg-mihrab flex min-h-dvh flex-col items-center justify-center gap-5">
-        <p className="font-display text-2xl text-parchment">No verses selected</p>
-        <p className="text-sm text-[var(--muted)]">Choose a surah and pick your verses to begin.</p>
-        <button
-          onClick={() => router.push("/browse")}
-          className="btn-gold rounded-full px-6 py-3 text-sm"
-        >
-          Browse the Quran
-        </button>
+      <main className="bg-mihrab flex min-h-dvh items-center justify-center px-5">
+        <div className="panel mx-auto max-w-md px-8 py-16 text-center">
+          <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--hairline)] text-2xl text-gold-soft">
+            ﷽
+          </span>
+          <h1 className="font-display text-2xl text-parchment">No verses selected</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-[var(--muted)]">
+            Choose a surah and pick your verses to begin crafting your clip.
+          </p>
+          <button
+            onClick={() => router.push("/browse")}
+            className="btn-gold mt-7 rounded-full px-6 py-3 text-sm"
+          >
+            Browse the Quran
+          </button>
+        </div>
       </main>
     );
   }

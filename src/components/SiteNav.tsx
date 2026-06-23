@@ -2,12 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+type NavItem = { href: string; label: string; match: (p: string) => boolean };
+
+const LINKS: NavItem[] = [
+  { href: "/", label: "Home", match: (p) => p === "/" },
+  {
+    href: "/browse",
+    label: "Browse",
+    match: (p) => p.startsWith("/browse") || p.startsWith("/surah"),
+  },
+  { href: "/library", label: "Library", match: (p) => p.startsWith("/library") },
+  { href: "/styles", label: "Styles", match: (p) => p.startsWith("/styles") },
+  { href: "/support", label: "Support", match: (p) => p.startsWith("/support") },
+];
 
 export function SiteNav() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
+  const [open, setOpen] = useState(false);
+
+  // Close the mobile menu whenever the route changes.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   // The studio is a focused, full-bleed editor — it has its own chrome.
-  if (pathname?.startsWith("/studio")) return null;
+  if (pathname.startsWith("/studio")) return null;
 
   return (
     <nav className="sticky top-0 z-40 border-b border-[var(--hairline-soft)] bg-[var(--ink)]/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
@@ -19,37 +40,56 @@ export function SiteNav() {
           Ayah<span className="text-gold">Clip</span>
         </Link>
 
-        {/* Links scroll horizontally on phones instead of overflowing. */}
-        <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <NavLink href="/" label="Home" active={pathname === "/"} />
-          <NavLink
-            href="/browse"
-            label="Browse"
-            active={pathname?.startsWith("/browse") || pathname?.startsWith("/surah")}
-          />
-          <NavLink
-            href="/library"
-            label="Library"
-            active={pathname?.startsWith("/library")}
-          />
-          <NavLink
-            href="/styles"
-            label="Styles"
-            active={pathname?.startsWith("/styles")}
-          />
-          <NavLink
-            href="/support"
-            label="Support"
-            active={pathname?.startsWith("/support")}
-          />
-          <Link
-            href="/browse"
-            className="btn-gold ml-2 shrink-0 rounded-full px-4 py-2 text-sm"
-          >
+        {/* Desktop: full inline row */}
+        <div className="hidden items-center gap-1 sm:flex">
+          {LINKS.map((l) => (
+            <NavLink key={l.href} href={l.href} label={l.label} active={l.match(pathname)} />
+          ))}
+          <Link href="/browse" className="btn-gold ml-2 shrink-0 rounded-full px-4 py-2 text-sm">
             New clip
           </Link>
         </div>
+
+        {/* Mobile: keep the primary CTA visible, tuck the rest behind a menu */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <Link href="/browse" className="btn-gold shrink-0 rounded-full px-3.5 py-2 text-sm">
+            New clip
+          </Link>
+          <button
+            type="button"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="btn-ghost flex h-10 w-10 items-center justify-center rounded-full"
+          >
+            <MenuGlyph open={open} />
+          </button>
+        </div>
       </div>
+
+      {/* Mobile dropdown panel */}
+      {open && (
+        <div className="border-t border-[var(--hairline-soft)] bg-[var(--ink)]/95 px-4 pb-4 pt-2 backdrop-blur-xl sm:hidden">
+          <div className="flex flex-col gap-0.5">
+            {LINKS.map((l) => {
+              const active = l.match(pathname);
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={`rounded-xl px-4 py-3 text-base transition-colors ${
+                    active
+                      ? "bg-[rgba(201,162,75,0.08)] text-parchment"
+                      : "text-[var(--muted)] hover:text-parchment"
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
@@ -67,12 +107,38 @@ function NavLink({
     <Link
       href={href}
       className={`shrink-0 rounded-full px-3 py-2 text-sm transition-colors ${
-        active
-          ? "text-parchment"
-          : "text-[var(--muted)] hover:text-parchment"
+        active ? "text-parchment" : "text-[var(--muted)] hover:text-parchment"
       }`}
     >
       {label}
     </Link>
+  );
+}
+
+function MenuGlyph({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      {open ? (
+        <>
+          <path d="M6 6l12 12" />
+          <path d="M18 6L6 18" />
+        </>
+      ) : (
+        <>
+          <path d="M3 7h18" />
+          <path d="M3 12h18" />
+          <path d="M3 17h18" />
+        </>
+      )}
+    </svg>
   );
 }
