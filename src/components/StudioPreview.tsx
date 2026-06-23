@@ -18,6 +18,7 @@ import {
   sliceQcfForDisplay,
   type SceneContent,
 } from "@/lib/render-core";
+import { clipFadeProgress } from "@/lib/clip-fade";
 import { FrameMode } from "./PlatformChrome";
 import { DevicePreview } from "./DevicePreview";
 import { importedPlayer } from "@/lib/imported-player";
@@ -382,6 +383,28 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         ? 1
         : Math.min(1, (performance.now() - verseShownAtRef.current) / s.verseIntroMs);
 
+    // Clip-start fade: the whole frame eases in from black during the first
+    // clipFadeMs of playback from the very start (verse 0), driven by the audio
+    // playhead so it tracks the recitation. A static/paused preview, or any
+    // verse after the first, shows the fully faded-in scene.
+    const fadeMs = s.clipFadeMs ?? 0;
+    let clipFade = 1;
+    if (fadeMs > 0 && playing && s.currentVerseIndex === 0) {
+      if (s.audioSource.mode === "imported") {
+        const t0 = s.audioSource.timings[0]?.start ?? 0;
+        clipFade = clipFadeProgress((importedPlayer.currentTime() - t0) * 1000, fadeMs);
+      } else if (currentAudioRef.current && !currentAudioRef.current.paused) {
+        clipFade = clipFadeProgress(currentAudioRef.current.currentTime * 1000, fadeMs);
+      }
+    }
+    // Optional audio fade-in, matched to the visual fade. Managed whenever a
+    // fade is configured so toggling it off restores full volume.
+    if (fadeMs > 0) {
+      const vol = s.audioFadeIn && playing && s.currentVerseIndex === 0 ? clipFade : 1;
+      if (s.audioSource.mode === "imported") importedPlayer.setVolume(vol);
+      else if (currentAudioRef.current) currentAudioRef.current.volume = vol;
+    }
+
     const content: SceneContent = {
       arabicText: displayArabic,
       verseNumber: cv.verse_number,
@@ -393,6 +416,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       emphasisStyleOverride: wordHi != null ? "color" : undefined,
       emphasisColorOverride: wordHi != null ? s.emphasisColor || "#c9a24b" : undefined,
       introProgress,
+      clipFadeProgress: clipFade,
     };
 
     drawScene(

@@ -9,6 +9,7 @@ import {
   sliceQcfForDisplay,
   type SceneContent,
 } from "./render-core";
+import { clipFadeProgress, applyAudioFadeIn } from "./clip-fade";
 import { verseTextAt, type VerseTiming } from "./audio-import";
 import { ensureQcfFontsReady } from "./qcf-font-loader";
 import {
@@ -51,6 +52,11 @@ interface ExportOptions {
   videoLoopMode?: "loop" | "freeze";
   verseIntro?: import("./canvas-utils").VerseIntro;
   verseIntroMs?: number;
+  /** Clip-start fade: fade the whole frame in from black over this many ms at
+   *  the very start of the clip (0 = off). Distinct from the per-verse intro. */
+  clipFadeMs?: number;
+  /** Ramp the audio in over the same clip-start window. */
+  audioFadeIn?: boolean;
   textShadow: TextShadow;
   letterbox: LetterboxConfig;
   emphasis: Record<string, VerseEmphasis>;
@@ -264,6 +270,22 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
     stream.addTrack(track);
   }
 
+  // Optional clip-start audio fade: route every verse source through one gain
+  // node, ramped 0→1 once when the first verse's audio actually begins (so the
+  // ramp aligns with playback even if the first fetch was slow).
+  const audioFadeOn = !!options.audioFadeIn && (options.clipFadeMs ?? 0) > 0;
+  const master = audioCtx.createGain();
+  master.connect(destination);
+  master.connect(audioCtx.destination);
+  let audioRampScheduled = false;
+  const scheduleAudioRamp = () => {
+    if (!audioFadeOn || audioRampScheduled) return;
+    audioRampScheduled = true;
+    const t0 = audioCtx.currentTime;
+    master.gain.setValueAtTime(0, t0);
+    master.gain.linearRampToValueAtTime(1, t0 + options.clipFadeMs! / 1000);
+  };
+
   // Prefer MP4 (H.264 + AAC) so clips upload cleanly to TikTok/Instagram/YouTube;
   // fall back to WebM only if the browser can't record MP4.
   const MIME_PREFERENCE = [
@@ -311,6 +333,11 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
   // Reciter clips: per-verse word-parts timed to the reciter (empty for uploads).
   const reciterSegs = await buildReciterSegments(options);
 
+  // Clip-start fade anchor: the clip begins as the loop starts drawing verse 0.
+  const clipFadeMs = options.clipFadeMs ?? 0;
+  const clipStartMs = performance.now();
+  const clipFadeAt = () => clipFadeProgress(performance.now() - clipStartMs, clipFadeMs);
+
   for (let i = 0; i < options.verses.length; i++) {
     const verse = options.verses[i];
     options.onProgress(i + 1, options.verses.length);
@@ -329,20 +356,23 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
     prevSegAr = seg0.ar;
     drawFrame(
       ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      introAt(segStart), seg0.ar, seg0.tr, seg0.isLast
+      introAt(segStart), seg0.ar, seg0.tr, seg0.isLast, clipFadeAt()
     );
 
     try {
       const source = audioCtx.createBufferSource();
-      let renderWhilePlaying = !!bgVideo || hasIntro || !!tm?.splits?.length || !!vSegs;
+      // The clip-start fade animates during the first verse, so keep drawing
+      // frames through verse 0 even when nothing else would require it.
+      let renderWhilePlaying =
+        !!bgVideo || hasIntro || !!tm?.splits?.length || !!vSegs || (clipFadeMs > 0 && i === 0);
 
       if (importedBuffer && options.importedAudio) {
         const start = sourceStart;
         const dur = Math.max(0.05, (tm?.end ?? importedBuffer.duration) - start);
         source.buffer = importedBuffer;
-        source.connect(destination);
-        source.connect(audioCtx.destination);
+        source.connect(master);
         source.start(0, start, dur);
+        scheduleAudioRamp();
         if (bgVideo && options.backgroundVideoSync) {
           try {
             bgVideo.currentTime = start;
@@ -357,9 +387,9 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
         const response = await fetch(audioUrl);
         const audioBuffer = await audioCtx.decodeAudioData(await response.arrayBuffer());
         source.buffer = audioBuffer;
-        source.connect(destination);
-        source.connect(audioCtx.destination);
+        source.connect(master);
         source.start();
+        scheduleAudioRamp();
       }
 
       if (renderWhilePlaying) {
@@ -381,7 +411,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
             }
             drawFrame(
               ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-              introAt(segStart), seg.ar, seg.tr, seg.isLast
+              introAt(segStart), seg.ar, seg.tr, seg.isLast, clipFadeAt()
             );
             frameId = requestAnimationFrame(renderLoop);
           };
@@ -514,6 +544,13 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   }
 
   const { buffer: audioBuffer, verseDurations } = await assembleAudio(options);
+  // Optional audio fade-in: ramp the first clipFadeMs of the concatenated clip
+  // (sample 0) up from silence, synced to the visual fade.
+  if (options.audioFadeIn && (options.clipFadeMs ?? 0) > 0) {
+    for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+      applyAudioFadeIn(audioBuffer.getChannelData(c), audioBuffer.sampleRate, options.clipFadeMs!);
+    }
+  }
   const totalDur = Math.max(0.1, verseDurations.reduce((a, b) => a + b, 0));
   const cum: number[] = [];
   {
@@ -582,6 +619,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   const ctx = canvas.getContext("2d")!;
   const scale = size.w / 480;
   const introMs = options.verseIntro && options.verseIntro !== "none" ? options.verseIntroMs ?? 450 : 0;
+  const clipFadeMsFast = options.clipFadeMs ?? 0;
   const totalFrames = Math.max(1, Math.ceil(totalDur * FAST_FPS));
   // Reciter clips: per-verse word-parts timed to the reciter (empty for uploads).
   const reciterSegs = await buildReciterSegments(options);
@@ -613,29 +651,41 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   // video backgrounds still get every frame.
   interface FramePlan {
     t: number;
-    vi: number;
+    vi: number; // verse shown on screen (leads the audio by the intro duration)
+    audioVi: number; // verse whose audio is playing (for bg-video sync)
     ar: string;
     tr: string | null | undefined;
     isLast: boolean;
     introProgress: number;
+    clipFade: number;
     key: string;
   }
+  // Fade-in lead: show the next verse `introLead` before its recitation so its
+  // intro animation finishes as the words begin (mirrors the live preview in
+  // imported-player). Verse-level only — within a verse, parts track the audio.
+  const introLead = introMs / 1000;
   const plan: FramePlan[] = new Array(totalFrames);
   {
     let prevSegText = "";
     let segStartT = 0;
     for (let f = 0; f < totalFrames; f++) {
       const t = f / FAST_FPS;
+      const td = t + introLead;
       let vi = 0;
-      while (vi < cum.length - 1 && t >= cum[vi + 1]) vi++;
+      while (vi < cum.length - 1 && td >= cum[vi + 1]) vi++; // display verse (leads)
+      let audioVi = 0;
+      while (audioVi < cum.length - 1 && t >= cum[audioVi + 1]) audioVi++; // audio verse
       const verse = options.verses[vi];
       const tmFast = options.importedAudio?.timings.find(
         (x) => x.verseNumber === verse.verse_number
       );
       const vSegsFast = reciterSegs.get(verse.verse_number);
-      const sourceTime = (tmFast?.start ?? 0) + (t - cum[vi]);
+      // Real-time offset into the displayed verse (0 during the lead window, so a
+      // leading verse shows its first part) — parts never lead, only the verse.
+      const localT = Math.max(0, t - cum[vi]);
+      const sourceTime = (tmFast?.start ?? 0) + localT;
       const segFast = vSegsFast
-        ? reciterTextAt(verse, vSegsFast, t - cum[vi])
+        ? reciterTextAt(verse, vSegsFast, localT)
         : segmentFor(verse, tmFast, sourceTime);
       const segKey = `${vi}:${segFast.ar}`;
       if (segKey !== prevSegText) {
@@ -643,13 +693,18 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
         segStartT = t;
       }
       const introProgress = introMs > 0 ? Math.min(1, ((t - segStartT) * 1000) / introMs) : 1;
+      // Clip-start fade: clip begins at t=0 on the output timeline.
+      const clipFade = clipFadeProgress(t * 1000, clipFadeMsFast);
       plan[f] = {
-        t, vi,
+        t, vi, audioVi,
         ar: segFast.ar,
         tr: segFast.tr,
         isLast: segFast.isLast,
         introProgress,
-        key: `${segKey}|${introProgress}|${segFast.isLast}`,
+        clipFade,
+        // clipFade is part of the dedupe key so each distinct fade frame is
+        // encoded (run-length encoding must not collapse the fade animation).
+        key: `${segKey}|${introProgress}|${clipFade}|${segFast.isLast}`,
       };
     }
   }
@@ -661,11 +716,11 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     if (encodeError) throw encodeError;
     const p = plan[f];
     const verse = options.verses[p.vi];
-    if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(p.t, p.vi));
+    if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(p.t, p.audioVi));
 
     drawFrame(
       ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      p.introProgress, p.ar, p.tr, p.isLast
+      p.introProgress, p.ar, p.tr, p.isLast, p.clipFade
     );
 
     // Length of the static run starting here (1 when a bg video animates,
@@ -754,7 +809,9 @@ function drawFrame(
   displayArabic?: string,
   /** Override translation. Falls back to verse.translation. */
   displayTranslation?: string | null,
-  isLastPart = true
+  isLastPart = true,
+  /** Clip-start fade progress (1 = fully shown, 0 = black). */
+  clipFade = 1
 ) {
   // When showing a mid-verse segment, manual word emphasis indices wouldn't
   // line up with the partial text — so emphasis only applies on the full verse.
@@ -774,6 +831,7 @@ function drawFrame(
     arabicEmphasis: ve?.arabic,
     translationEmphasis: ve?.translation,
     introProgress,
+    clipFadeProgress: clipFade,
   };
   drawScene(ctx, options, content, { image: bgImage, video: bgVideo });
 }

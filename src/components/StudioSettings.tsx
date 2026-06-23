@@ -418,6 +418,25 @@ export function StudioSettings() {
               onChange={store.setVerseIntroMs}
             />
           )}
+          {/* Clip-start fade: whole picture + verse ease in from black once, at
+              the very beginning of the clip. */}
+          <Slider
+            label="Clip Start Fade"
+            value={store.clipFadeMs}
+            min={0}
+            max={1500}
+            step={50}
+            suffix="ms"
+            display={(v) => (v === 0 ? "Off" : `${v}ms`)}
+            onChange={store.setClipFadeMs}
+          />
+          {store.clipFadeMs > 0 && (
+            <Toggle
+              label="Fade in audio too"
+              checked={store.audioFadeIn}
+              onChange={() => store.setAudioFadeIn(!store.audioFadeIn)}
+            />
+          )}
           <Slider
             label="Arabic Line Height"
             value={store.lineHeight}

@@ -154,6 +154,8 @@ export default function StudioPage() {
         videoLoopMode: state.videoLoopMode,
         verseIntro: state.verseIntro,
         verseIntroMs: state.verseIntroMs,
+        clipFadeMs: state.clipFadeMs,
+        audioFadeIn: state.audioFadeIn,
         textShadow: state.textShadow,
         letterbox: state.letterbox,
         emphasis: state.emphasis,
@@ -198,6 +200,7 @@ export default function StudioPage() {
     store.lineHeight, store.translationLineHeight, store.arabicTranslationGap, store.textPosition, store.overlayOpacity, store.overlayColor,
     store.safeAreaTarget, store.safePadding, store.background, store.backgroundFit, store.fitBackdrop, store.videoLoopMode, store.textShadow, store.letterbox,
     store.emphasis, store.emphasisStyle, store.emphasisColor,
+    store.clipFadeMs, store.audioFadeIn,
     store.audioSource,
     surah, selectedVerseNumbers,
   ]);

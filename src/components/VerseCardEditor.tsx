@@ -7,6 +7,7 @@ import {
   autoSegment,
   resampleTo16kMono,
   snapToSentenceBoundary,
+  findSilenceCenters,
   type VerseTiming,
 } from "@/lib/audio-import";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
@@ -39,8 +40,9 @@ function cloneTimings(timings: readonly VerseTiming[]): VerseTiming[] {
  * can be divided into PARTS by word: splitting after word N keeps every word but
  * shows words 1..N as "part 1" and the rest as "part 2" (stacked below), and you
  * can split a part again into part 3, and so on. Parts never remove any words —
- * the whole verse is always present, just shown in sequence. Verses themselves
- * can't be removed (that would drop an ayah).
+ * the whole verse is always present, just shown in sequence. A whole verse card
+ * can be deleted from the clip (for a mis-detected or duplicate segment), but
+ * splitting never drops words.
  */
 export function VerseCardEditor() {
   const store = useAppStore();
@@ -249,6 +251,19 @@ export function VerseCardEditor() {
     [commit, duration]
   );
 
+  // Delete a whole verse card from the clip. This is a structural change that
+  // also touches selectedVerseNumbers (in the store action), so we clear the
+  // timings-only undo history — a later ⌘Z restoring an old timings snapshot
+  // would otherwise reintroduce the verse and desync it from the selection.
+  const deleteVerse = useCallback((verseIdx: number) => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported" || cur.timings.length <= 1) return;
+    historyRef.current = [];
+    futureRef.current = [];
+    useAppStore.getState().deleteImportedVerse(verseIdx);
+    setHistoryTick((n) => (n + 1) & 0xffff);
+  }, []);
+
   const setBoundary = useCallback(
     (verseIdx: number, kind: "start" | "end") => {
       const cur = useAppStore.getState().audioSource;
@@ -333,18 +348,22 @@ export function VerseCardEditor() {
 
   const deepAlign = useCallback(async () => {
     const buf = bufferRef.current;
-    const cur = useAppStore.getState().audioSource;
-    const surahId = useAppStore.getState().surah?.id;
+    const state = useAppStore.getState();
+    const cur = state.audioSource;
+    const surahId = state.surah?.id;
     if (!buf || cur.mode !== "imported" || !surahId) return;
-    const verseNumbers = cur.timings.map((t) => t.verseNumber);
+    // Forced alignment wants the unique, sorted verse list (one timing per verse).
+    const verseNumbers = [...new Set(cur.timings.map((t) => t.verseNumber))].sort(
+      (a, b) => a - b
+    );
     if (verseNumbers.length === 0) return;
     setDeepErr(null);
     setDeepMsg("Preparing…");
     try {
       await loadCorpus();
       const audio = await resampleTo16kMono(buf);
-      const { transcribe } = await import("@/lib/asr");
-      const result = await transcribe(audio, (loaded, total) => {
+      const { computeEmissions } = await import("@/lib/asr");
+      const emissions = await computeEmissions(audio, (loaded, total) => {
         setDeepMsg(
           total
             ? `Downloading model (one-time, ~131 MB)… ${Math.round((loaded / total) * 100)}%`
@@ -354,12 +373,13 @@ export function VerseCardEditor() {
       setDeepMsg("Aligning…");
       const lo = verseNumbers[0];
       const hi = verseNumbers[verseNumbers.length - 1];
+      const silences = findSilenceCenters(buf);
       const aligned = forceAlignVerses({
-        hypText: result.text,
-        hypCharTimes: result.charTimes,
+        emissions,
         surah: surahId,
         verseNumbers,
         audioDuration: buf.duration,
+        silences,
       });
       if (aligned) {
         commit(aligned);
@@ -488,6 +508,8 @@ export function VerseCardEditor() {
             onSplitWord={(absBoundary) => addWordSplit(i, absBoundary)}
             onRemoveSplit={(si) => removeSplit(i, si)}
             onDuplicate={() => duplicateVerse(i)}
+            onDelete={() => deleteVerse(i)}
+            canDelete={timings.length > 1}
             onSeek={(time) => seekTo(time, i)}
           />
         ))}
@@ -495,7 +517,8 @@ export function VerseCardEditor() {
 
       <p className="px-1 text-[11px] leading-relaxed text-[var(--muted-deep)]">
         Splitting a verse keeps every word — it just shows the verse in parts
-        (part 1, part 2…), one after another. Verses can&apos;t be removed.
+        (part 1, part 2…), one after another. To remove a wrongly detected or
+        duplicate segment, use the 🗑 button on its card.
       </p>
     </div>
   );
@@ -519,6 +542,8 @@ interface VerseCardProps {
   onSplitWord: (absBoundary: number) => void;
   onRemoveSplit: (splitIdx: number) => void;
   onDuplicate: () => void;
+  onDelete: () => void;
+  canDelete: boolean;
   onSeek: (time: number) => void;
 }
 
@@ -535,8 +560,11 @@ function VerseCard({
   onSplitWord,
   onRemoveSplit,
   onDuplicate,
+  onDelete,
+  canDelete,
   onSeek,
 }: VerseCardProps) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const verse = useAppStore((s) =>
     s.verses.find((v) => v.verse_number === timing.verseNumber)
   );
@@ -650,6 +678,54 @@ function VerseCard({
           >
             ⧉ Duplicate
           </button>
+          {canDelete &&
+            (confirmingDelete ? (
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11px] text-red-300/90">Delete verse?</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmingDelete(false);
+                  }}
+                  className="rounded-full border border-[var(--hairline)] px-2.5 py-1 text-[11px] text-parchment transition-colors hover:border-gold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmingDelete(false);
+                    onDelete();
+                  }}
+                  className="rounded-full bg-red-500/15 px-2.5 py-1 text-[11px] text-red-300 ring-1 ring-inset ring-red-400/30 transition-colors hover:bg-red-500/25"
+                >
+                  Delete
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmingDelete(true);
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-[var(--muted)] transition-colors hover:border-red-400/40 hover:text-red-300"
+                title="Delete this whole verse from the clip"
+                aria-label="Delete verse"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                  <path d="M10 11v6M14 11v6" />
+                </svg>
+              </button>
+            ))}
         </div>
       </div>
 

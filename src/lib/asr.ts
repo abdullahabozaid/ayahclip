@@ -161,6 +161,7 @@ async function loadModelBuffer(onProgress?: Progress): Promise<ArrayBuffer> {
 // ---- session + vocab singletons ----
 let session: ort.InferenceSession | null = null;
 let vocab: Map<number, string> | null = null;
+let vocabRecord: Record<string, string> | null = null;
 let blankId = 1024;
 
 async function ensureReady(onProgress?: Progress): Promise<void> {
@@ -175,6 +176,7 @@ async function ensureReady(onProgress?: Progress): Promise<void> {
   ]);
 
   vocab = new Map();
+  vocabRecord = vocabJson;
   for (const [id, tok] of Object.entries(vocabJson)) {
     const n = parseInt(id);
     vocab.set(n, tok);
@@ -242,11 +244,12 @@ function decodeCTC(
   };
 }
 
-/** Transcribe 16 kHz mono Float32 audio to Arabic text + word onsets. Loads/caches the model on first use. */
-export async function transcribe(
+// Run the model once → raw per-frame outputs + dims. Shared by transcribe()
+// (greedy decode) and computeEmissions() (forced alignment).
+async function runModel(
   audio16k: Float32Array,
   onProgress?: Progress
-): Promise<Transcription> {
+): Promise<{ data: Float32Array; T: number; V: number; frameDur: number }> {
   await ensureReady(onProgress);
   const { features, timeFrames } = await computeMel(audio16k);
 
@@ -255,8 +258,66 @@ export async function transcribe(
   const names = session!.inputNames;
   const results = await session!.run({ [names[0]]: input, [names[1]]: length });
   const out = results[session!.outputNames[0]];
-  const [, timeSteps, vocabSize] = out.dims as number[];
+  const [, T, V] = out.dims as number[];
   const durationSec = audio16k.length / SAMPLE_RATE;
-  const frameDur = timeSteps > 0 ? durationSec / timeSteps : 0;
-  return decodeCTC(out.data as Float32Array, timeSteps, vocabSize, frameDur);
+  const frameDur = T > 0 ? durationSec / T : 0;
+  return { data: out.data as Float32Array, T, V, frameDur };
+}
+
+// Per-frame log-softmax. Idempotent if the model already outputs log-probs
+// (then logsumexp over a normalized row is 0, so this is a no-op); corrective if
+// it outputs raw logits. Forced alignment needs true per-frame log-probs so that
+// "emit token" vs "emit blank" is compared on the same normalized scale.
+function logSoftmaxPerFrame(data: Float32Array, T: number, V: number): Float32Array {
+  const out = new Float32Array(T * V);
+  for (let t = 0; t < T; t++) {
+    const base = t * V;
+    let max = -Infinity;
+    for (let v = 0; v < V; v++) if (data[base + v] > max) max = data[base + v];
+    let sum = 0;
+    for (let v = 0; v < V; v++) sum += Math.exp(data[base + v] - max);
+    const lse = max + Math.log(sum);
+    for (let v = 0; v < V; v++) out[base + v] = data[base + v] - lse;
+  }
+  return out;
+}
+
+/** Transcribe 16 kHz mono Float32 audio to Arabic text + word onsets. Loads/caches the model on first use. */
+export async function transcribe(
+  audio16k: Float32Array,
+  onProgress?: Progress
+): Promise<Transcription> {
+  const { data, T, V, frameDur } = await runModel(audio16k, onProgress);
+  return decodeCTC(data, T, V, frameDur);
+}
+
+export interface Emissions {
+  /** Per-frame log-probabilities, flat [T, V] row-major. */
+  logProbs: Float32Array;
+  T: number;
+  V: number;
+  /** Seconds per frame (audioDuration / T). */
+  frameDur: number;
+  blankId: number;
+  /** The raw model vocab (id → token), for skeleton reduction. */
+  vocab: Record<string, string>;
+}
+
+/**
+ * Run the model and return normalized per-frame emissions for forced alignment.
+ * Unlike transcribe(), this keeps the full [T, V] matrix (no greedy collapse).
+ */
+export async function computeEmissions(
+  audio16k: Float32Array,
+  onProgress?: Progress
+): Promise<Emissions> {
+  const { data, T, V, frameDur } = await runModel(audio16k, onProgress);
+  return {
+    logProbs: logSoftmaxPerFrame(data, T, V),
+    T,
+    V,
+    frameDur,
+    blankId,
+    vocab: vocabRecord!,
+  };
 }

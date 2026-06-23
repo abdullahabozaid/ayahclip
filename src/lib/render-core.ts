@@ -87,6 +87,9 @@ export interface SceneContent {
   emphasisStyleOverride?: EmphasisStyle;
   emphasisColorOverride?: string;
   introProgress: number;
+  /** Clip-start fade: 1 = fully shown, 0 = black. Fades the whole frame in at
+   *  the very start of the clip. Defaults to 1 (no fade) when omitted. */
+  clipFadeProgress?: number;
 }
 
 export interface SceneMedia {
@@ -198,5 +201,17 @@ export function drawScene(
     ctx.restore();
   } else {
     paintRegion(w, h);
+  }
+
+  // Clip-start fade: paint black over the finished frame so the background AND
+  // verse fade in together. Applied last, over everything (including letterbox
+  // bars), and never touches text rendering — so Quranic glyphs are unaffected.
+  const fade = content.clipFadeProgress ?? 1;
+  if (fade < 1) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, 1 - fade));
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
 }

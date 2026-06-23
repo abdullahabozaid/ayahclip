@@ -397,6 +397,29 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           next[i + 1].start = b;
           commit(next);
         }
+      } else if (e.code === "KeyL" || e.code === "KeyR") {
+        // L / R: pull the LEFT or RIGHT boundary of the verse under the playhead
+        // to the playhead. L grows the previous (left) verse up to the playhead;
+        // R pulls the next (right) verse's start back to the playhead (same edge
+        // as plain S, but explicit and symmetric with L).
+        e.preventDefault();
+        const cur = useAppStore.getState().audioSource;
+        if (cur.mode !== "imported") return;
+        const t = importedPlayer.currentTime();
+        const next = cur.timings.map((x) => ({ ...x }));
+        const i = next.findIndex((s) => t >= s.start && t < s.end);
+        if (i < 0) return;
+        if (e.code === "KeyL" && i > 0) {
+          const b = Math.max(next[i - 1].start + MIN_DUR, Math.min(next[i].end - MIN_DUR, t));
+          next[i - 1].end = b;
+          next[i].start = b;
+          commit(next);
+        } else if (e.code === "KeyR" && i < next.length - 1) {
+          const b = Math.max(next[i].start + MIN_DUR, Math.min(next[i + 1].end - MIN_DUR, t));
+          next[i].end = b;
+          next[i + 1].start = b;
+          commit(next);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -815,18 +838,21 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   // onsets — most accurate for run-on recitation with few pauses.
   const deepAlign = async () => {
     const buf = bufferRef.current;
-    const cur = useAppStore.getState().audioSource;
-    const surahId = useAppStore.getState().surah?.id;
+    const state = useAppStore.getState();
+    const cur = state.audioSource;
+    const surahId = state.surah?.id;
     if (!buf || cur.mode !== "imported" || !surahId) return;
-    const verseNumbers = cur.timings.map((t) => t.verseNumber);
+    const verseNumbers = [...new Set(cur.timings.map((t) => t.verseNumber))].sort(
+      (a, b) => a - b
+    );
     if (verseNumbers.length === 0) return;
     setDeepErr(null);
     setDeepMsg("Preparing…");
     try {
       await loadCorpus();
       const audio = await resampleTo16kMono(buf);
-      const { transcribe } = await import("@/lib/asr");
-      const result = await transcribe(audio, (loaded, total) => {
+      const { computeEmissions } = await import("@/lib/asr");
+      const emissions = await computeEmissions(audio, (loaded, total) => {
         // First run downloads the ~131 MB recognition model once (then cached);
         // say so explicitly so a slow first load doesn't look frozen.
         setDeepMsg(
@@ -839,15 +865,16 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       const lo = verseNumbers[0];
       const hi = verseNumbers[verseNumbers.length - 1];
 
-      // Forced alignment: align the decoded transcript (with per-char frame times)
-      // to the known verse text for true per-verse boundaries. Falls back to
-      // pause-based segmentation if alignment isn't usable.
+      // True CTC forced alignment: align the known verse text directly onto the
+      // model's per-frame emissions for real per-verse boundaries (works even with
+      // no pause between verses). Falls back to pause-based segmentation if unusable.
+      const silences = findSilenceCenters(buf);
       const aligned = forceAlignVerses({
-        hypText: result.text,
-        hypCharTimes: result.charTimes,
+        emissions,
         surah: surahId,
         verseNumbers,
         audioDuration: buf.duration,
+        silences,
       });
       if (aligned) {
         commit(aligned);

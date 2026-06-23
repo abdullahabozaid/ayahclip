@@ -53,7 +53,6 @@ function dropChars(text: string, rate: number, seed: number): string {
 
 async function main() {
 const { loadCorpus, matchVerses, getVersesText } = await import("../src/lib/verse-match");
-const { forceAlignVerses } = await import("../src/lib/forced-align");
 const { verseTextAt } = await import("../src/lib/audio-import");
 await loadCorpus();
 
@@ -107,55 +106,11 @@ console.log("\n── Matcher: gibberish → no false match (returns null) ─�
     m ? `got ${m.surah}:${m.ayahStart}-${m.ayahEnd} score=${m.score.toFixed(2)}` : "null");
 }
 
-console.log("\n── Forced alignment: monotonic, in-bounds boundaries ──");
-{
-  // Build a perfect hypothesis: the exact ref text with linearly increasing char times.
-  const surah = 2, lo = 1, hi = 3, duration = 30;
-  const { text } = getVersesText(surah, lo, hi);
-  const charTimes = [...text].map((_, i) => (i / Math.max(1, text.length - 1)) * duration);
-  const out = forceAlignVerses({
-    hypText: text,
-    hypCharTimes: charTimes,
-    surah,
-    verseNumbers: [1, 2, 3],
-    audioDuration: duration,
-  });
-  check("returns one timing per verse", !!out && out.length === 3, out ? `len=${out.length}` : "null");
-  if (out) {
-    const monotonic = out.every((t, i) => t.end >= t.start && (i === 0 || t.start >= out[i - 1].start));
-    const inBounds = out.every((t) => t.start >= 0 && t.end <= duration + 1e-6);
-    const verseNums = out.map((t) => t.verseNumber).join(",");
-    check("boundaries monotonic & non-overlapping", monotonic);
-    check("boundaries within [0, duration]", inBounds);
-    check("verse numbers are 1,2,3", verseNums === "1,2,3", `got ${verseNums}`);
-  }
-}
-
-console.log("\n── Forced alignment: robust to a noisy hypothesis ──");
-{
-  const surah = 2, lo = 1, hi = 3, duration = 30;
-  const { text } = getVersesText(surah, lo, hi);
-  const noisy = dropChars(text, 0.18, 7);
-  const charTimes = [...noisy].map((_, i) => (i / Math.max(1, noisy.length - 1)) * duration);
-  const out = forceAlignVerses({
-    hypText: noisy,
-    hypCharTimes: charTimes,
-    surah,
-    verseNumbers: [1, 2, 3],
-    audioDuration: duration,
-  });
-  // Either a usable monotonic result, or a clean null (caller falls back to pauses).
-  const ok = out === null ||
-    (out.length === 3 && out.every((t, i) => t.end >= t.start && (i === 0 || t.start >= out[i - 1].start) && t.end <= duration + 1e-6));
-  check("18% noisy hyp → usable monotonic result or graceful null", ok,
-    out ? `len=${out.length}` : "null (fallback)");
-}
-
-console.log("\n── Forced alignment: rejects unusable input ──");
-{
-  check("empty verse list → null", forceAlignVerses({ hypText: "ا", hypCharTimes: [0], surah: 2, verseNumbers: [], audioDuration: 10 }) === null);
-  check("non-contiguous verses → null", forceAlignVerses({ hypText: "الم", hypCharTimes: [0, 1, 2], surah: 2, verseNumbers: [1, 3], audioDuration: 10 }) === null);
-}
+// Forced alignment moved from decode-then-fuzzy-match to TRUE CTC forced
+// alignment on the model's per-frame emissions. Because that needs the browser
+// ONNX model (not runnable from this Node script), its logic is covered by the
+// vitest suites instead: ctc-align (Viterbi), ctc-vocab (skeleton tokenization +
+// emission marginalization), and forced-align (timing assembly / fade-in / snap).
 
 console.log("\n── Intra-verse splits: verseTextAt segment math ──");
 {

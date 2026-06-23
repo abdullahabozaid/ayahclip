@@ -1,145 +1,148 @@
-// Forced alignment for imported recitation: we already KNOW the exact verse text,
-// so instead of open ASR + fuzzy timing we align the decoded transcript (which
-// carries per-character CTC frame times) to the known verse text and read off a
-// real acoustic timestamp for each verse boundary. Works even with no pauses.
+// Forced alignment for imported recitation. We already KNOW the exact verse text,
+// so we align that text directly onto the model's per-frame acoustic emissions
+// (true CTC forced alignment) rather than fuzzy-matching a free decode. This
+// places a real acoustic onset on every verse — including verses recited with NO
+// pause between them, which silence detection alone cannot resolve.
+//
+// Pipeline: emissions (asr.computeEmissions) → marginalize onto the skeleton
+// alphabet (ctc-vocab) → tokenize the reference verses → CTC Viterbi alignment
+// (ctc-align) → assemble VerseTiming[] (silence-snap + fade-in offset).
 
 import { VerseTiming } from "./audio-import";
-import { normalizeArabicTimed, getVersesText } from "./verse-match";
+import { getVersesText, normalizeArabic } from "./verse-match";
+import {
+  buildSkeletonVocab,
+  tokenizeSkeletonVerses,
+  marginalizeEmissions,
+} from "./ctc-vocab";
+import { ctcForcedAlign } from "./ctc-align";
+import type { Emissions } from "./asr";
 
 const MIN_DUR = 0.12;
+// A forced-aligned boundary snaps to a detected pause center within this window.
+const SNAP_WINDOW = 0.4;
 
 export interface ForceAlignInput {
-  hypText: string;
-  hypCharTimes: number[];
+  emissions: Emissions;
   surah: number;
   verseNumbers: number[]; // contiguous lo..hi
   audioDuration: number;
+  /** Detected pauses (center time + length, seconds) to snap clean cuts to. */
+  silences?: { time: number; len: number }[];
 }
 
 /**
- * Char-level global alignment (Needleman–Wunsch) of the decoded transcript to the
- * known verse text, returning one timing per verse. Returns null if alignment
- * isn't usable (caller should fall back to pause-based segmentation).
+ * Turn per-verse recitation onsets + ends into final VerseTiming[]. Pure (numbers
+ * in, numbers out) so the snap + fade-in + monotonic logic is unit-testable
+ * without the model. `onsets[i]`/`recEnds[i]` are the acoustic start/end of verse
+ * i's recitation; they must be non-decreasing onsets.
+ */
+export function assembleTimings(params: {
+  onsets: number[];
+  recEnds: number[];
+  verseNumbers: number[];
+  audioDuration: number;
+  silences?: { time: number; len: number }[];
+}): VerseTiming[] {
+  const { verseNumbers, audioDuration } = params;
+  const n = verseNumbers.length;
+  const end = Math.max(0.5, audioDuration);
+  const silences = params.silences ?? [];
+
+  const onset = params.onsets.slice();
+  const recEnd = params.recEnds.slice();
+
+  // Snap each verse onset (i>0) to a nearby pause center for a clean cut, without
+  // crossing the previous verse's recitation end or this verse's own recitation.
+  // The fade-in lead is NOT applied here — that's a render concern (the display
+  // leads the audio by the intro duration), so alignment produces clean
+  // onset-to-onset boundaries and the renderer presents the fade.
+  for (let i = 1; i < n; i++) {
+    let best = -1;
+    let bestDist = SNAP_WINDOW;
+    for (const s of silences) {
+      if (s.time <= recEnd[i - 1] || s.time >= recEnd[i]) continue;
+      const d = Math.abs(s.time - onset[i]);
+      if (d < bestDist) {
+        bestDist = d;
+        best = s.time;
+      }
+    }
+    if (best >= 0) onset[i] = best;
+  }
+
+  // Contiguous ends; last verse runs to the clip end.
+  const timings: VerseTiming[] = verseNumbers.map((vnum, i) => ({
+    verseNumber: vnum,
+    start: Math.max(0, Math.min(onset[i], end)),
+    end: i < n - 1 ? onset[i + 1] : end,
+  }));
+
+  // Enforce ordering + a minimum duration (mirrors the previous aligner).
+  for (let i = 0; i < n; i++) {
+    if (i > 0 && timings[i].start < timings[i - 1].end) timings[i].start = timings[i - 1].end;
+    if (timings[i].end < timings[i].start + MIN_DUR) {
+      timings[i].end = Math.min(end, timings[i].start + MIN_DUR);
+    }
+  }
+  return timings;
+}
+
+/**
+ * Align the known verses of `surah` (contiguous lo..hi) onto the audio emissions.
+ * Returns one VerseTiming per verse, or null if alignment isn't usable (caller
+ * should fall back to pause-based segmentation).
  */
 export function forceAlignVerses(input: ForceAlignInput): VerseTiming[] | null {
-  const { hypText, hypCharTimes, surah, verseNumbers, audioDuration } = input;
+  const { emissions, surah, verseNumbers, audioDuration } = input;
   if (verseNumbers.length === 0) return null;
   const lo = verseNumbers[0];
   const hi = verseNumbers[verseNumbers.length - 1];
-  // Only the contiguous case maps cleanly onto getVersesText(lo..hi).
   if (hi - lo + 1 !== verseNumbers.length) return null;
 
-  const hyp = normalizeArabicTimed(hypText, hypCharTimes);
+  // Reference: each verse's diacritic-free skeleton text.
   const ref = getVersesText(surah, lo, hi);
-  const a = ref.text; // reference chars (incl. single spaces)
-  const b = hyp.text; // hypothesis chars
-  const n = a.length;
-  const m = b.length;
-  if (n === 0 || m < 2) return null;
+  const verseSkeletons = ref.ranges.map((r) =>
+    normalizeArabic(ref.text.slice(r.start, r.end))
+  );
 
-  // ---- Needleman–Wunsch (match +2, mismatch -1, gap -1) ----
-  const MATCH = 2;
-  const MIS = -1;
-  const GAP = -1;
-  const cols = m + 1;
-  const dp = new Float64Array((n + 1) * cols);
-  const tb = new Int8Array((n + 1) * cols); // 0=diag, 1=up(ref deletion), 2=left(hyp insertion)
-  for (let j = 0; j <= m; j++) {
-    dp[j] = j * GAP;
-    tb[j] = 2;
+  const sv = buildSkeletonVocab(emissions.vocab);
+  const { ids, verseStart } = tokenizeSkeletonVerses(verseSkeletons, sv);
+  if (ids.length < 2) return null;
+
+  const reduced = marginalizeEmissions(
+    emissions.logProbs,
+    emissions.T,
+    emissions.V,
+    sv
+  );
+  const aligned = ctcForcedAlign(reduced, emissions.T, sv.size, ids, sv.blankId);
+  if (!aligned) return null;
+
+  const fd = emissions.frameDur;
+  const tokens = aligned.tokens;
+  // Per-verse recitation onset = first token's start; end = last token's end.
+  const onsets: number[] = [];
+  const recEnds: number[] = [];
+  for (let v = 0; v < verseNumbers.length; v++) {
+    const first = verseStart[v];
+    const lastTok = (v < verseNumbers.length - 1 ? verseStart[v + 1] : ids.length) - 1;
+    const startFrame = tokens[first]?.startFrame ?? 0;
+    const endFrame = tokens[Math.max(first, lastTok)]?.endFrame ?? startFrame;
+    onsets.push(startFrame * fd);
+    recEnds.push((endFrame + 1) * fd);
   }
-  for (let i = 0; i <= n; i++) {
-    dp[i * cols] = i * GAP;
-    tb[i * cols] = 1;
-  }
-  tb[0] = 0;
-  for (let i = 1; i <= n; i++) {
-    const ai = a[i - 1];
-    const base = i * cols;
-    const prevBase = (i - 1) * cols;
-    for (let j = 1; j <= m; j++) {
-      const diag = dp[prevBase + (j - 1)] + (ai === b[j - 1] ? MATCH : MIS);
-      const up = dp[prevBase + j] + GAP;
-      const left = dp[base + (j - 1)] + GAP;
-      let best = diag;
-      let t = 0;
-      if (up > best) {
-        best = up;
-        t = 1;
-      }
-      if (left > best) {
-        best = left;
-        t = 2;
-      }
-      dp[base + j] = best;
-      tb[base + j] = t;
-    }
+  // Onsets must be non-decreasing for the assembler.
+  for (let v = 1; v < onsets.length; v++) {
+    if (onsets[v] < onsets[v - 1]) onsets[v] = onsets[v - 1];
+    if (recEnds[v] < onsets[v]) recEnds[v] = onsets[v];
   }
 
-  // Traceback → aligned hyp index per ref char (-1 if the ref char was deleted).
-  const refToHyp = new Int32Array(n).fill(-1);
-  let i = n;
-  let j = m;
-  while (i > 0 && j > 0) {
-    const t = tb[i * cols + j];
-    if (t === 0) {
-      refToHyp[i - 1] = j - 1;
-      i--;
-      j--;
-    } else if (t === 1) {
-      i--;
-    } else {
-      j--;
-    }
-  }
-
-  // refTime per ref char, interpolating across deletions.
-  const refTime = new Array<number>(n).fill(NaN);
-  for (let k = 0; k < n; k++) {
-    const h = refToHyp[k];
-    if (h >= 0) refTime[k] = hyp.times[h];
-  }
-  let firstKnown = -1;
-  let lastKnown = -1;
-  for (let k = 0; k < n; k++) {
-    if (!Number.isNaN(refTime[k])) {
-      if (firstKnown < 0) firstKnown = k;
-      lastKnown = k;
-    }
-  }
-  if (firstKnown < 0) return null;
-  for (let k = 0; k < firstKnown; k++) refTime[k] = refTime[firstKnown];
-  for (let k = lastKnown + 1; k < n; k++) refTime[k] = refTime[lastKnown];
-  let k = firstKnown;
-  while (k < lastKnown) {
-    if (!Number.isNaN(refTime[k + 1])) {
-      k++;
-      continue;
-    }
-    let g = k + 1;
-    while (Number.isNaN(refTime[g])) g++;
-    const t0 = refTime[k];
-    const t1 = refTime[g];
-    for (let x = k + 1; x < g; x++) refTime[x] = t0 + (t1 - t0) * ((x - k) / (g - k));
-    k = g;
-  }
-
-  // Verse start = time of its first reference char; keep monotonic.
-  const starts = ref.ranges.map((r) => refTime[r.start] ?? 0);
-  for (let x = 1; x < starts.length; x++) {
-    if (starts[x] < starts[x - 1]) starts[x] = starts[x - 1];
-  }
-
-  const end = Math.max(0.5, audioDuration);
-  const timings: VerseTiming[] = verseNumbers.map((vnum, idx) => ({
-    verseNumber: vnum,
-    start: Math.max(0, Math.min(starts[idx], end)),
-    end: idx < verseNumbers.length - 1 ? starts[idx + 1] : end,
-  }));
-  // Enforce ordering + a minimum duration.
-  for (let x = 0; x < timings.length; x++) {
-    if (x > 0 && timings[x].start < timings[x - 1].end) timings[x].start = timings[x - 1].end;
-    if (timings[x].end < timings[x].start + MIN_DUR) timings[x].end = Math.min(end, timings[x].start + MIN_DUR);
-  }
-  return timings;
+  return assembleTimings({
+    onsets,
+    recEnds,
+    verseNumbers,
+    audioDuration,
+    silences: input.silences,
+  });
 }

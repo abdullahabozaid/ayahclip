@@ -53,3 +53,4 @@ public/asr/*.onnx
 
 # Local video assets (backgrounds + exports)
 /videos/
+.env*.local

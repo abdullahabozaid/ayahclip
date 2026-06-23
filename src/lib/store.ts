@@ -66,6 +66,11 @@ interface AppState {
   highlightHeight: number;
   verseIntro: VerseIntro;
   verseIntroMs: number;
+  // Clip-start fade: the whole frame (and optionally audio) eases in from black
+  // over the first clipFadeMs of the clip. 0 = off. Distinct from verseIntro,
+  // which animates every verse; this fires once, at the very start.
+  clipFadeMs: number;
+  audioFadeIn: boolean;
   audioSource: AudioSource;
   // Manual word-part boundaries for reciter (library) clips, keyed by verse
   // number. Each entry is a sorted list of word indices AFTER which a new part
@@ -138,8 +143,11 @@ interface AppState {
   setActivePartIndex: (index: number) => void;
   setVerseIntro: (v: VerseIntro) => void;
   setVerseIntroMs: (ms: number) => void;
+  setClipFadeMs: (ms: number) => void;
+  setAudioFadeIn: (on: boolean) => void;
   setImportedAudio: (url: string, name: string, timings: VerseTiming[]) => void;
   setVerseTimings: (timings: VerseTiming[]) => void;
+  deleteImportedVerse: (verseIdx: number) => void;
   clearImportedAudio: () => void;
 }
 
@@ -193,6 +201,10 @@ export const useAppStore = create<AppState>((set) => ({
   highlightHeight: 1,
   verseIntro: "none",
   verseIntroMs: 450,
+  // On for new clips; restoreProject resets it to the saved value (or 0 for
+  // clips saved before this feature) so reopened clips keep their look.
+  clipFadeMs: 400,
+  audioFadeIn: false,
   audioSource: { mode: "reciter" },
   verseParts: {},
   activePartIndex: 0,
@@ -290,6 +302,12 @@ export const useAppStore = create<AppState>((set) => ({
         ? { mode: "imported", url: importedAudio.url, name: importedAudio.name, timings }
         : { mode: "reciter" },
       ...settings,
+      // Clips saved before the clip-start fade existed have no value here; treat
+      // missing as "off" so reopening them never adds an unexpected fade. (The
+      // ...settings spread above would otherwise leave the store's new-clip
+      // default of 400ms in place.)
+      clipFadeMs: settings.clipFadeMs ?? 0,
+      audioFadeIn: settings.audioFadeIn ?? false,
     });
   },
   toggleEmphasisWord: (verseKey, which, index) =>
@@ -327,6 +345,8 @@ export const useAppStore = create<AppState>((set) => ({
   setActivePartIndex: (index) => set({ activePartIndex: index }),
   setVerseIntro: (v) => set({ verseIntro: v }),
   setVerseIntroMs: (ms) => set({ verseIntroMs: ms }),
+  setClipFadeMs: (ms) => set({ clipFadeMs: ms }),
+  setAudioFadeIn: (on) => set({ audioFadeIn: on }),
   setImportedAudio: (url, name, timings) =>
     set({ audioSource: { mode: "imported", url, name, timings } }),
   setVerseTimings: (timings) =>
@@ -335,5 +355,29 @@ export const useAppStore = create<AppState>((set) => ({
         ? { audioSource: { ...state.audioSource, timings } }
         : {}
     ),
+  // Remove a whole verse (one editor card) from an imported clip. Drops the
+  // timing entry AND, unless another timing still covers that verse number
+  // (i.e. it was duplicated), drops the verse from selectedVerseNumbers — the
+  // export iterates selectedVerseNumbers and looks up audio by verse number, so
+  // leaving a deselected/timing-less verse behind would desync preview/export.
+  deleteImportedVerse: (verseIdx) =>
+    set((state) => {
+      if (state.audioSource.mode !== "imported") return {};
+      const timings = state.audioSource.timings;
+      // Never delete the last remaining verse — a clip needs at least one.
+      if (verseIdx < 0 || verseIdx >= timings.length || timings.length <= 1) return {};
+      const removed = timings[verseIdx];
+      const nextTimings = timings.filter((_, j) => j !== verseIdx);
+      const stillUsed = nextTimings.some((t) => t.verseNumber === removed.verseNumber);
+      const nextSelected = stillUsed
+        ? state.selectedVerseNumbers
+        : state.selectedVerseNumbers.filter((n) => n !== removed.verseNumber);
+      const nextIndex = Math.max(0, Math.min(state.currentVerseIndex, nextTimings.length - 1));
+      return {
+        audioSource: { ...state.audioSource, timings: nextTimings },
+        selectedVerseNumbers: nextSelected,
+        currentVerseIndex: nextIndex,
+      };
+    }),
   clearImportedAudio: () => set({ audioSource: { mode: "reciter" } }),
 }));

@@ -124,6 +124,8 @@ export async function renderClipFile(
     videoLoopMode: s.videoLoopMode,
     verseIntro: s.verseIntro,
     verseIntroMs: s.verseIntroMs,
+    clipFadeMs: s.clipFadeMs,
+    audioFadeIn: s.audioFadeIn,
     textShadow: s.textShadow,
     letterbox: s.letterbox,
   };

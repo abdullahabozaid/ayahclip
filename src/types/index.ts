@@ -100,6 +100,10 @@ export interface Project {
     videoLoopMode?: "loop" | "freeze";
     verseIntro?: "none" | "fade" | "blur" | "slide" | "scale";
     verseIntroMs?: number;
+    /** Clip-start fade-in (whole frame from black) over this many ms; 0 = off. */
+    clipFadeMs?: number;
+    /** Ramp the audio in over the same clip-start window. */
+    audioFadeIn?: boolean;
     textShadow: TextShadow;
     letterbox: LetterboxConfig;
     emphasis?: Record<string, { arabic: number[]; translation: number[] }>;

@@ -104,18 +104,28 @@ function frame() {
       }
     }
 
-    const idx = bounds.findIndex(([s, e]) => t >= s && t < e);
+    // The verse whose recitation is actually playing right now.
+    const audioIdx = bounds.findIndex(([s, e]) => t >= s && t < e);
+
+    // Fade-in lead: when a verse intro is set, show the NEXT verse a touch before
+    // its recitation so its intro animation finishes as the words begin (the same
+    // lead is applied in export, keeping preview == export). With no intro the
+    // display tracks the audio exactly — identical to the old behaviour.
+    const introState = useAppStore.getState();
+    const lead = introState.verseIntro !== "none" ? introState.verseIntroMs / 1000 : 0;
+    const dispIdx =
+      lead > 0 ? bounds.findIndex(([s, e]) => t + lead >= s && t + lead < e) : audioIdx;
+    const idx = dispIdx >= 0 ? dispIdx : audioIdx; // the verse shown on screen
     if (idx >= 0 && idx !== useAppStore.getState().currentVerseIndex) {
       useAppStore.getState().setCurrentVerseIndex(idx);
     }
 
-    // Word-by-word highlight: which word of the current verse is being recited.
-    // Proportional within the verse's span over its displayed word count — lands
-    // on the right word given the (now accurate) verse boundaries, and the index
-    // always matches the rendered text. Only pushed to the store when it changes.
+    // Word-by-word highlight tracks the RECITED verse. During the fade-in lead
+    // (display already on the next verse, audio still on this one) nothing is
+    // highlighted — the incoming verse's words haven't been recited yet.
     const st = useAppStore.getState();
-    if (st.wordHighlight && idx >= 0) {
-      const seg = src.timings[idx];
+    if (st.wordHighlight && audioIdx >= 0 && audioIdx === idx) {
+      const seg = src.timings[audioIdx];
       const verse = st.verses.find((vv) => vv.verse_number === seg.verseNumber);
       const count = verse ? verse.text_uthmani.split(/\s+/).filter(Boolean).length : 0;
       let wordIdx: number | null = null;
@@ -133,9 +143,9 @@ function frame() {
     }
 
     // Intra-verse splits: swap on-screen Arabic + translation to the current
-    // segment when the active verse has splits. No splits → restore full text.
-    if (idx >= 0) {
-      const seg = src.timings[idx];
+    // segment when the recited verse has splits. No splits → restore full text.
+    if (audioIdx >= 0) {
+      const seg = src.timings[audioIdx];
       const verse = st.verses.find((vv) => vv.verse_number === seg.verseNumber);
       if (seg.splits && seg.splits.length > 0 && verse) {
         // Identify the segment by index so we only emit on transitions.
@@ -144,7 +154,7 @@ function frame() {
           if (t >= sp) segIdx++;
           else break;
         }
-        const key = `${idx}:${segIdx}`;
+        const key = `${audioIdx}:${segIdx}`;
         if (key !== lastSegKey) {
           lastSegKey = key;
           const ar = verseTextAt(seg, verse.text_uthmani, t);
@@ -172,6 +182,10 @@ export const importedPlayer = {
   },
   isPlaying: () => playing,
   currentTime: () => G.__ayahAudio?.currentTime ?? 0,
+  /** Set playback volume (0–1) — used for the clip-start audio fade-in. */
+  setVolume(v: number) {
+    if (G.__ayahAudio) G.__ayahAudio.volume = Math.max(0, Math.min(1, v));
+  },
   play(url: string) {
     const a = ensure(url);
     if (a.duration && a.currentTime >= a.duration - 0.05) a.currentTime = 0;
