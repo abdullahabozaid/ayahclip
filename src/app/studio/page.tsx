@@ -46,6 +46,17 @@ export default function StudioPage() {
   const savedAudioUrlRef = useRef<string | null>(null);
   const savedVideoUrlRef = useRef<string | null>(null);
 
+  // The bottom timeline dock and the right settings drawer both eat into the
+  // preview's space, so they're mutually exclusive: opening one closes the other.
+  const openSettings = (next: boolean) => {
+    setSettingsOpen(next);
+    if (next) setTimelineOpen(false);
+  };
+  const openTimeline = (next: boolean) => {
+    setTimelineOpen(next);
+    if (next) setSettingsOpen(false);
+  };
+
   // Vertical platform frames only make sense for 9:16
   const framesAllowed = store.videoFormat === "9:16";
 
@@ -369,7 +380,7 @@ export default function StudioPage() {
           </button>
 
           <button
-            onClick={() => setSettingsOpen((v) => !v)}
+            onClick={() => openSettings(!settingsOpen)}
             className={`flex h-9 items-center gap-2 rounded-full px-3 text-sm transition-colors ${
               settingsOpen
                 ? "bg-[var(--gold)] text-[var(--ink-deep)]"
@@ -418,7 +429,7 @@ export default function StudioPage() {
         {settingsOpen && (
           <button
             aria-label="Close settings"
-            onClick={() => setSettingsOpen(false)}
+            onClick={() => openSettings(false)}
             className="absolute inset-0 z-20 bg-black/50 lg:hidden"
           />
         )}
@@ -445,7 +456,7 @@ export default function StudioPage() {
           <div className="flex items-center gap-2">
             {/* Collapse / expand the dock */}
             <button
-              onClick={() => setTimelineOpen((v) => !v)}
+              onClick={() => openTimeline(!timelineOpen)}
               className="flex items-center gap-2 text-left"
               aria-expanded={timelineOpen}
               title={timelineOpen ? "Minimize editor" : "Show editor"}
@@ -504,7 +515,7 @@ export default function StudioPage() {
                 </button>
               )}
               <button
-                onClick={() => setTimelineOpen((v) => !v)}
+                onClick={() => openTimeline(!timelineOpen)}
                 className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment"
               >
                 {timelineOpen ? "Minimize" : "Show"}
