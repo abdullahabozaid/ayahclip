@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/lib/store";
 import { saveProject, generateProjectId, saveBlob, getProject } from "@/lib/projects";
+import { captureSceneThumbnail } from "@/lib/scene-thumbnail";
 import { fetchVerses } from "@/lib/api";
 import { getTranslationLanguage } from "@/lib/translations";
 import { StudioPreview } from "@/components/StudioPreview";
@@ -92,8 +93,11 @@ export default function StudioPage() {
     const id = state.projectId;
     const src = state.audioSource;
     const sel = state.selectedVerseNumbers;
-    // Preserve a user-chosen cover thumbnail across saves.
-    const existingThumb = (await getProject(id))?.thumbnail;
+    // Preserve a user-chosen cover thumbnail across saves; otherwise grab a
+    // default cover from the current preview frame (skipping black/mid-fade
+    // frames) so the dashboard shows the real clip, not a placeholder.
+    const existingThumb =
+      (await getProject(id))?.thumbnail ?? captureSceneThumbnail({ skipIfDark: true });
 
     // Persist uploaded media so the clip (and its editable verse timeline)
     // can be fully restored later. Blobs are saved once per URL.

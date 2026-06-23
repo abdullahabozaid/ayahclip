@@ -34,6 +34,18 @@ function warn(op: string, err: unknown): void {
   console.warn(`[clip-library] ${op} failed`, err);
 }
 
+/**
+ * Pick the timestamp (seconds) to grab a clip's thumbnail from. The first ~1s
+ * is unusable — it's the clip-start fade (black) and, for video backgrounds, a
+ * black t=0 frame — so we aim ~5s in, clamped just shy of the end, and fall
+ * back to the midpoint for very short clips.
+ */
+export function thumbnailSeekTime(durationSec: number): number {
+  if (!Number.isFinite(durationSec) || durationSec <= 0) return 5; // unknown → aim ~5s; the browser clamps if shorter
+  if (durationSec <= 1.2) return durationSec / 2; // too short to skip the fade — use the midpoint
+  return Math.min(5, durationSec - 0.2);
+}
+
 export function generateClipId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -228,11 +240,12 @@ export async function captureThumbnail(video: Blob): Promise<string | undefined>
         reject(new Error("video load error"));
       });
     });
-    // Nudge off frame 0 (often black) then draw.
+    // Seek past the clip-start fade (and a video background's black t=0 frame)
+    // to a representative frame ~5s in before drawing.
     try {
-      el.currentTime = Math.min(0.3, (el.duration || 1) / 4);
+      el.currentTime = thumbnailSeekTime(el.duration);
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, 1500);
+        const timer = setTimeout(resolve, 2500);
         el.addEventListener(
           "seeked",
           () => {
