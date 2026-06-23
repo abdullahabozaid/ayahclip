@@ -20,6 +20,14 @@ import {
   type RenderedClip,
 } from "@/components/Mp4Preview";
 
+// Editor zoom bounds. CSS `zoom` reflows layout, so the page scrolls naturally
+// when zoomed past the viewport (and shrinks within it when zoomed out).
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 1.25;
+const ZOOM_STEP = 0.1;
+const clampZoom = (z: number) =>
+  Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 100) / 100;
+
 export default function StudioPage() {
   const router = useRouter();
   const store = useAppStore();
@@ -56,6 +64,24 @@ export default function StudioPage() {
     setTimelineOpen(next);
     if (next) setSettingsOpen(false);
   };
+
+  // Whole-editor zoom: a header control plus Cmd/Ctrl + scroll (or trackpad
+  // pinch) over the studio. Applied as CSS `zoom` to <main>.
+  const [zoom, setZoom] = useState(1);
+  const stageRef = useRef<HTMLElement>(null);
+  const adjustZoom = (delta: number) => setZoom((z) => clampZoom(z + delta));
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return; // pinch / Cmd+scroll only
+      e.preventDefault();
+      setZoom((z) => clampZoom(z + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
 
   // Vertical platform frames only make sense for 9:16
   const framesAllowed = store.videoFormat === "9:16";
@@ -248,7 +274,8 @@ export default function StudioPage() {
       : `verses ${selectedVerseNumbers[0]}–${selectedVerseNumbers[selectedVerseNumbers.length - 1]}`;
 
   return (
-    <main className="flex h-dvh flex-col bg-[var(--ink)]">
+    <>
+    <main ref={stageRef} style={{ zoom }} className="flex h-dvh flex-col bg-[var(--ink)]">
       {/* Studio top bar — pad for the notch / status bar on mobile */}
       <header className="flex shrink-0 items-center justify-between border-b border-[var(--hairline-soft)] bg-[var(--ink)]/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
         <div className="flex items-center gap-4">
@@ -290,6 +317,37 @@ export default function StudioPage() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Whole-editor zoom (also Cmd/Ctrl + scroll over the studio) */}
+          <div className="hidden items-center gap-0.5 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1 md:flex">
+            <button
+              onClick={() => adjustZoom(-ZOOM_STEP)}
+              disabled={zoom <= ZOOM_MIN}
+              aria-label="Zoom out"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:text-parchment disabled:opacity-30"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" d="M5 12h14" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setZoom(1)}
+              title="Reset zoom"
+              className="w-11 text-center text-xs tabular-nums text-[var(--muted)] transition-colors hover:text-parchment"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              onClick={() => adjustZoom(ZOOM_STEP)}
+              disabled={zoom >= ZOOM_MAX}
+              aria-label="Zoom in"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:text-parchment disabled:opacity-30"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
           </div>
 
           {(frameMode === "tiktok" || frameMode === "reels") && (
@@ -535,13 +593,14 @@ export default function StudioPage() {
         </div>
       )}
 
-      {timelineFullscreen && (
-        <FullscreenTimeline onClose={() => setTimelineFullscreen(false)} />
-      )}
-
-      {mp4Clip && (
-        <Mp4PreviewOverlay clip={mp4Clip} onClose={() => setMp4Clip(null)} />
-      )}
     </main>
+
+    {/* Full-screen overlays live OUTSIDE the zoomed <main> so they always cover
+        the real viewport regardless of the editor zoom level. */}
+    {timelineFullscreen && (
+      <FullscreenTimeline onClose={() => setTimelineFullscreen(false)} />
+    )}
+    {mp4Clip && <Mp4PreviewOverlay clip={mp4Clip} onClose={() => setMp4Clip(null)} />}
+    </>
   );
 }
