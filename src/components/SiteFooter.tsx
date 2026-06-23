@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const CREDITS: { label: string; href: string }[] = [
@@ -19,6 +20,17 @@ export function SiteFooter() {
 
   return (
     <footer className="mt-16 border-t border-[var(--hairline-soft)] px-5 py-8 text-center">
+      <p className="text-sm text-[var(--muted)]">
+        AyahClip is free.{" "}
+        <Link
+          href="/support"
+          className="text-gold underline-offset-4 transition-colors hover:text-gold-soft hover:underline"
+        >
+          Support its development
+        </Link>{" "}
+        and help fund future projects, insha&rsquo;Allah.
+      </p>
+      <div className="gold-rule mx-auto my-6 max-w-[12rem]" />
       <p className="text-xs text-[var(--muted-deep)]">
         AyahClip is a personal tool for crafting Quran recitation clips. Please
         respect the source licenses below when sharing your clips.

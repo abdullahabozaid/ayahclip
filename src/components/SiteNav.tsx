@@ -11,12 +11,16 @@ export function SiteNav() {
 
   return (
     <nav className="sticky top-0 z-40 border-b border-[var(--hairline-soft)] bg-[var(--ink)]/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-        <Link href="/" className="font-display text-xl tracking-[0.12em] text-parchment">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4">
+        <Link
+          href="/"
+          className="font-display shrink-0 text-xl tracking-[0.12em] text-parchment"
+        >
           Ayah<span className="text-gold">Clip</span>
         </Link>
 
-        <div className="flex items-center gap-1">
+        {/* Links scroll horizontally on phones instead of overflowing. */}
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavLink href="/" label="Home" active={pathname === "/"} />
           <NavLink
             href="/browse"
@@ -33,9 +37,14 @@ export function SiteNav() {
             label="Styles"
             active={pathname?.startsWith("/styles")}
           />
+          <NavLink
+            href="/support"
+            label="Support"
+            active={pathname?.startsWith("/support")}
+          />
           <Link
             href="/browse"
-            className="btn-gold ml-2 rounded-full px-4 py-2 text-sm"
+            className="btn-gold ml-2 shrink-0 rounded-full px-4 py-2 text-sm"
           >
             New clip
           </Link>
@@ -57,7 +66,7 @@ function NavLink({
   return (
     <Link
       href={href}
-      className={`rounded-full px-3 py-2 text-sm transition-colors ${
+      className={`shrink-0 rounded-full px-3 py-2 text-sm transition-colors ${
         active
           ? "text-parchment"
           : "text-[var(--muted)] hover:text-parchment"
