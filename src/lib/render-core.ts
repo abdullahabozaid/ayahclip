@@ -21,6 +21,7 @@ import {
   VerseIntro,
   EmphasisStyle,
   DrawVerseOptions,
+  MediaTransform,
 } from "./canvas-utils";
 
 /** Output resolution per format. The ONLY size any render path may draw at. */
@@ -44,6 +45,7 @@ export interface SceneStyleSource {
   arabicVerseNumber: boolean;
   translationVerseNumber: boolean;
   translationEnabled: boolean;
+  arabicEnabled?: boolean;
   translationFontSize: number;
   translationFont: string;
   translationFontWeight: number;
@@ -54,6 +56,7 @@ export interface SceneStyleSource {
   translationLineHeight: number;
   arabicTranslationGap: number;
   textPosition: number;
+  textLayout?: "center" | "left-panel";
   overlayOpacity: number;
   overlayColor: string;
   safeAreaTarget: SafeAreaTarget;
@@ -61,6 +64,7 @@ export interface SceneStyleSource {
   background: Background;
   backgroundFit?: MediaFit;
   fitBackdrop?: FitBackdrop;
+  mediaTransform?: MediaTransform;
   letterbox: LetterboxConfig;
   verseIntro?: VerseIntro;
   emphasisStyle: EmphasisStyle;
@@ -95,6 +99,18 @@ export interface SceneContent {
 export interface SceneMedia {
   image?: HTMLImageElement;
   video?: HTMLVideoElement;
+  /** Optional per-frame override used by B-roll sequences. */
+  background?: Background;
+  fit?: MediaFit;
+  backdrop?: FitBackdrop;
+  transform?: MediaTransform;
+  nextImage?: HTMLImageElement;
+  nextVideo?: HTMLVideoElement;
+  nextBackground?: Background;
+  nextFit?: MediaFit;
+  nextBackdrop?: FitBackdrop;
+  nextTransform?: MediaTransform;
+  transitionProgress?: number;
 }
 
 /**
@@ -146,6 +162,7 @@ export function drawScene(
     arabicFont: style.arabicFont,
     arabicFontSize: style.arabicFontSize,
     translationEnabled: style.translationEnabled,
+    arabicEnabled: style.arabicEnabled,
     translationFontSize: style.translationFontSize,
     translationFont: style.translationFont,
     translationDirection: style.translationDirection,
@@ -155,6 +172,7 @@ export function drawScene(
     translationLineHeight: style.translationLineHeight,
     arabicTranslationGap: style.arabicTranslationGap,
     verticalPosition: style.textPosition,
+    textLayout: style.textLayout,
     safeInset: safeInsetFor(style.safeAreaTarget, style.safePadding / 100),
     arabicFontWeight: style.arabicFontWeight,
     arabicVerseNumber: style.arabicVerseNumber && content.isLastPart,
@@ -176,11 +194,53 @@ export function drawScene(
   };
 
   const paintRegion = (rw: number, rh: number) => {
-    if (media.video) drawVideoFrame(ctx, media.video, rw, rh, style.backgroundFit, style.fitBackdrop);
-    else if (media.image) drawBgImage(ctx, media.image, rw, rh, style.backgroundFit, style.fitBackdrop);
-    else drawBackground(ctx, rw, rh, style.background);
+    const paintBackground = (
+      background: Background,
+      image: HTMLImageElement | undefined,
+      video: HTMLVideoElement | undefined,
+      fit: MediaFit | undefined,
+      backdrop: FitBackdrop | undefined,
+      transform: MediaTransform | undefined
+    ) => {
+      if (video) drawVideoFrame(ctx, video, rw, rh, fit, backdrop, transform);
+      else if (image) drawBgImage(ctx, image, rw, rh, fit, backdrop, transform);
+      else drawBackground(ctx, rw, rh, background);
+    };
+
+    paintBackground(
+      media.background ?? style.background,
+      media.image,
+      media.video,
+      media.fit ?? style.backgroundFit,
+      media.backdrop ?? style.fitBackdrop,
+      media.transform ?? style.mediaTransform
+    );
+
+    const transition = Math.max(0, Math.min(1, media.transitionProgress ?? 0));
+    if (transition > 0 && media.nextBackground) {
+      ctx.save();
+      ctx.globalAlpha = transition;
+      paintBackground(
+        media.nextBackground,
+        media.nextImage,
+        media.nextVideo,
+        media.nextFit,
+        media.nextBackdrop,
+        media.nextTransform
+      );
+      ctx.restore();
+    }
     ctx.fillStyle = rgbaFromHex(style.overlayColor, style.overlayOpacity / 100);
     ctx.fillRect(0, 0, rw, rh);
+    if (style.textLayout === "left-panel") {
+      const panel = ctx.createLinearGradient(0, 0, rw * 0.72, 0);
+      panel.addColorStop(0, "rgba(5, 5, 7, 1)");
+      panel.addColorStop(0.52, "rgba(5, 5, 7, 0.94)");
+      panel.addColorStop(0.78, "rgba(5, 5, 7, 0.45)");
+      panel.addColorStop(1, "rgba(5, 5, 7, 0)");
+      ctx.fillStyle = panel;
+      ctx.fillRect(0, 0, rw * 0.72, rh);
+    }
     drawVerseText(
       ctx, rw, rh,
       content.arabicText, content.verseNumber, content.translation,

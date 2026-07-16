@@ -210,7 +210,6 @@ export function ReciterVerseEditor() {
                       totalWords={total}
                       isActivePart={active && pi === activePartIndex}
                       isPlaying={playingKey === key}
-                      cardActive={active}
                       onPlay={() =>
                         playingKey === key ? stop() : playPart(verse.verse_number, p.startMs, p.endMs, key)
                       }

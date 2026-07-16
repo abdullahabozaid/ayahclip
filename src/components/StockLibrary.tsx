@@ -31,6 +31,8 @@ export function StockLibrary({ onSelect }: StockLibraryProps) {
                   onClick={() => handleSelect(image)}
                   className="group relative aspect-[3/4] overflow-hidden rounded-md border-2 border-transparent transition-all hover:border-[var(--hairline)]"
                 >
+                  {/* Direct library preview keeps local and remote stock sources interchangeable. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={image.thumbUrl}
                     alt={image.name}

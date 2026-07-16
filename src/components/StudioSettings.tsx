@@ -10,6 +10,8 @@ import { StylePanel } from "./StylePanel";
 import { EmphasisPanel } from "./EmphasisPanel";
 import { TRANSLATION_LANGUAGES } from "@/lib/translations";
 import { getProject, saveProject } from "@/lib/projects";
+import { BackgroundThumb } from "./BackgroundThumb";
+import { sequenceDuration } from "@/lib/background-sequence";
 
 /** Capture the current preview frame as the clip's dashboard cover thumbnail. */
 function SetCoverButton() {
@@ -76,10 +78,6 @@ function WeightControl({
     </div>
   );
 }
-
-const ARABIC_FONT_OPTIONS = [
-  { value: "uthmanic-hafs", label: "UthmanicHafs (Madinah Mushaf)" },
-];
 
 const TRANSLATION_FONT_OPTIONS = [
   { value: "serif", label: "Georgia (Serif)" },
@@ -371,6 +369,63 @@ export function StudioSettings() {
 
         {/* Typography */}
         <Section title="Typography">
+          <div>
+            <p className="mb-2 text-xs text-[var(--muted)]">Caption content</p>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { id: "both", label: "Both" },
+                { id: "arabic", label: "Arabic" },
+                { id: "translation", label: "English" },
+              ] as const).map((option) => {
+                const active = option.id === "both"
+                  ? store.arabicEnabled && store.translationEnabled
+                  : option.id === "arabic"
+                    ? store.arabicEnabled && !store.translationEnabled
+                    : !store.arabicEnabled && store.translationEnabled;
+                return (
+                  <button
+                    key={option.id}
+                    onClick={() => {
+                      store.setArabicEnabled(option.id !== "translation");
+                      store.setTranslationEnabled(option.id !== "arabic");
+                    }}
+                    className={`min-h-10 rounded-lg border px-2 text-xs transition-colors ${active
+                      ? "border-[var(--gold)] bg-[var(--gold)]/10 text-parchment"
+                      : "border-[var(--hairline-soft)] text-[var(--muted)] hover:border-[var(--hairline)]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs text-[var(--muted)]">Text composition</p>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { id: "center", label: "Centered" },
+                { id: "left-panel", label: "Left fade" },
+              ] as const).map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => store.setTextLayout(option.id)}
+                  className={`min-h-10 rounded-lg border px-3 text-xs transition-colors ${
+                    store.textLayout === option.id
+                      ? "border-[var(--gold)] bg-[var(--gold)]/10 text-parchment"
+                      : "border-[var(--hairline-soft)] text-[var(--muted)] hover:border-[var(--hairline)]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {store.textLayout === "left-panel" && (
+              <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted)]">
+                Keeps the reciter visible on the right and lays the verse over a black-to-video fade.
+              </p>
+            )}
+          </div>
           <Slider
             label="Arabic Size"
             value={store.arabicFontSize}
@@ -455,11 +510,6 @@ export function StudioSettings() {
             onChange={store.setTextPosition}
           />
 
-          <Toggle
-            label="Translation"
-            checked={store.translationEnabled}
-            onChange={() => store.setTranslationEnabled(!store.translationEnabled)}
-          />
           {store.translationEnabled && (
             <>
               <Slider
@@ -529,13 +579,34 @@ export function StudioSettings() {
             }
           />
           {store.textShadow.enabled && (
-            <Slider
-              label="Shadow Blur"
-              value={store.textShadow.blur}
-              min={0}
-              max={20}
-              onChange={(n) => store.setTextShadow({ ...store.textShadow, blur: n })}
-            />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => store.setTextShadow({ enabled: true, color: "#000000", blur: 8, offsetX: 0, offsetY: 2 })}
+                  className="rounded-lg border border-[var(--hairline-soft)] px-3 py-2 text-xs text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment"
+                >
+                  Dark lift
+                </button>
+                <button
+                  onClick={() => store.setTextShadow({ enabled: true, color: "#ffffff", blur: 12, offsetX: 0, offsetY: 0 })}
+                  className="rounded-lg border border-[var(--hairline-soft)] px-3 py-2 text-xs text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment"
+                >
+                  White glow
+                </button>
+              </div>
+              <ColorRow
+                label="Shadow / Glow Color"
+                value={store.textShadow.color}
+                onChange={(color) => store.setTextShadow({ ...store.textShadow, color })}
+              />
+              <Slider
+                label="Shadow / Glow Blur"
+                value={store.textShadow.blur}
+                min={0}
+                max={24}
+                onChange={(n) => store.setTextShadow({ ...store.textShadow, blur: n })}
+              />
+            </div>
           )}
 
           {/* Continuous highlight bar behind each Arabic line */}
@@ -598,6 +669,112 @@ export function StudioSettings() {
 
         {/* Background */}
         <Section title="Background">
+          <div className="mb-4 border-b border-[var(--hairline-soft)] pb-4">
+            <Toggle
+              label="B-roll sequence"
+              checked={store.backgroundSequenceEnabled}
+              onChange={() => store.setBackgroundSequenceEnabled(!store.backgroundSequenceEnabled)}
+            />
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)]">
+              Rotate through several images or videos. The sequence loops if the recitation runs longer.
+            </p>
+
+            {store.backgroundSequenceEnabled && (
+              <div className="mt-3 space-y-3">
+                <div className="flex items-stretch gap-1.5 overflow-x-auto pb-1">
+                  {store.backgroundScenes.map((scene, index) => {
+                    const active = scene.id === store.activeBackgroundSceneId;
+                    return (
+                      <button
+                        key={scene.id}
+                        onClick={() => store.selectBackgroundScene(scene.id)}
+                        className={`relative h-16 min-w-20 overflow-hidden rounded-lg border transition-colors ${active
+                          ? "border-[var(--gold)]"
+                          : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"
+                        }`}
+                        aria-label={`Edit B-roll scene ${index + 1}`}
+                      >
+                        <BackgroundThumb background={scene.background} />
+                        <span className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-[var(--ink-deep)]/90 px-1.5 py-1 text-[10px] text-parchment">
+                          <span>{index + 1}</span>
+                          <span className="tabular-nums text-[var(--muted)]">{scene.duration.toFixed(1)}s</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <div className="flex min-w-24 items-center justify-center rounded-lg border border-dashed border-[var(--hairline-soft)] px-2 text-center text-[10px] leading-tight text-[var(--muted)]">
+                    Pick media below to add
+                  </div>
+                </div>
+
+                {(() => {
+                  const active = store.backgroundScenes.find((scene) => scene.id === store.activeBackgroundSceneId);
+                  if (!active) return null;
+                  const index = store.backgroundScenes.findIndex((scene) => scene.id === active.id);
+                  return (
+                    <div className="space-y-3 rounded-xl bg-[var(--ink-deep)] px-3 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-parchment">Scene {index + 1}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => store.moveBackgroundScene(active.id, -1)}
+                            disabled={index === 0}
+                            className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] disabled:opacity-30"
+                            aria-label="Move scene earlier"
+                          >←</button>
+                          <button
+                            onClick={() => store.moveBackgroundScene(active.id, 1)}
+                            disabled={index === store.backgroundScenes.length - 1}
+                            className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] disabled:opacity-30"
+                            aria-label="Move scene later"
+                          >→</button>
+                          <button
+                            onClick={() => store.removeBackgroundScene(active.id)}
+                            className="h-9 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] hover:text-red-300"
+                          >Remove</button>
+                        </div>
+                      </div>
+                      <Slider
+                        label="Scene duration"
+                        value={active.duration}
+                        min={1}
+                        max={30}
+                        step={0.5}
+                        suffix="s"
+                        onChange={(duration) => store.updateBackgroundScene(active.id, { duration })}
+                      />
+                      <Field
+                        label="Transition"
+                        value={active.transition}
+                        onChange={(transition) => store.updateBackgroundScene(active.id, {
+                          transition: transition as typeof active.transition,
+                        })}
+                        options={[
+                          { value: "cut", label: "Clean cut" },
+                          { value: "crossfade", label: "Crossfade" },
+                        ]}
+                      />
+                      {active.transition === "crossfade" && (
+                        <Slider
+                          label="Crossfade"
+                          value={active.transitionDuration}
+                          min={0.2}
+                          max={2}
+                          step={0.1}
+                          suffix="s"
+                          onChange={(transitionDuration) => store.updateBackgroundScene(active.id, { transitionDuration })}
+                        />
+                      )}
+                      <p className="text-[10px] tabular-nums text-[var(--muted-deep)]">
+                        Sequence length {sequenceDuration(store.backgroundScenes).toFixed(1)}s
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+
           {/* Fit: Fill crops to fill the frame; Fit shows the whole video/image
               centered with rounded corners over a blurred backdrop. */}
           <div className="mb-3">
@@ -646,6 +823,50 @@ export function StudioSettings() {
             </div>
           )}
 
+          {(store.background.type === "image" || store.background.type === "video") && store.backgroundFit === "cover" && (
+            <div className="mb-4 space-y-3 border-t border-[var(--hairline-soft)] pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-parchment">Frame the media</p>
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">Zoom and choose which part stays visible.</p>
+                </div>
+                <button
+                  onClick={() => store.setMediaTransform({ scale: 1, x: 0, y: 0 })}
+                  className="rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 text-[11px] text-[var(--muted)] hover:text-parchment"
+                >
+                  Reset
+                </button>
+              </div>
+              <Slider
+                label="Zoom"
+                value={store.mediaTransform.scale}
+                min={1}
+                max={3}
+                step={0.05}
+                display={(v) => `${v.toFixed(2)}×`}
+                onChange={(scale) => store.setMediaTransform({ ...store.mediaTransform, scale })}
+              />
+              <Slider
+                label="Horizontal focus"
+                value={store.mediaTransform.x * 100}
+                min={-100}
+                max={100}
+                step={1}
+                display={(v) => v === 0 ? "Center" : v < 0 ? `${Math.abs(v)}% left` : `${v}% right`}
+                onChange={(x) => store.setMediaTransform({ ...store.mediaTransform, x: x / 100 })}
+              />
+              <Slider
+                label="Vertical focus"
+                value={store.mediaTransform.y * 100}
+                min={-100}
+                max={100}
+                step={1}
+                display={(v) => v === 0 ? "Center" : v < 0 ? `${Math.abs(v)}% up` : `${v}% down`}
+                onChange={(y) => store.setMediaTransform({ ...store.mediaTransform, y: y / 100 })}
+              />
+            </div>
+          )}
+
           {store.background.type === "video" && store.audioSource.mode === "imported" && (
             <div className="mb-3">
               <Toggle
@@ -689,7 +910,14 @@ export function StudioSettings() {
             onChange={store.setOverlayOpacity}
           />
           <ColorRow label="Overlay Color" value={store.overlayColor} onChange={store.setOverlayColor} />
-          <BackgroundPicker value={store.background} onChange={store.setBackground} />
+          <p className="mb-2 text-[11px] text-[var(--muted)]">
+            {store.backgroundSequenceEnabled ? "Choose media to add as a new scene" : "Choose one background"}
+          </p>
+          <BackgroundPicker
+            value={store.background}
+            onChange={store.backgroundSequenceEnabled ? store.addBackgroundScene : store.setBackground}
+            revokePrevious={!store.backgroundSequenceEnabled}
+          />
         </Section>
       </div>
 

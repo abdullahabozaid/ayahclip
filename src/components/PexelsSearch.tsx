@@ -91,6 +91,8 @@ export function PexelsSearch({ onSelect }: PexelsSearchProps) {
               }
               className="group relative aspect-[3/4] overflow-hidden rounded-md"
             >
+              {/* Pexels thumbnails are dynamic third-party preview URLs. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={photo.src.tiny}
                 alt={photo.photographer}

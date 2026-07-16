@@ -14,6 +14,15 @@ interface DevicePreviewProps {
   children: React.ReactNode;
 }
 
+function DeviceSideButton({ side, top, h }: { side: "left" | "right"; top: string; h: number }) {
+  return (
+    <span
+      className="absolute bg-[#26262b]"
+      style={{ [side]: -2, top, width: 3, height: h, borderRadius: 2 }}
+    />
+  );
+}
+
 export function DevicePreview({
   frameMode,
   width,
@@ -96,19 +105,6 @@ export function DevicePreview({
   const rail = (width * 0.016).toFixed(1);
   const frameShadow = `inset 0 0 ${hl}px ${hlSpread}px #9a9aa3, inset 0 0 0 ${rail}px #2b2b31, 0 ${(width * 0.12).toFixed(0)}px ${(width * 0.26).toFixed(0)}px -${(width * 0.08).toFixed(0)}px rgba(0,0,0,0.92)`;
 
-  const Button = ({ side, top, h }: { side: "left" | "right"; top: string; h: number }) => (
-    <span
-      className="absolute bg-[#26262b]"
-      style={{
-        [side]: -2,
-        top,
-        width: 3,
-        height: h,
-        borderRadius: 2,
-      }}
-    />
-  );
-
   return (
     <div
       className="relative"
@@ -121,10 +117,10 @@ export function DevicePreview({
       }}
     >
       {/* Side buttons */}
-      <Button side="left" top="14%" h={width * 0.07} />
-      <Button side="left" top="22%" h={width * 0.14} />
-      <Button side="left" top="40%" h={width * 0.14} />
-      <Button side="right" top="26%" h={width * 0.22} />
+      <DeviceSideButton side="left" top="14%" h={width * 0.07} />
+      <DeviceSideButton side="left" top="22%" h={width * 0.14} />
+      <DeviceSideButton side="left" top="40%" h={width * 0.14} />
+      <DeviceSideButton side="right" top="26%" h={width * 0.22} />
       {screen}
     </div>
   );

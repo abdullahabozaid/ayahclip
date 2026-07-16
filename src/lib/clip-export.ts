@@ -43,12 +43,26 @@ async function healDeadMediaUrls(): Promise<void> {
     s.setImportedAudio(url, s.audioSource.name, s.audioSource.timings);
   }
   const bg = s.background;
-  if (bg.type === "video" && bg.value.startsWith("blob:") && !(await urlAlive(bg.value))) {
-    const blob = s.projectId ? await getBlob(`video:${s.projectId}`) : undefined;
+  if ((bg.type === "video" || bg.type === "image") && bg.value.startsWith("blob:") && !(await urlAlive(bg.value))) {
+    const blob = s.projectId
+      ? await getBlob(`background:${s.projectId}:single`) ?? await getBlob(`video:${s.projectId}`)
+      : undefined;
     if (blob) {
       s.setBackground({ ...bg, value: URL.createObjectURL(blob) });
     }
-    // No stored copy → leave it; the exporter falls back to a plain background.
+  }
+  if (s.projectId && s.backgroundSequenceEnabled) {
+    for (const scene of s.backgroundScenes) {
+      const media = scene.background;
+      if ((media.type !== "image" && media.type !== "video") || !media.value.startsWith("blob:")) continue;
+      if (await urlAlive(media.value)) continue;
+      const blob = await getBlob(`background:${s.projectId}:${scene.id}`);
+      if (blob) {
+        s.updateBackgroundScene(scene.id, {
+          background: { ...media, value: URL.createObjectURL(blob) },
+        });
+      }
+    }
   }
 }
 
@@ -88,6 +102,7 @@ export async function renderClipFile(
     arabicVerseNumber: s.arabicVerseNumber,
     translationVerseNumber: s.translationVerseNumber,
     translationEnabled: s.translationEnabled,
+    arabicEnabled: s.arabicEnabled,
     translationFontSize: s.translationFontSize,
     translationFont: s.translationFont,
     translationFontWeight: s.translationFontWeight,
@@ -97,6 +112,7 @@ export async function renderClipFile(
     translationLineHeight: s.translationLineHeight,
     arabicTranslationGap: s.arabicTranslationGap,
     textPosition: s.textPosition,
+    textLayout: s.textLayout,
     overlayOpacity: s.overlayOpacity,
     overlayColor: s.overlayColor,
     safeAreaTarget: s.safeAreaTarget,
@@ -119,6 +135,9 @@ export async function renderClipFile(
     translationResourceId: getTranslationLanguage(s.translationLanguage).resourceId,
     background: s.background,
     backgroundFit: s.backgroundFit,
+    mediaTransform: s.mediaTransform,
+    backgroundSequenceEnabled: s.backgroundSequenceEnabled,
+    backgroundScenes: s.backgroundScenes,
     fitBackdrop: s.fitBackdrop,
     backgroundVideoSync: s.backgroundVideoSync,
     videoLoopMode: s.videoLoopMode,

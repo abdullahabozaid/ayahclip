@@ -424,6 +424,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // Editing commands only read refs/Zustand at invocation time; re-registering
+    // this global handler on every timing mutation would interrupt shortcuts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, setHead]);
 
   // ---- Click / scrub on the track ----------------------------------------
@@ -528,6 +531,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     // pushed on release so undo restores to the pre-drag state in one step.
     commit(next, false);
     setDragInfo({ pct: (edgeTime / dur) * 100, time: edgeTime });
+    // commit reads the current Zustand snapshot and stable history refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onDragMove = useCallback((e: PointerEvent) => applyDrag(e.clientX), [applyDrag]);
@@ -541,6 +546,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     setDragInfo(null);
     window.removeEventListener("pointermove", onDragMove);
     window.removeEventListener("pointerup", onDragEnd);
+    // pushHistory only mutates stable refs; keeping this listener stable avoids
+    // removing a different pointerup callback mid-drag.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onDragMove]);
 
   // Tracks the pointer-down on a verse body so we can distinguish a tap (no

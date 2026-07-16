@@ -34,6 +34,8 @@ export function DashboardCard({
       <div className="relative mb-3 aspect-[9/16] overflow-hidden rounded-xl bg-[var(--ink-deep)]">
         {/* Actual clip background */}
         {project.thumbnail ? (
+          // Canvas thumbnails are data URLs and bypass the Next image optimizer.
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={project.thumbnail}
             alt={project.name}

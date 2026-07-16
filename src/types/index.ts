@@ -81,6 +81,7 @@ export interface Project {
     arabicFontWeight?: number;
     arabicVerseNumber?: boolean;
     translationEnabled: boolean;
+    arabicEnabled?: boolean;
     translationFontSize: number;
     translationFont: string;
     translationFontWeight?: number;
@@ -90,12 +91,17 @@ export interface Project {
     translationLineHeight?: number;
     arabicTranslationGap?: number;
     textPosition: number;
+    textLayout?: "center" | "left-panel";
     overlayOpacity: number;
     overlayColor: string;
     safeAreaTarget?: "none" | "tiktok" | "reels";
     safePadding?: number;
     background: Background;
     backgroundFit?: "cover" | "contain";
+    mediaTransform?: { scale: number; x: number; y: number };
+    backgroundSequenceEnabled?: boolean;
+    backgroundScenes?: import("@/lib/background-sequence").BackgroundScene[];
+    activeBackgroundSceneId?: string | null;
     fitBackdrop?: "blur" | "black";
     videoLoopMode?: "loop" | "freeze";
     verseIntro?: "none" | "fade" | "blur" | "slide" | "scale";
@@ -109,6 +115,12 @@ export interface Project {
     emphasis?: Record<string, { arabic: number[]; translation: number[] }>;
     emphasisStyle?: "color" | "underline";
     emphasisColor?: string;
+    highlightEnabled?: boolean;
+    highlightColor?: string;
+    highlightOpacity?: number;
+    highlightRadius?: number;
+    highlightPadding?: number;
+    highlightHeight?: number;
   };
   /** Present when the clip uses uploaded audio/video — the blobs are stored
    *  separately in IndexedDB under `audio:<id>` / `video:<id>`. */
@@ -131,6 +143,8 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;
+  /** Uploaded image/video backgrounds persisted outside the project record. */
+  backgroundMedia?: { sceneId: string; type: "image" | "video" }[];
 }
 
 export interface StudioSettings {
@@ -141,10 +155,12 @@ export interface StudioSettings {
   arabicFontSize: number;
   arabicFont: string;
   translationEnabled: boolean;
+  arabicEnabled?: boolean;
   translationFontSize: number;
   translationFont: string;
   translationLanguage: string;
   textColor: string;
+  textLayout?: "center" | "left-panel";
   overlayOpacity: number;
   background: Background;
   textShadow: TextShadow;

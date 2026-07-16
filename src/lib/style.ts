@@ -1,5 +1,5 @@
 import { Background, TextShadow, LetterboxConfig } from "@/types";
-import { MediaFit, FitBackdrop, VerseIntro } from "./canvas-utils";
+import { MediaFit, FitBackdrop, VerseIntro, MediaTransform } from "./canvas-utils";
 
 /** The visual style of a clip — the bundle a Template or Saved Style captures/applies.
  *  Deliberately excludes surah/verse selection, reciter, format, language and safe-area. */
@@ -13,7 +13,10 @@ export interface StyleSettings {
   translationLineHeight?: number;
   arabicTranslationGap?: number;
   textPosition: number;
+  /** Composition of the text and media, not just a cosmetic preset. */
+  textLayout?: "center" | "left-panel";
   translationEnabled: boolean;
+  arabicEnabled?: boolean;
   translationFont: string;
   translationFontSize: number;
   translationFontWeight: number;
@@ -30,6 +33,7 @@ export interface StyleSettings {
   highlightHeight?: number;
   background: Background;
   backgroundFit?: MediaFit;
+  mediaTransform?: MediaTransform;
   fitBackdrop?: FitBackdrop;
   videoLoopMode?: "loop" | "freeze";
   verseIntro?: VerseIntro;
@@ -47,7 +51,9 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "translationLineHeight",
   "arabicTranslationGap",
   "textPosition",
+  "textLayout",
   "translationEnabled",
+  "arabicEnabled",
   "translationFont",
   "translationFontSize",
   "translationFontWeight",
@@ -63,6 +69,7 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "highlightHeight",
   "background",
   "backgroundFit",
+  "mediaTransform",
   "fitBackdrop",
   "videoLoopMode",
   "verseIntro",
@@ -81,7 +88,9 @@ export const PRESET_KEYS: (keyof StyleSettings)[] = [
   "translationLineHeight",
   "arabicTranslationGap",
   "textPosition",
+  "textLayout",
   "translationEnabled",
+  "arabicEnabled",
   "translationFont",
   "translationFontSize",
   "translationFontWeight",
@@ -105,6 +114,7 @@ export function stripBackgroundKeys(
   const rest = { ...style };
   delete rest.background;
   delete rest.backgroundFit;
+  delete rest.mediaTransform;
   delete rest.fitBackdrop;
   delete rest.videoLoopMode;
   return rest;

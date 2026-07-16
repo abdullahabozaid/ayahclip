@@ -1,10 +1,15 @@
 import { create } from "zustand";
 import { Surah, Verse, VideoFormat, Background, TextShadow, LetterboxConfig, Project } from "@/types";
-import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro } from "./canvas-utils";
+import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, MediaTransform } from "./canvas-utils";
 import { StyleSettings } from "./style";
 import { VerseTiming } from "./audio-import";
 import { sanitizeArabic } from "./canvas-utils";
 import { backgroundPresets } from "./backgrounds";
+import {
+  createBackgroundScene,
+  moveBackgroundScene,
+  type BackgroundScene,
+} from "./background-sequence";
 
 export interface VerseEmphasis {
   arabic: number[];
@@ -27,6 +32,7 @@ interface AppState {
   arabicVerseNumber: boolean;
   translationVerseNumber: boolean;
   translationEnabled: boolean;
+  arabicEnabled: boolean;
   translationFontSize: number;
   translationFont: string;
   translationFontWeight: number;
@@ -36,12 +42,17 @@ interface AppState {
   translationLineHeight: number;
   arabicTranslationGap: number;
   textPosition: number;
+  textLayout: "center" | "left-panel";
   overlayOpacity: number;
   overlayColor: string;
   safeAreaTarget: SafeAreaTarget;
   safePadding: number;
   background: Background;
   backgroundFit: MediaFit;
+  mediaTransform: MediaTransform;
+  backgroundSequenceEnabled: boolean;
+  backgroundScenes: BackgroundScene[];
+  activeBackgroundSceneId: string | null;
   fitBackdrop: FitBackdrop;
   backgroundVideoSync: boolean; // sync the bg video's frames to the recitation (lip-sync)
   videoLoopMode: "loop" | "freeze"; // when the bg video ends: loop it, or hold the last frame
@@ -94,6 +105,7 @@ interface AppState {
   setArabicVerseNumber: (on: boolean) => void;
   setTranslationVerseNumber: (on: boolean) => void;
   setTranslationEnabled: (enabled: boolean) => void;
+  setArabicEnabled: (enabled: boolean) => void;
   setTranslationFontSize: (size: number) => void;
   setTranslationFont: (font: string) => void;
   setTranslationFontWeight: (weight: number) => void;
@@ -103,12 +115,20 @@ interface AppState {
   setTranslationLineHeight: (lh: number) => void;
   setArabicTranslationGap: (gap: number) => void;
   setTextPosition: (pos: number) => void;
+  setTextLayout: (layout: "center" | "left-panel") => void;
   setOverlayOpacity: (opacity: number) => void;
   setOverlayColor: (color: string) => void;
   setSafeAreaTarget: (target: SafeAreaTarget) => void;
   setSafePadding: (padding: number) => void;
   setBackground: (bg: Background) => void;
   setBackgroundFit: (fit: MediaFit) => void;
+  setMediaTransform: (transform: MediaTransform) => void;
+  setBackgroundSequenceEnabled: (enabled: boolean) => void;
+  addBackgroundScene: (background: Background) => void;
+  selectBackgroundScene: (id: string) => void;
+  updateBackgroundScene: (id: string, patch: Partial<BackgroundScene>) => void;
+  removeBackgroundScene: (id: string) => void;
+  moveBackgroundScene: (id: string, direction: -1 | 1) => void;
   setFitBackdrop: (b: FitBackdrop) => void;
   setBackgroundVideoSync: (on: boolean) => void;
   setVideoLoopMode: (m: "loop" | "freeze") => void;
@@ -149,6 +169,7 @@ interface AppState {
   setVerseTimings: (timings: VerseTiming[]) => void;
   deleteImportedVerse: (verseIdx: number) => void;
   clearImportedAudio: () => void;
+  beginNewProject: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -163,6 +184,7 @@ export const useAppStore = create<AppState>((set) => ({
   arabicVerseNumber: false,
   translationVerseNumber: true,
   translationEnabled: true,
+  arabicEnabled: true,
   translationFontSize: 14,
   translationFont: "sans-serif",
   translationFontWeight: 400,
@@ -172,12 +194,17 @@ export const useAppStore = create<AppState>((set) => ({
   translationLineHeight: 1,
   arabicTranslationGap: 0.6,
   textPosition: 50,
+  textLayout: "center",
   overlayOpacity: 50,
   overlayColor: "#000000",
   safeAreaTarget: "none",
   safePadding: 0,
   background: backgroundPresets[0],
   backgroundFit: "cover",
+  mediaTransform: { scale: 1, x: 0, y: 0 },
+  backgroundSequenceEnabled: false,
+  backgroundScenes: [],
+  activeBackgroundSceneId: null,
   fitBackdrop: "blur",
   backgroundVideoSync: false,
   videoLoopMode: "loop",
@@ -244,6 +271,7 @@ export const useAppStore = create<AppState>((set) => ({
   setArabicVerseNumber: (on) => set({ arabicVerseNumber: on }),
   setTranslationVerseNumber: (on) => set({ translationVerseNumber: on }),
   setTranslationEnabled: (enabled) => set({ translationEnabled: enabled }),
+  setArabicEnabled: (enabled) => set({ arabicEnabled: enabled }),
   setTranslationFontSize: (size) => set({ translationFontSize: size }),
   setTranslationFont: (font) => set({ translationFont: font }),
   setTranslationFontWeight: (weight) => set({ translationFontWeight: weight }),
@@ -253,13 +281,124 @@ export const useAppStore = create<AppState>((set) => ({
   setTranslationLineHeight: (lh) => set({ translationLineHeight: lh }),
   setArabicTranslationGap: (gap) => set({ arabicTranslationGap: gap }),
   setTextPosition: (pos) => set({ textPosition: pos }),
+  setTextLayout: (textLayout) => set({ textLayout }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
   setOverlayColor: (color) => set({ overlayColor: color }),
   setSafeAreaTarget: (target) => set({ safeAreaTarget: target }),
   setSafePadding: (padding) => set({ safePadding: padding }),
-  setBackground: (bg) => set({ background: bg, backgroundVideoSync: false }),
-  setBackgroundFit: (fit) => set({ backgroundFit: fit }),
-  setFitBackdrop: (b) => set({ fitBackdrop: b }),
+  setBackground: (bg) => set((state) => ({
+    background: bg,
+    backgroundVideoSync: false,
+    backgroundScenes: state.backgroundSequenceEnabled && state.activeBackgroundSceneId
+      ? state.backgroundScenes.map((scene) => scene.id === state.activeBackgroundSceneId
+        ? { ...scene, background: bg }
+        : scene)
+      : state.backgroundScenes,
+  })),
+  setBackgroundFit: (fit) => set((state) => ({
+    backgroundFit: fit,
+    backgroundScenes: state.backgroundSequenceEnabled && state.activeBackgroundSceneId
+      ? state.backgroundScenes.map((scene) => scene.id === state.activeBackgroundSceneId ? { ...scene, fit } : scene)
+      : state.backgroundScenes,
+  })),
+  setMediaTransform: (mediaTransform) => set((state) => ({
+    mediaTransform,
+    backgroundScenes: state.backgroundSequenceEnabled && state.activeBackgroundSceneId
+      ? state.backgroundScenes.map((scene) => scene.id === state.activeBackgroundSceneId ? { ...scene, transform: mediaTransform } : scene)
+      : state.backgroundScenes,
+  })),
+  setFitBackdrop: (b) => set((state) => ({
+    fitBackdrop: b,
+    backgroundScenes: state.backgroundSequenceEnabled && state.activeBackgroundSceneId
+      ? state.backgroundScenes.map((scene) => scene.id === state.activeBackgroundSceneId ? { ...scene, backdrop: b } : scene)
+      : state.backgroundScenes,
+  })),
+  setBackgroundSequenceEnabled: (enabled) => set((state) => {
+    if (!enabled) return { backgroundSequenceEnabled: false };
+    if (state.backgroundScenes.length > 0) {
+      const active = state.backgroundScenes.find((scene) => scene.id === state.activeBackgroundSceneId) ?? state.backgroundScenes[0];
+      return {
+        backgroundSequenceEnabled: true,
+        activeBackgroundSceneId: active.id,
+        background: active.background,
+        backgroundFit: active.fit,
+        fitBackdrop: active.backdrop,
+        mediaTransform: active.transform,
+      };
+    }
+    const first = createBackgroundScene(state.background, {
+      fit: state.backgroundFit,
+      backdrop: state.fitBackdrop,
+      transform: state.mediaTransform,
+    });
+    return {
+      backgroundSequenceEnabled: true,
+      backgroundScenes: [first],
+      activeBackgroundSceneId: first.id,
+    };
+  }),
+  addBackgroundScene: (background) => set((state) => {
+    const scene = createBackgroundScene(background, {
+      fit: state.backgroundFit,
+      backdrop: state.fitBackdrop,
+      transform: { scale: 1, x: 0, y: 0 },
+    });
+    return {
+      backgroundSequenceEnabled: true,
+      backgroundScenes: [...state.backgroundScenes, scene],
+      activeBackgroundSceneId: scene.id,
+      background,
+      mediaTransform: scene.transform,
+      backgroundVideoSync: false,
+    };
+  }),
+  selectBackgroundScene: (id) => set((state) => {
+    const scene = state.backgroundScenes.find((item) => item.id === id);
+    return scene ? {
+      activeBackgroundSceneId: id,
+      background: scene.background,
+      backgroundFit: scene.fit,
+      fitBackdrop: scene.backdrop,
+      mediaTransform: scene.transform,
+    } : {};
+  }),
+  updateBackgroundScene: (id, patch) => set((state) => {
+    const scenes = state.backgroundScenes.map((scene) => scene.id === id ? { ...scene, ...patch } : scene);
+    const active = id === state.activeBackgroundSceneId ? scenes.find((scene) => scene.id === id) : undefined;
+    return {
+      backgroundScenes: scenes,
+      ...(active ? {
+        background: active.background,
+        backgroundFit: active.fit,
+        fitBackdrop: active.backdrop,
+        mediaTransform: active.transform,
+      } : {}),
+    };
+  }),
+  removeBackgroundScene: (id) => set((state) => {
+    const index = state.backgroundScenes.findIndex((scene) => scene.id === id);
+    if (index < 0) return {};
+    const scenes = state.backgroundScenes.filter((scene) => scene.id !== id);
+    if (scenes.length === 0) return {
+      backgroundSequenceEnabled: false,
+      backgroundScenes: [],
+      activeBackgroundSceneId: null,
+    };
+    const active = state.activeBackgroundSceneId === id
+      ? scenes[Math.min(index, scenes.length - 1)]
+      : scenes.find((scene) => scene.id === state.activeBackgroundSceneId) ?? scenes[0];
+    return {
+      backgroundScenes: scenes,
+      activeBackgroundSceneId: active.id,
+      background: active.background,
+      backgroundFit: active.fit,
+      fitBackdrop: active.backdrop,
+      mediaTransform: active.transform,
+    };
+  }),
+  moveBackgroundScene: (id, direction) => set((state) => ({
+    backgroundScenes: moveBackgroundScene(state.backgroundScenes, id, direction),
+  })),
   setBackgroundVideoSync: (on) => set({ backgroundVideoSync: on }),
   setVideoLoopMode: (m) => set({ videoLoopMode: m }),
   setTextShadow: (shadow) => set({ textShadow: shadow }),
@@ -308,6 +447,12 @@ export const useAppStore = create<AppState>((set) => ({
       // default of 400ms in place.)
       clipFadeMs: settings.clipFadeMs ?? 0,
       audioFadeIn: settings.audioFadeIn ?? false,
+      textLayout: settings.textLayout ?? "center",
+      arabicEnabled: settings.arabicEnabled ?? true,
+      mediaTransform: settings.mediaTransform ?? { scale: 1, x: 0, y: 0 },
+      backgroundSequenceEnabled: settings.backgroundSequenceEnabled ?? false,
+      backgroundScenes: settings.backgroundScenes ?? [],
+      activeBackgroundSceneId: settings.activeBackgroundSceneId ?? settings.backgroundScenes?.[0]?.id ?? null,
     });
   },
   toggleEmphasisWord: (verseKey, which, index) =>
@@ -380,4 +525,16 @@ export const useAppStore = create<AppState>((set) => ({
       };
     }),
   clearImportedAudio: () => set({ audioSource: { mode: "reciter" } }),
+  beginNewProject: () => set({
+    projectId: null,
+    selectedVerseNumbers: [],
+    currentVerseIndex: 0,
+    audioSource: { mode: "reciter" },
+    verseParts: {},
+    activePartIndex: 0,
+    mediaTransform: { scale: 1, x: 0, y: 0 },
+    backgroundSequenceEnabled: false,
+    backgroundScenes: [],
+    activeBackgroundSceneId: null,
+  }),
 }));

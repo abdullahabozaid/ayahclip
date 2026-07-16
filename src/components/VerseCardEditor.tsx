@@ -773,7 +773,6 @@ function VerseCard({
             totalWords={totalWords}
             isActivePart={pi === activePartIdx}
             isPlaying={isPlaying && pi === activePartIdx}
-            cardActive={active}
             onPlay={() => (isPlaying && pi === activePartIdx ? onStop() : onPlayPart(p.from, p.to))}
             onSplitWord={onSplitWord}
             canRemove={p.openingSplit != null}
@@ -801,7 +800,6 @@ export interface PartBlockProps {
   totalWords: number;
   isActivePart: boolean;
   isPlaying: boolean;
-  cardActive: boolean;
   onPlay: () => void;
   onSplitWord: (absBoundary: number) => void;
   canRemove: boolean;
@@ -819,7 +817,6 @@ export function PartBlock({
   wordOffset,
   isActivePart,
   isPlaying,
-  cardActive,
   onPlay,
   onSplitWord,
   canRemove,

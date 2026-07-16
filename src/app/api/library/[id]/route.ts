@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { LibraryClip } from "@/lib/clip-library";
-import { readMeta, writeMeta, removeClip, originAllowed } from "@/lib/library-server";
+import { readMeta, writeMeta, removeClip, originAllowed, localRequestAllowed } from "@/lib/library-server";
 
 export const runtime = "nodejs";
 
@@ -8,7 +8,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 // PATCH /api/library/[id] → merge a metadata patch (schedule, folder, status…).
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  if (!originAllowed(req)) {
+  if (!localRequestAllowed(req) || !originAllowed(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await ctx.params;
@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 
 // DELETE /api/library/[id] → remove metadata + video file.
 export async function DELETE(req: NextRequest, ctx: Ctx) {
-  if (!originAllowed(req)) {
+  if (!localRequestAllowed(req) || !originAllowed(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { id } = await ctx.params;

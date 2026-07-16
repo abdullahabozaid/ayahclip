@@ -42,7 +42,7 @@ export default function SurahPage() {
         setLoading(false);
       }
     );
-  }, [surahId, translationLanguage]);
+  }, [clearSelection, setSurahStore, setVersesStore, surahId, translationLanguage]);
 
   return (
     <main className="bg-mihrab min-h-[calc(100dvh-65px)]">

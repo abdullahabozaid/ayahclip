@@ -333,6 +333,8 @@ export interface DrawVerseOptions {
   arabicFont: string;
   arabicFontSize: number;
   translationEnabled: boolean;
+  /** Hide Arabic for translation-led compositions. Defaults to true. */
+  arabicEnabled?: boolean;
   translationFontSize: number;
   translationFont: string;
   translationDirection?: "ltr" | "rtl";
@@ -344,6 +346,8 @@ export interface DrawVerseOptions {
   translationLineHeight?: number;
   /** Vertical placement of the text block: 0 = top, 50 = center, 100 = bottom. Default 50. */
   verticalPosition?: number;
+  /** Centered default or a compact block in the dark left side of the frame. */
+  textLayout?: "center" | "left-panel";
   /** When set, text is laid out within this inset box (fractions of w/h) to dodge platform UI. */
   safeInset?: SafeInset;
   /** CSS font-weight for the Arabic text (default 400). */
@@ -557,19 +561,25 @@ export function drawVerseText(
   const inset = options.safeInset;
   const boxTop = h * (inset?.top ?? 0);
   const boxH = h - boxTop - h * (inset?.bottom ?? 0);
-  const centerX = w / 2;
-  const maxWidth = inset
-    ? w * (1 - 2 * Math.max(inset.left, inset.right))
-    : w * 0.85;
+  const leftPanel = options.textLayout === "left-panel";
+  const centerX = leftPanel ? w * 0.265 : w / 2;
+  const maxWidth = leftPanel
+    ? w * 0.43
+    : inset
+      ? w * (1 - 2 * Math.max(inset.left, inset.right))
+      : w * 0.85;
 
   const arLh = options.lineHeight ?? 1;
   const trLh = options.translationLineHeight ?? arLh;
   const arabicLineH = arabicSize * 1.8 * arLh;
   const transLineH = options.translationFontSize * scale * 1.6 * trLh;
 
-  const arabicLineCount = useQcf
-    ? measureQcfLines(ctx, qcfRenderWords, arabicSize, maxWidth)
-    : measureLines(ctx, arabicDisplay, maxWidth).length;
+  const arabicEnabled = options.arabicEnabled !== false;
+  const arabicLineCount = arabicEnabled
+    ? useQcf
+      ? measureQcfLines(ctx, qcfRenderWords, arabicSize, maxWidth)
+      : measureLines(ctx, arabicDisplay, maxWidth).length
+    : 0;
   const arabicBlockHeight = arabicLineCount * arabicLineH;
 
   let transLines: string[] = [];
@@ -585,7 +595,9 @@ export function drawVerseText(
     transBlockHeight = transLines.length * transLineH;
   }
 
-  const gap = transLines.length > 0 ? arabicSize * (options.arabicTranslationGap ?? 0.6) : 0;
+  const gap = arabicLineCount > 0 && transLines.length > 0
+    ? arabicSize * (options.arabicTranslationGap ?? 0.6)
+    : 0;
   const totalHeight = arabicBlockHeight + gap + transBlockHeight;
 
   // Vertical placement within the layout box: 0 = top, 50 = center, 100 = bottom.
@@ -615,7 +627,7 @@ export function drawVerseText(
     // Continuous highlight bar behind each Arabic line. Drawn first (no shadow),
     // purely behind the glyphs — text layout/shaping is untouched. Reveals
     // right-to-left (reading direction) while the verse intro plays.
-    if (options.highlightEnabled) {
+    if (arabicEnabled && options.highlightEnabled) {
       const introPNow = options.introProgress ?? 1;
       const hasIntroAnim = (options.introStyle ?? "none") !== "none";
       const reveal = hasIntroAnim ? 1 - Math.pow(1 - Math.min(1, introPNow), 3) : 1;
@@ -668,7 +680,10 @@ export function drawVerseText(
     tctx.font = `${arabicWeight} ${arabicSize}px ${arabicFamily}`;
     tctx.direction = "rtl";
 
-    if (useQcf) {
+    if (!arabicEnabled) {
+      // Translation-only composition; the shared block metrics place the
+      // translation at the requested vertical position below.
+    } else if (useQcf) {
       const qcfEmph =
         options.arabicEmphasis && options.arabicEmphasis.length > 0
           ? {
@@ -826,6 +841,13 @@ export function drawTransition(
 
 export type MediaFit = "cover" | "contain";
 export type FitBackdrop = "blur" | "black";
+export interface MediaTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export const DEFAULT_MEDIA_TRANSFORM: MediaTransform = { scale: 1, x: 0, y: 0 };
 
 /** Draw image/video into w×h. "cover" fills + crops (zoom); "contain" shows the
  *  whole media as-is, centered with rounded corners over a backdrop (a blurred fill
@@ -838,7 +860,8 @@ function drawMedia(
   w: number,
   h: number,
   fit: MediaFit,
-  backdrop: FitBackdrop = "blur"
+  backdrop: FitBackdrop = "blur",
+  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM
 ) {
   if (mw <= 0 || mh <= 0) return;
   if (fit === "contain") {
@@ -873,10 +896,14 @@ function drawMedia(
     ctx.restore();
     return;
   }
-  const scale = Math.max(w / mw, h / mh);
+  const scale = Math.max(w / mw, h / mh) * Math.max(1, transform.scale);
   const sw = mw * scale;
   const sh = mh * scale;
-  ctx.drawImage(media, (w - sw) / 2, (h - sh) / 2, sw, sh);
+  const overflowX = Math.max(0, sw - w);
+  const overflowY = Math.max(0, sh - h);
+  const tx = Math.max(-1, Math.min(1, transform.x));
+  const ty = Math.max(-1, Math.min(1, transform.y));
+  ctx.drawImage(media, -overflowX / 2 + (tx * overflowX) / 2, -overflowY / 2 + (ty * overflowY) / 2, sw, sh);
 }
 
 export function drawVideoFrame(
@@ -885,9 +912,10 @@ export function drawVideoFrame(
   w: number,
   h: number,
   fit: MediaFit = "cover",
-  backdrop: FitBackdrop = "blur"
+  backdrop: FitBackdrop = "blur",
+  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM
 ) {
-  drawMedia(ctx, video, video.videoWidth, video.videoHeight, w, h, fit, backdrop);
+  drawMedia(ctx, video, video.videoWidth, video.videoHeight, w, h, fit, backdrop, transform);
 }
 
 export function drawBgImage(
@@ -896,9 +924,10 @@ export function drawBgImage(
   w: number,
   h: number,
   fit: MediaFit = "cover",
-  backdrop: FitBackdrop = "blur"
+  backdrop: FitBackdrop = "blur",
+  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM
 ) {
-  drawMedia(ctx, img, img.width, img.height, w, h, fit, backdrop);
+  drawMedia(ctx, img, img.width, img.height, w, h, fit, backdrop, transform);
 }
 
 export function drawLetterboxBars(

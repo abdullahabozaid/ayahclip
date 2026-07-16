@@ -37,6 +37,8 @@ export function BackgroundThumb({ background, className = "" }: BackgroundThumbP
 
   if (background.type === "image") {
     return (
+      // Saved media can be a blob URL, which Next Image cannot optimize.
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={background.value}
         alt=""

@@ -21,6 +21,7 @@ See [`.env.example`](.env.example). Both are optional for basic use:
 |---|---|
 | `PEXELS_API_KEY` | Enables the stock photo/video background library. Free key at <https://www.pexels.com/api/>. Server-side only — never exposed to the client. |
 | `NEXT_PUBLIC_ASR_MODEL_URL` | Optional absolute URL to the ASR model (see below). Leave blank to serve it same-origin from `public/asr/`. |
+| `NEXT_PUBLIC_SITE_URL` | Canonical production origin for Open Graph, Twitter, and canonical metadata. Defaults to `https://ayahclip.vercel.app`. |
 
 The app runs without either: backgrounds fall back to presets/gradients, and
 the verse auto-detection ("Deep align") is only needed for imported audio.
@@ -72,6 +73,11 @@ Deploy notes:
 - Set `PEXELS_API_KEY` in the host's environment for the stock library.
 - Export uses WebCodecs (faster-than-real-time H.264/AAC) where supported, with
   a `MediaRecorder` fallback — no server-side rendering or transcoding.
+- On public deployments, saved projects and exported-library videos stay private
+  in that visitor's browser (IndexedDB). Localhost/LAN development keeps the
+  existing shared disk library for multi-browser editing on one machine.
+- B-roll sequences, per-scene crop/zoom, crossfades, and the left-fade reciter
+  composition all render through the same canvas path used by final MP4 export.
 
 ## Attributions
 

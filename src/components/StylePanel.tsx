@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { extractPresetStyle, stripBackgroundKeys } from "@/lib/style";
+import { TEMPLATES } from "@/lib/templates";
 import {
   SavedStyle,
   getSavedStyles,
@@ -24,6 +25,30 @@ export function StylePanel() {
 
   return (
     <div className="space-y-4">
+      <div>
+        <div className="mb-2 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-medium text-parchment">Composition presets</p>
+            <p className="mt-0.5 text-[11px] text-[var(--muted)]">A starting point, every detail stays editable.</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {TEMPLATES.slice(0, 4).map((template) => (
+            <button
+              key={template.id}
+              onClick={() => applyStyle(template.settings)}
+              className="group overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] text-left transition-colors hover:border-[var(--hairline)] focus-visible:border-[var(--gold)]"
+              title={`Apply ${template.name}`}
+            >
+              <span className="block aspect-[16/7]" style={{ background: template.swatch }} />
+              <span className="block px-2.5 py-2 text-[11px] font-medium text-[var(--muted)] group-hover:text-parchment">
+                {template.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Saved layout presets — font size, position, spacing (no colors/bg) */}
       <div>
         <div className="mb-2 flex items-center justify-between">

@@ -4,7 +4,7 @@
 // can be scheduled to a date/platform (storage only — no actual posting),
 // browsed by reciter, previewed, downloaded, and marked posted.
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { NewClipLink } from "@/components/NewClipLink";
 import {
   LibraryClip,
   ClipStatus,
@@ -469,9 +469,9 @@ export default function LibraryPage() {
             Every clip you export is saved here automatically, ready to preview,
             gather into folders, and schedule across TikTok, Reels, and Shorts.
           </p>
-          <Link href="/browse" className="btn-gold mt-7 inline-block rounded-full px-6 py-3 text-sm">
+          <NewClipLink href="/browse" className="btn-gold mt-7 inline-block rounded-full px-6 py-3 text-sm">
             Make your first clip
-          </Link>
+          </NewClipLink>
         </div>
       )}
 

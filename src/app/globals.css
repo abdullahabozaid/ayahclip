@@ -25,16 +25,16 @@
   --emerald: #1f6f5c;      /* deep emerald — secondary accent */
   --emerald-soft: #2f9279;
   --parchment: #ece7da;    /* warm off-white text */
-  --muted: #8a8fa3;        /* slate grey muted text */
-  --muted-deep: #5a607a;   /* dimmest text */
+  --muted: #a9adbd;        /* readable slate grey for secondary copy */
+  --muted-deep: #777d95;   /* tertiary labels, still legible on ink */
   --hairline: rgba(201, 162, 75, 0.18);   /* gold hairline borders */
   --hairline-soft: rgba(236, 231, 218, 0.08);
 
   --background: var(--ink);
   --foreground: var(--parchment);
 
-  --font-display: "Marcellus", "Cormorant Garamond", Georgia, serif;
-  --font-body: "Outfit", system-ui, sans-serif;
+  --font-display: var(--font-marcellus), var(--font-cormorant), Georgia, serif;
+  --font-body: var(--font-outfit), system-ui, sans-serif;
   --font-arabic: "UthmanicHafs", serif;
 }
 

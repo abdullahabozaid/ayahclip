@@ -44,7 +44,6 @@ export default function ImportPage() {
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState<string | null>(null);
   const [detected, setDetected] = useState<{ transcript: string; ref: string } | null>(null);
-  const [wordStarts, setWordStarts] = useState<number[] | null>(null);
 
   const autoDetect = async () => {
     if (!buffer) return;
@@ -63,7 +62,6 @@ export default function ImportPage() {
         else setDetectMsg("Recognising…");
       });
       const transcript = result.text;
-      setWordStarts(result.wordStarts.length ? result.wordStarts : null);
       setDetectMsg("Matching to the Quran…");
       const m = matchVerses(transcript);
       if (m) {
@@ -99,7 +97,6 @@ export default function ImportPage() {
     setSourceAudio(null);
     setError(null);
     setDetected(null);
-    setWordStarts(null);
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const isVideo = f.type.startsWith("video/");
     setVideoUrl(isVideo ? URL.createObjectURL(f) : null);
@@ -145,6 +142,7 @@ export default function ImportPage() {
     const timings = autoSegment(buffer, verseNumbers, weights);
     const url = URL.createObjectURL(sourceAudio);
 
+    store.beginNewProject();
     store.setSurah(surah);
     store.setVerses(verses);
     store.setSelectedVerseNumbers(verseNumbers);
@@ -168,13 +166,24 @@ export default function ImportPage() {
         <p className="mb-2 text-sm uppercase tracking-[0.25em] text-gold-soft/70">
           Import recitation
         </p>
-        <h1 className="font-display text-4xl tracking-wide text-parchment">
-          Use your own audio
+        <h1 className="font-display text-4xl tracking-wide text-parchment sm:text-5xl">
+          Turn a recitation into a vertical clip
         </h1>
-        <p className="mt-3 text-[var(--muted)]">
-          Clip a recitation from YouTube (or anywhere), upload the file, tell us which
-          verses it covers, and we&apos;ll line it up — then style and export it like any clip.
+        <p className="mt-3 max-w-xl leading-relaxed text-[var(--muted)]">
+          Upload audio or a video you have permission to use. AyahClip detects the verses,
+          builds an editable timeline, and keeps the media on your device.
         </p>
+        <ol className="mt-6 grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--hairline-soft)] text-[11px] text-[var(--muted)]">
+          {[
+            ["01", "Add media"],
+            ["02", "Confirm verses"],
+            ["03", "Style & export"],
+          ].map(([number, label]) => (
+            <li key={number} className="bg-[var(--ink-deep)] px-3 py-3">
+              <span className="mr-1.5 tabular-nums text-gold-soft">{number}</span>{label}
+            </li>
+          ))}
+        </ol>
 
         {/* Step 1 — upload */}
         <div className="panel mt-8 p-6">
@@ -199,16 +208,16 @@ export default function ImportPage() {
             onClick={openFilePicker}
             className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[var(--hairline)] p-8 text-center transition-colors hover:border-gold focus-visible:border-gold"
           >
-            <span className="text-2xl text-gold-soft/70">↑</span>
+            <span className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--hairline)] text-xl text-gold-soft">↑</span>
             <span className="text-sm text-parchment">
-              {file ? file.name : "Click to choose an MP3, M4A, WAV or MP4"}
+              {file ? file.name : "Choose audio or video"}
             </span>
             <span className="text-xs text-[var(--muted-deep)]">
               {decoding
                 ? decodeMsg ?? "Reading audio…"
                 : buffer
                   ? `Loaded · ${fmt(buffer.duration)}`
-                  : "Audio/video is processed on your device — nothing is uploaded to a server"}
+                  : "MP3, M4A, WAV, MP4 or WebM · processed locally"}
             </span>
           </button>
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
@@ -238,7 +247,10 @@ export default function ImportPage() {
 
           <div className="mb-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-3">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-parchment">Let the app detect it</p>
+              <div>
+                <p className="text-sm font-medium text-parchment">Detect from the recitation</p>
+                <p className="mt-0.5 text-[11px] text-[var(--muted)]">Best first step, you can correct the result.</p>
+              </div>
               <button
                 onClick={autoDetect}
                 disabled={detecting || !buffer}

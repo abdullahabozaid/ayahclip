@@ -7,6 +7,18 @@ export const runtime = "nodejs";
 // POST /api/support/checkout → create a Stripe Checkout Session for a one-time
 // or monthly donation and return its hosted URL. The client redirects to it.
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  if (!origin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  try {
+    if (new URL(origin).host !== req.nextUrl.host) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   let body: { amount?: unknown; frequency?: unknown };
   try {
     body = await req.json();
@@ -35,12 +47,12 @@ export async function POST(req: NextRequest) {
 
   // Build absolute return URLs from the request origin so this works on any
   // deployment without a hardcoded base URL.
-  const origin = req.nextUrl.origin;
+  const siteOrigin = req.nextUrl.origin;
   const params = buildCheckoutParams({
     pence: amount.pence,
     frequency,
-    successUrl: `${origin}/support/thanks?session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${origin}/support`,
+    successUrl: `${siteOrigin}/support/thanks?session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${siteOrigin}/support`,
   });
 
   try {

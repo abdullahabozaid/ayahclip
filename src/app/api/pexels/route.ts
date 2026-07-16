@@ -11,14 +11,15 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const query = searchParams.get("query") ?? "nature";
-  const page = searchParams.get("page") ?? "1";
-  const perPage = searchParams.get("per_page") ?? "15";
+  const query = (searchParams.get("query") ?? "nature").trim().slice(0, 80) || "nature";
+  const page = Math.min(1000, Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1));
+  const perPage = Math.min(40, Math.max(1, Number.parseInt(searchParams.get("per_page") ?? "15", 10) || 15));
 
   const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&page=${page}&per_page=${perPage}&orientation=portrait`;
 
   const res = await fetch(url, {
     headers: { Authorization: PEXELS_API_KEY },
+    next: { revalidate: 300 },
   });
 
   if (!res.ok) {

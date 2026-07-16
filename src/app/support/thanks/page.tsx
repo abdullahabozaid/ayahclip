@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NewClipLink } from "@/components/NewClipLink";
 
 export const metadata: Metadata = {
   title: "Thank you — AyahClip",
@@ -25,9 +26,9 @@ export default function ThanksPage() {
           insha&rsquo;Allah. May Allah accept it from you and reward you abundantly.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
+          <NewClipLink href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
             Make a clip
-          </Link>
+          </NewClipLink>
           <Link href="/" className="btn-ghost rounded-full px-6 py-3 text-sm">
             Back to home
           </Link>

@@ -7,16 +7,42 @@ const EVERYAYAH_BASE = "https://everyayah.com/data";
 
 /** fetch + JSON with a status check, so an API outage fails with a clear error
  *  instead of "Unexpected token <" from parsing an HTML error page. */
-async function fetchJson(url: string) {
+async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Request failed (${res.status} ${res.statusText}): ${url}`);
   }
-  return res.json();
+  return res.json() as Promise<T>;
+}
+
+interface QuranApiWord {
+  position: number;
+  code_v2?: string;
+  page_number: number;
+  line_number: number;
+  text_uthmani: string;
+  char_type_name: QcfWord["char_type_name"];
+  translation?: { text?: string };
+}
+
+interface QuranApiVerse {
+  id: number;
+  verse_number: number;
+  verse_key: string;
+  text_uthmani: string;
+  translations?: { text?: string }[];
+  words?: QuranApiWord[];
+}
+
+interface ApiVerseTiming {
+  verse_key: string;
+  timestamp_from: number;
+  timestamp_to: number;
+  segments?: [number, number | null, number | null][];
 }
 
 export async function fetchSurahs(): Promise<Surah[]> {
-  const data = await fetchJson(`${QURAN_API}/chapters?language=en`);
+  const data = await fetchJson<{ chapters: Surah[] }>(`${QURAN_API}/chapters?language=en`);
   return data.chapters;
 }
 
@@ -25,10 +51,10 @@ export async function fetchVerses(
   translationId: number = 20
 ): Promise<Verse[]> {
   const perPage = 300;
-  const data = await fetchJson(
+  const data = await fetchJson<{ verses: QuranApiVerse[] }>(
     `${QURAN_API}/verses/by_chapter/${surahId}?language=en&translations=${translationId}&fields=text_uthmani&words=true&word_fields=code_v2,text_uthmani&per_page=${perPage}`
   );
-  const verses: Verse[] = data.verses.map((v: any) => ({
+  const verses: Verse[] = data.verses.map((v) => ({
     id: v.id,
     verse_number: v.verse_number,
     verse_key: v.verse_key,
@@ -42,10 +68,10 @@ export async function fetchVerses(
           .trim()
       : undefined,
     qcfWords: v.words
-      ?.filter((w: any) => w.code_v2)
-      .map((w: any): QcfWord => ({
+      ?.filter((w) => w.code_v2)
+      .map((w): QcfWord => ({
         position: w.position,
-        code_v2: w.code_v2,
+        code_v2: w.code_v2!,
         page_number: w.page_number,
         line_number: w.line_number,
         text_uthmani: w.text_uthmani,
@@ -133,24 +159,24 @@ export async function fetchChapterTimings(
   recitationId: number,
   chapterNumber: number
 ): Promise<VerseTiming[]> {
-  const data = await fetchJson(
+  const data = await fetchJson<{ audio_files?: { verse_timings?: ApiVerseTiming[] }[] }>(
     `${QURAN_CDN_API}/audio/reciters/${recitationId}/audio_files?chapter=${chapterNumber}&segments=true`
   );
   const audioFile = data.audio_files?.[0];
   if (!audioFile?.verse_timings) return [];
 
-  return audioFile.verse_timings.map((vt: any) => {
+  return audioFile.verse_timings.map((vt) => {
     const verseStart = vt.timestamp_from;
     return {
       verseKey: vt.verse_key,
       timestampFrom: vt.timestamp_from,
       timestampTo: vt.timestamp_to,
       wordTimings: (vt.segments || [])
-        .filter((s: any[]) => s.length >= 3 && s[1] !== null && s[2] !== null)
-        .map((s: any[]) => ({
+        .filter((s) => s.length >= 3 && s[1] !== null && s[2] !== null)
+        .map((s) => ({
           wordPosition: s[0],
-          startMs: s[1] - verseStart,
-          endMs: s[2] - verseStart,
+          startMs: s[1]! - verseStart,
+          endMs: s[2]! - verseStart,
         })),
     };
   });
@@ -167,15 +193,15 @@ export async function fetchWordsByVerse(
   verseNumber: number,
   translationResourceId: number = 20
 ): Promise<WordData[]> {
-  const data = await fetchJson(
+  const data = await fetchJson<{ verse?: { words?: QuranApiWord[] } }>(
     `${QURAN_API}/verses/by_key/${chapterNumber}:${verseNumber}?language=en&words=true&word_fields=text_uthmani&translation_fields=text&translations=${translationResourceId}&per_page=300`
   );
   const verse = data.verse;
   if (!verse?.words) return [];
 
   return verse.words
-    .filter((w: any) => w.char_type_name === "word")
-    .map((w: any) => ({
+    .filter((w) => w.char_type_name === "word")
+    .map((w) => ({
       position: w.position,
       textUthmani: w.text_uthmani,
       translation: w.translation?.text ?? null,

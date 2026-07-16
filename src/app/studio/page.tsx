@@ -53,6 +53,7 @@ export default function StudioPage() {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const savedAudioUrlRef = useRef<string | null>(null);
   const savedVideoUrlRef = useRef<string | null>(null);
+  const savedBackgroundUrlsRef = useRef<Set<string>>(new Set());
 
   // The bottom timeline dock and the right settings drawer both eat into the
   // preview's space, so they're mutually exclusive: opening one closes the other.
@@ -104,13 +105,6 @@ export default function StudioPage() {
   }, [mp4Rendering]);
 
   useEffect(() => {
-    if (!surah || selectedVerseNumbers.length === 0) return;
-    if (!store.projectId) {
-      store.setProjectId(generateProjectId());
-    }
-  }, [surah, selectedVerseNumbers.length]);
-
-  useEffect(() => {
     if (!framesAllowed && frameMode !== "studio") setFrameMode("studio");
   }, [framesAllowed, frameMode]);
 
@@ -118,23 +112,24 @@ export default function StudioPage() {
     if (!surah) return;
     const lang = getTranslationLanguage(store.translationLanguage);
     fetchVerses(surah.id, lang.resourceId).then((newVerses) => {
-      store.setVerses(newVerses);
+      useAppStore.getState().setVerses(newVerses);
     });
-  }, [store.translationLanguage]);
+  }, [store.translationLanguage, surah]);
 
   // Build + persist the current project (record + uploaded-media blobs). Shared
   // by autosave (debounced) and the manual Save button so they never drift.
   const saveNow = useCallback(async () => {
     const state = useAppStore.getState();
-    if (!state.surah || state.selectedVerseNumbers.length === 0 || !state.projectId) return;
-    const id = state.projectId;
+    if (!state.surah || state.selectedVerseNumbers.length === 0) return;
+    const id = state.projectId ?? generateProjectId();
+    if (!state.projectId) state.setProjectId(id);
     const src = state.audioSource;
     const sel = state.selectedVerseNumbers;
     // Preserve a user-chosen cover thumbnail across saves; otherwise grab a
     // default cover from the current preview frame (skipping black/mid-fade
     // frames) so the dashboard shows the real clip, not a placeholder.
-    const existingThumb =
-      (await getProject(id))?.thumbnail ?? captureSceneThumbnail({ skipIfDark: true });
+    const existing = await getProject(id);
+    const existingThumb = existing?.thumbnail ?? captureSceneThumbnail({ skipIfDark: true });
 
     // Persist uploaded media so the clip (and its editable verse timeline)
     // can be fully restored later. Blobs are saved once per URL.
@@ -160,6 +155,23 @@ export default function StudioPage() {
       }
     }
 
+    const backgroundMedia: NonNullable<import("@/types").Project["backgroundMedia"]> = [];
+    const mediaEntries = state.backgroundSequenceEnabled
+      ? state.backgroundScenes.map((scene) => ({ sceneId: scene.id, background: scene.background }))
+      : [{ sceneId: "single", background: state.background }];
+    for (const entry of mediaEntries) {
+      const media = entry.background;
+      if ((media.type !== "image" && media.type !== "video") || !media.value.startsWith("blob:")) continue;
+      backgroundMedia.push({ sceneId: entry.sceneId, type: media.type });
+      if (savedBackgroundUrlsRef.current.has(media.value)) continue;
+      try {
+        await saveBlob(`background:${id}:${entry.sceneId}`, await (await fetch(media.value)).blob());
+        savedBackgroundUrlsRef.current.add(media.value);
+      } catch {
+        /* object URL may already have been released */
+      }
+    }
+
     await saveProject({
       id,
       name: `${state.surah.name_simple} ${sel[0]}-${sel[sel.length - 1]}`,
@@ -167,6 +179,7 @@ export default function StudioPage() {
       surahName: state.surah.name_simple,
       selectedVerseNumbers: sel,
       imported,
+      backgroundMedia: backgroundMedia.length ? backgroundMedia : undefined,
       verseParts: Object.keys(state.verseParts).length ? state.verseParts : undefined,
       settings: {
         reciterId: state.reciterId,
@@ -176,6 +189,7 @@ export default function StudioPage() {
         arabicFontWeight: state.arabicFontWeight,
         arabicVerseNumber: state.arabicVerseNumber,
         translationEnabled: state.translationEnabled,
+        arabicEnabled: state.arabicEnabled,
         translationFontSize: state.translationFontSize,
         translationFont: state.translationFont,
         translationFontWeight: state.translationFontWeight,
@@ -185,12 +199,17 @@ export default function StudioPage() {
         translationLineHeight: state.translationLineHeight,
         arabicTranslationGap: state.arabicTranslationGap,
         textPosition: state.textPosition,
+        textLayout: state.textLayout,
         overlayOpacity: state.overlayOpacity,
         overlayColor: state.overlayColor,
         safeAreaTarget: state.safeAreaTarget,
         safePadding: state.safePadding,
         background: state.background,
         backgroundFit: state.backgroundFit,
+        mediaTransform: state.mediaTransform,
+        backgroundSequenceEnabled: state.backgroundSequenceEnabled,
+        backgroundScenes: state.backgroundScenes,
+        activeBackgroundSceneId: state.activeBackgroundSceneId,
         fitBackdrop: state.fitBackdrop,
         videoLoopMode: state.videoLoopMode,
         verseIntro: state.verseIntro,
@@ -202,9 +221,15 @@ export default function StudioPage() {
         emphasis: state.emphasis,
         emphasisStyle: state.emphasisStyle,
         emphasisColor: state.emphasisColor,
+        highlightEnabled: state.highlightEnabled,
+        highlightColor: state.highlightColor,
+        highlightOpacity: state.highlightOpacity,
+        highlightRadius: state.highlightRadius,
+        highlightPadding: state.highlightPadding,
+        highlightHeight: state.highlightHeight,
       },
       thumbnail: existingThumb,
-      createdAt: Date.now(),
+      createdAt: existing?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
     });
   }, []);
@@ -236,15 +261,21 @@ export default function StudioPage() {
   }, [
     saveNow,
     store.projectId, store.reciterId, store.videoFormat, store.arabicFontSize,
-    store.arabicFont, store.arabicVerseNumber, store.translationEnabled, store.translationFontSize,
+    store.arabicFont, store.arabicVerseNumber, store.arabicEnabled, store.translationEnabled, store.translationFontSize,
     store.translationFont, store.translationLanguage, store.textColor,
     store.lineHeight, store.translationLineHeight, store.arabicTranslationGap, store.textPosition, store.overlayOpacity, store.overlayColor,
-    store.safeAreaTarget, store.safePadding, store.background, store.backgroundFit, store.fitBackdrop, store.videoLoopMode, store.textShadow, store.letterbox,
+    store.safeAreaTarget, store.safePadding, store.background, store.backgroundFit, store.mediaTransform, store.backgroundSequenceEnabled, store.backgroundScenes, store.activeBackgroundSceneId, store.fitBackdrop, store.videoLoopMode, store.textShadow, store.letterbox,
     store.emphasis, store.emphasisStyle, store.emphasisColor,
     store.clipFadeMs, store.audioFadeIn,
     store.audioSource,
     surah, selectedVerseNumbers,
   ]);
+
+  // Flush pending edits when leaving an already-saved project. Fresh drafts
+  // still have no projectId, so navigating away never creates an unwanted card.
+  useEffect(() => () => {
+    if (useAppStore.getState().projectId) void saveNow();
+  }, [saveNow]);
 
   if (!surah || selectedVerseNumbers.length === 0) {
     return (
@@ -286,7 +317,17 @@ export default function StudioPage() {
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m6 6-6-6 6-6" />
             </svg>
-            Back
+            Verses
+          </button>
+          <button
+            onClick={() => router.push("/")}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment"
+            aria-label="Exit editor"
+            title={store.projectId ? "Exit; saved-project edits are kept" : "Exit without saving this draft"}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
           </button>
           <div className="hidden items-baseline gap-2 sm:flex">
             <span className="font-display text-lg tracking-wide text-parchment">{surah.name_simple}</span>

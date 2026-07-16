@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
-import { readMeta, readVideo, canonicalVideoType } from "@/lib/library-server";
+import { NextRequest, NextResponse } from "next/server";
+import { readMeta, readVideo, canonicalVideoType, localRequestAllowed } from "@/lib/library-server";
 
 export const runtime = "nodejs";
 
 // GET /api/library/[id]/video → stream the stored clip's video bytes.
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  if (!localRequestAllowed(req)) return new NextResponse("Not found", { status: 404 });
   const { id } = await ctx.params;
   const meta = await readMeta(id);
   if (!meta) return new NextResponse("Not found", { status: 404 });

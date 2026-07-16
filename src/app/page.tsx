@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Project } from "@/types";
 import { getAllProjects, deleteProject, getBlob } from "@/lib/projects";
 import { DashboardCard } from "@/components/DashboardCard";
 import { useAppStore } from "@/lib/store";
 import { fetchSurahs, fetchVerses } from "@/lib/api";
 import { getTranslationLanguage } from "@/lib/translations";
+import { NewClipLink } from "@/components/NewClipLink";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -26,6 +26,8 @@ export default function Dashboard() {
   }, []);
 
   const handleDelete = async (id: string) => {
+    const project = projects.find((item) => item.id === id);
+    if (!confirm(`Delete ${project?.name ?? "this clip"}? This can't be undone.`)) return;
     await deleteProject(id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
@@ -33,7 +35,8 @@ export default function Dashboard() {
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -89,6 +92,32 @@ export default function Dashboard() {
         }
       }
 
+      if (project.backgroundMedia?.length) {
+        for (const media of project.backgroundMedia) {
+          const blob = await getBlob(`background:${project.id}:${media.sceneId}`);
+          if (!blob) continue;
+          const value = URL.createObjectURL(blob);
+          if (media.sceneId === "single" && settings.background?.type === media.type) {
+            settings.background = { ...settings.background, value };
+          } else if (settings.backgroundScenes) {
+            settings.backgroundScenes = settings.backgroundScenes.map((scene) =>
+              scene.id === media.sceneId && scene.background.type === media.type
+                ? { ...scene, background: { ...scene.background, value } }
+                : scene
+            );
+          }
+        }
+        const activeScene = settings.backgroundScenes?.find(
+          (scene) => scene.id === settings.activeBackgroundSceneId
+        );
+        if (activeScene) {
+          settings.background = activeScene.background;
+          settings.backgroundFit = activeScene.fit;
+          settings.fitBackdrop = activeScene.backdrop;
+          settings.mediaTransform = activeScene.transform;
+        }
+      }
+
       const store = useAppStore.getState();
       store.restoreProject(surah, verses, project.selectedVerseNumbers, settings, project.id, importedAudio, project.verseParts);
       if (importedAudio && project.imported?.videoBg) store.setBackgroundVideoSync(true);
@@ -134,15 +163,15 @@ export default function Dashboard() {
             className="rise mt-10 flex items-center justify-center gap-3"
             style={{ animationDelay: "320ms" }}
           >
-            <Link
+            <NewClipLink
               href="/browse"
               className="btn-gold rounded-full px-7 py-3.5 text-base"
             >
               Begin a clip
-            </Link>
-            <Link href="/import" className="btn-ghost rounded-full px-6 py-3.5 text-sm">
+            </NewClipLink>
+            <NewClipLink href="/import" className="btn-ghost rounded-full px-6 py-3.5 text-sm">
               Import audio
-            </Link>
+            </NewClipLink>
             {projects.length > 0 && (
               <a href="#projects" className="btn-ghost rounded-full px-6 py-3.5 text-sm">
                 Your clips
@@ -236,12 +265,12 @@ export default function Dashboard() {
               the verses for you.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
+              <NewClipLink href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
                 Choose a surah
-              </Link>
-              <Link href="/import" className="btn-ghost rounded-full px-6 py-3 text-sm">
+              </NewClipLink>
+              <NewClipLink href="/import" className="btn-ghost rounded-full px-6 py-3 text-sm">
                 Import a recitation
-              </Link>
+              </NewClipLink>
             </div>
           </div>
         )}

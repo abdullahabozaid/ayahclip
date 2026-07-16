@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { NewClipLink } from "./NewClipLink";
 
 type NavItem = { href: string; label: string; match: (p: string) => boolean };
 
@@ -42,20 +43,20 @@ export function SiteNav() {
           {LINKS.map((l) => (
             <NavLink key={l.href} href={l.href} label={l.label} active={l.match(pathname)} />
           ))}
-          <Link href="/browse" className="btn-gold ml-2 shrink-0 rounded-full px-4 py-2 text-sm">
+          <NewClipLink href="/browse" className="btn-gold ml-2 shrink-0 rounded-full px-4 py-2 text-sm">
             New clip
-          </Link>
+          </NewClipLink>
         </div>
 
         {/* Mobile: keep the primary CTA visible, tuck the rest behind a menu */}
         <div className="flex items-center gap-2 sm:hidden">
-          <Link
+          <NewClipLink
             href="/browse"
             onClick={closeMenu}
             className="btn-gold shrink-0 rounded-full px-3.5 py-2 text-sm"
           >
             New clip
-          </Link>
+          </NewClipLink>
           <button
             type="button"
             aria-label={open ? "Close menu" : "Open menu"}

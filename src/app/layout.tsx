@@ -1,11 +1,47 @@
 import type { Metadata, Viewport } from "next";
+import {
+  Cinzel,
+  Cormorant_Garamond,
+  Lora,
+  Marcellus,
+  Outfit,
+  Playfair_Display,
+} from "next/font/google";
 import "./globals.css";
 import { SiteNav } from "@/components/SiteNav";
 import { SiteFooter } from "@/components/SiteFooter";
 
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit", display: "swap" });
+const marcellus = Marcellus({ weight: "400", subsets: ["latin"], variable: "--font-marcellus", display: "swap" });
+const cormorant = Cormorant_Garamond({ subsets: ["latin"], variable: "--font-cormorant", display: "swap" });
+const cinzel = Cinzel({ subsets: ["latin"], variable: "--font-cinzel", display: "swap" });
+const lora = Lora({ subsets: ["latin"], variable: "--font-lora", display: "swap" });
+const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "AyahClip — Luminous Quran recitation clips",
-  description: "Craft beautiful Quran recitation clips for social media",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ayahclip.vercel.app"),
+  applicationName: "AyahClip",
+  title: {
+    default: "AyahClip — Luminous Quran recitation clips",
+    template: "%s · AyahClip",
+  },
+  description:
+    "Craft polished Quran recitation clips for TikTok, Reels, and YouTube Shorts—entirely in your browser.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "AyahClip",
+    title: "AyahClip — Luminous Quran recitation clips",
+    description:
+      "Select verses, shape the typography, arrange B-roll, and export a polished social video.",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AyahClip — Luminous Quran recitation clips",
+    description:
+      "Select verses, shape the typography, arrange B-roll, and export a polished social video.",
+  },
 };
 
 // viewport-fit=cover lets us pad around the notch / Dynamic Island via the
@@ -24,15 +60,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Marcellus&family=Outfit:wght@300;400;500;600&family=Cormorant+Garamond:wght@400;500;600&family=Cinzel:wght@400;700&family=Lora:wght@400;700&family=Playfair+Display:wght@400;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html
+      lang="en"
+      className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable}`}
+    >
       <body className="grain min-h-dvh text-parchment antialiased">
         <SiteNav />
         {children}

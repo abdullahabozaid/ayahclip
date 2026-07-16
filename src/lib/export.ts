@@ -1,4 +1,4 @@
-import { Verse, VideoFormat, Background, TextShadow, LetterboxConfig, QcfWord } from "@/types";
+import { Verse, VideoFormat, Background, TextShadow, LetterboxConfig } from "@/types";
 import type { VerseEmphasis } from "./store";
 import { getAudioUrl } from "./api";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
@@ -8,10 +8,12 @@ import {
   drawScene,
   sliceQcfForDisplay,
   type SceneContent,
+  type SceneMedia,
 } from "./render-core";
 import { clipFadeProgress, applyAudioFadeIn } from "./clip-fade";
 import { verseTextAt, type VerseTiming } from "./audio-import";
 import { ensureQcfFontsReady } from "./qcf-font-loader";
+import { resolveBackgroundScene, type BackgroundScene } from "./background-sequence";
 import {
   loadVerseWords,
   buildPartsFromBoundaries,
@@ -30,6 +32,7 @@ interface ExportOptions {
   arabicVerseNumber: boolean;
   translationVerseNumber: boolean;
   translationEnabled: boolean;
+  arabicEnabled?: boolean;
   translationFontSize: number;
   translationFont: string;
   translationFontWeight: number;
@@ -39,12 +42,16 @@ interface ExportOptions {
   translationLineHeight: number;
   arabicTranslationGap: number;
   textPosition: number;
+  textLayout?: "center" | "left-panel";
   overlayOpacity: number;
   overlayColor: string;
   safeAreaTarget: SafeAreaTarget;
   safePadding: number;
   background: Background;
   backgroundFit?: import("./canvas-utils").MediaFit;
+  mediaTransform?: import("./canvas-utils").MediaTransform;
+  backgroundSequenceEnabled?: boolean;
+  backgroundScenes?: BackgroundScene[];
   fitBackdrop?: import("./canvas-utils").FitBackdrop;
   /** Sync the background video's time to each verse's audio slice (lip-sync). */
   backgroundVideoSync?: boolean;
@@ -154,6 +161,93 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+interface LoadedBackgroundSequence {
+  images: Map<string, HTMLImageElement>;
+  videos: Map<string, HTMLVideoElement>;
+}
+
+async function loadBackgroundSequence(
+  scenes: BackgroundScene[],
+  playVideos = false
+): Promise<LoadedBackgroundSequence> {
+  const images = new Map<string, HTMLImageElement>();
+  const videos = new Map<string, HTMLVideoElement>();
+  await Promise.all(scenes.map(async (scene) => {
+    if (scene.background.type === "image") {
+      try {
+        images.set(scene.id, await loadImage(scene.background.value));
+      } catch {
+        /* renderer falls back to the scene's base background */
+      }
+    } else if (scene.background.type === "video") {
+      const video = document.createElement("video");
+      video.src = scene.background.value;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      await new Promise<void>((resolve) => {
+        video.addEventListener("loadeddata", () => resolve(), { once: true });
+        video.addEventListener("error", () => resolve(), { once: true });
+      });
+      if (video.readyState >= 2) {
+        videos.set(scene.id, video);
+        if (playVideos) video.play().catch(() => {});
+      }
+    }
+  }));
+  return { images, videos };
+}
+
+function sequenceMediaAt(
+  scenes: BackgroundScene[],
+  time: number,
+  loaded: LoadedBackgroundSequence,
+  syncPlayingVideos = false
+): SceneMedia | undefined {
+  const resolved = resolveBackgroundScene(scenes, time);
+  if (!resolved) return undefined;
+  const video = loaded.videos.get(resolved.scene.id);
+  if (syncPlayingVideos && video && Number.isFinite(video.duration) && video.duration > 0) {
+    const target = resolved.localTime % video.duration;
+    if (Math.abs(video.currentTime - target) > 0.4) video.currentTime = target;
+  }
+  const nextVideo = resolved.next ? loaded.videos.get(resolved.next.id) : undefined;
+  if (syncPlayingVideos && nextVideo && Number.isFinite(nextVideo.duration) && nextVideo.duration > 0) {
+    const target = (resolved.transitionProgress * resolved.scene.transitionDuration) % nextVideo.duration;
+    if (Math.abs(nextVideo.currentTime - target) > 0.4) nextVideo.currentTime = target;
+  }
+  return {
+    background: resolved.scene.background,
+    image: loaded.images.get(resolved.scene.id),
+    video,
+    fit: resolved.scene.fit,
+    backdrop: resolved.scene.backdrop,
+    transform: resolved.scene.transform,
+    nextBackground: resolved.next?.background,
+    nextImage: resolved.next ? loaded.images.get(resolved.next.id) : undefined,
+    nextVideo,
+    nextFit: resolved.next?.fit,
+    nextBackdrop: resolved.next?.backdrop,
+    nextTransform: resolved.next?.transform,
+    transitionProgress: resolved.transitionProgress,
+  };
+}
+
+async function seekSequenceMedia(
+  media: SceneMedia | undefined,
+  time: number,
+  nextTime = 0
+): Promise<void> {
+  if (!media) return;
+  if (media.video && Number.isFinite(media.video.duration) && media.video.duration > 0) {
+    await seekVideoFrame(media.video, time % media.video.duration);
+  }
+  if (media.nextVideo && Number.isFinite(media.nextVideo.duration) && media.nextVideo.duration > 0) {
+    await seekVideoFrame(media.nextVideo, nextTime % media.nextVideo.duration);
+  }
+}
+
 /**
  * Export router: use the fast WebCodecs encoder when it's supported. Video
  * backgrounds are handled by seeking the bg video to each output frame's time
@@ -230,7 +324,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
   const ctx = canvas.getContext("2d")!;
 
   let bgImage: HTMLImageElement | undefined;
-  if (options.background.type === "image") {
+  if (!options.backgroundSequenceEnabled && options.background.type === "image") {
     try {
       bgImage = await loadImage(options.background.value);
     } catch {
@@ -239,7 +333,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
   }
 
   let bgVideo: HTMLVideoElement | undefined;
-  if (options.background.type === "video") {
+  if (!options.backgroundSequenceEnabled && options.background.type === "video") {
     bgVideo = document.createElement("video");
     bgVideo.src = options.background.value;
     bgVideo.muted = true;
@@ -255,6 +349,11 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
       bgVideo!.addEventListener("error", () => resolve());
     });
   }
+
+  const sequenceScenes = options.backgroundSequenceEnabled ? options.backgroundScenes ?? [] : [];
+  const sequenceLoaded = sequenceScenes.length > 0
+    ? await loadBackgroundSequence(sequenceScenes, true)
+    : undefined;
 
   const stream = canvas.captureStream(30);
   const audioCtx = new AudioContext();
@@ -356,7 +455,8 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
     prevSegAr = seg0.ar;
     drawFrame(
       ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      introAt(segStart), seg0.ar, seg0.tr, seg0.isLast, clipFadeAt()
+      introAt(segStart), seg0.ar, seg0.tr, seg0.isLast, clipFadeAt(),
+      sequenceLoaded ? sequenceMediaAt(sequenceScenes, (performance.now() - clipStartMs) / 1000, sequenceLoaded, true) : undefined
     );
 
     try {
@@ -411,7 +511,8 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
             }
             drawFrame(
               ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-              introAt(segStart), seg.ar, seg.tr, seg.isLast, clipFadeAt()
+              introAt(segStart), seg.ar, seg.tr, seg.isLast, clipFadeAt(),
+              sequenceLoaded ? sequenceMediaAt(sequenceScenes, (performance.now() - clipStartMs) / 1000, sequenceLoaded, true) : undefined
             );
             frameId = requestAnimationFrame(renderLoop);
           };
@@ -433,6 +534,12 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
   if (bgVideo) {
     bgVideo.pause();
     bgVideo.src = "";
+  }
+  if (sequenceLoaded) {
+    for (const video of sequenceLoaded.videos.values()) {
+      video.pause();
+      video.src = "";
+    }
   }
 
   recorder.stop();
@@ -515,7 +622,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   const size = FORMAT_SIZES[options.videoFormat];
 
   let bgImage: HTMLImageElement | undefined;
-  if (options.background.type === "image") {
+  if (!options.backgroundSequenceEnabled && options.background.type === "image") {
     try {
       bgImage = await loadImage(options.background.value);
     } catch {
@@ -527,7 +634,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   // can't load/decode, throw to fall back to the real-time recorder.
   let bgVideo: HTMLVideoElement | undefined;
   let videoDuration = 0;
-  if (options.background.type === "video") {
+  if (!options.backgroundSequenceEnabled && options.background.type === "video") {
     bgVideo = document.createElement("video");
     bgVideo.src = options.background.value;
     bgVideo.muted = true;
@@ -542,6 +649,10 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       throw new Error("background video has no usable duration");
     }
   }
+  const sequenceScenesFast = options.backgroundSequenceEnabled ? options.backgroundScenes ?? [] : [];
+  const sequenceLoadedFast = sequenceScenesFast.length > 0
+    ? await loadBackgroundSequence(sequenceScenesFast)
+    : undefined;
 
   const { buffer: audioBuffer, verseDurations } = await assembleAudio(options);
   // Optional audio fade-in: ramp the first clipFadeMs of the concatenated clip
@@ -704,7 +815,10 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
         clipFade,
         // clipFade is part of the dedupe key so each distinct fade frame is
         // encoded (run-length encoding must not collapse the fade animation).
-        key: `${segKey}|${introProgress}|${clipFade}|${segFast.isLast}`,
+        key: `${segKey}|${introProgress}|${clipFade}|${segFast.isLast}|${(() => {
+          const scene = sequenceScenesFast.length ? resolveBackgroundScene(sequenceScenesFast, t) : undefined;
+          return scene ? `${scene.index}:${scene.transitionProgress.toFixed(3)}` : "single";
+        })()}`,
       };
     }
   }
@@ -717,16 +831,27 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     const p = plan[f];
     const verse = options.verses[p.vi];
     if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(p.t, p.audioVi));
+    const sequenceMedia = sequenceLoadedFast
+      ? sequenceMediaAt(sequenceScenesFast, p.t, sequenceLoadedFast)
+      : undefined;
+    if (sequenceMedia) {
+      const resolved = resolveBackgroundScene(sequenceScenesFast, p.t);
+      await seekSequenceMedia(
+        sequenceMedia,
+        resolved?.localTime ?? 0,
+        resolved ? resolved.transitionProgress * resolved.scene.transitionDuration : 0
+      );
+    }
 
     drawFrame(
       ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      p.introProgress, p.ar, p.tr, p.isLast, p.clipFade
+      p.introProgress, p.ar, p.tr, p.isLast, p.clipFade, sequenceMedia
     );
 
     // Length of the static run starting here (1 when a bg video animates,
     // capped at 1s so keyframes stay regular).
     let runLen = 1;
-    if (!bgVideo) {
+    if (!bgVideo && !sequenceLoadedFast) {
       while (
         runLen < FAST_FPS &&
         f + runLen < totalFrames &&
@@ -757,6 +882,12 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   if (bgVideo) {
     bgVideo.pause();
     bgVideo.src = "";
+  }
+  if (sequenceLoadedFast) {
+    for (const video of sequenceLoadedFast.videos.values()) {
+      video.pause();
+      video.src = "";
+    }
   }
 
   // ---- Audio: encode the rendered buffer in planar chunks ----
@@ -811,7 +942,8 @@ function drawFrame(
   displayTranslation?: string | null,
   isLastPart = true,
   /** Clip-start fade progress (1 = fully shown, 0 = black). */
-  clipFade = 1
+  clipFade = 1,
+  sequenceMedia?: SceneMedia
 ) {
   // When showing a mid-verse segment, manual word emphasis indices wouldn't
   // line up with the partial text — so emphasis only applies on the full verse.
@@ -833,5 +965,5 @@ function drawFrame(
     introProgress,
     clipFadeProgress: clipFade,
   };
-  drawScene(ctx, options, content, { image: bgImage, video: bgVideo });
+  drawScene(ctx, options, content, sequenceMedia ?? { image: bgImage, video: bgVideo });
 }

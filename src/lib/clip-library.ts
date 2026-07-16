@@ -1,8 +1,7 @@
-// Clip library client. Clips are stored SERVER-SIDE (see src/lib/library-server.ts
-// + /api/library) so every browser on this machine shares one library — the old
-// IndexedDB store was per-browser. These functions are thin wrappers over the
-// API; the video bytes live on disk, metadata is JSON, thumbnails are inline.
-import { get, keys, del } from "idb-keyval";
+// Clip library client. Public deployments keep each visitor's videos private in
+// IndexedDB. Localhost/LAN development uses the disk-backed API so browsers on
+// the same editing machine can share one library.
+import { get, set, keys, del } from "idb-keyval";
 
 export type ClipStatus = "draft" | "scheduled" | "posted";
 export type ClipPlatform = "tiktok" | "reels" | "shorts" | "other";
@@ -34,6 +33,22 @@ function warn(op: string, err: unknown): void {
   console.warn(`[clip-library] ${op} failed`, err);
 }
 
+const META_PREFIX = "clip:";
+const BLOB_PREFIX = "clipblob:";
+const FOLDERS_KEY = "clipfolders:list";
+
+/** Public hosting has no durable per-user filesystem. Keep each visitor's
+ * library private in their browser; localhost/LAN retains the shared disk API. */
+function browserLibraryMode(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  const local = host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const lan = /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host);
+  return !local && !lan;
+}
+
 /**
  * Pick the timestamp (seconds) to grab a clip's thumbnail from. The first ~1s
  * is unusable — it's the clip-start fade (black) and, for video backgrounds, a
@@ -52,6 +67,13 @@ export function generateClipId(): string {
 
 export async function saveClip(meta: LibraryClip, video: Blob): Promise<boolean> {
   try {
+    if (browserLibraryMode()) {
+      await Promise.all([
+        set(`${META_PREFIX}${meta.id}`, meta),
+        set(`${BLOB_PREFIX}${meta.id}`, video),
+      ]);
+      return true;
+    }
     const form = new FormData();
     form.append("file", video, `${meta.id}`);
     form.append("meta", JSON.stringify(meta));
@@ -65,6 +87,16 @@ export async function saveClip(meta: LibraryClip, video: Blob): Promise<boolean>
 
 export async function listClips(): Promise<LibraryClip[]> {
   try {
+    if (browserLibraryMode()) {
+      const allKeys = await keys();
+      const clips = await Promise.all(
+        allKeys
+          .filter((key) => String(key).startsWith(META_PREFIX))
+          .map((key) => get(key) as Promise<LibraryClip | undefined>)
+      );
+      return clips.filter((clip): clip is LibraryClip => !!clip)
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
     const res = await fetch("/api/library");
     if (!res.ok) return [];
     const { clips } = (await res.json()) as { clips: LibraryClip[] };
@@ -80,6 +112,13 @@ export async function updateClip(
   patch: Partial<Omit<LibraryClip, "id">>
 ): Promise<LibraryClip | undefined> {
   try {
+    if (browserLibraryMode()) {
+      const existing = await get(`${META_PREFIX}${id}`) as LibraryClip | undefined;
+      if (!existing) return undefined;
+      const next = { ...existing, ...patch, id: existing.id };
+      await set(`${META_PREFIX}${id}`, next);
+      return next;
+    }
     const res = await fetch(`/api/library/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -96,6 +135,10 @@ export async function updateClip(
 
 export async function deleteClip(id: string): Promise<void> {
   try {
+    if (browserLibraryMode()) {
+      await Promise.all([del(`${META_PREFIX}${id}`), del(`${BLOB_PREFIX}${id}`)]);
+      return;
+    }
     await fetch(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" });
   } catch (err) {
     warn("deleteClip", err);
@@ -104,6 +147,9 @@ export async function deleteClip(id: string): Promise<void> {
 
 export async function getClipBlob(id: string): Promise<Blob | undefined> {
   try {
+    if (browserLibraryMode()) {
+      return await get(`${BLOB_PREFIX}${id}`) as Blob | undefined;
+    }
     const res = await fetch(`/api/library/${encodeURIComponent(id)}/video`);
     if (!res.ok) return undefined;
     return await res.blob();
@@ -118,6 +164,9 @@ export async function getClipBlob(id: string): Promise<Blob | undefined> {
 // own `folder` field.
 export async function listFolders(): Promise<string[]> {
   try {
+    if (browserLibraryMode()) {
+      return (await get(FOLDERS_KEY) as string[] | undefined) ?? [];
+    }
     const res = await fetch("/api/library/folders");
     if (!res.ok) return [];
     const { folders } = (await res.json()) as { folders: string[] };
@@ -130,6 +179,10 @@ export async function listFolders(): Promise<string[]> {
 
 async function writeFolders(folders: string[]): Promise<string[]> {
   try {
+    if (browserLibraryMode()) {
+      await set(FOLDERS_KEY, folders);
+      return folders;
+    }
     const res = await fetch("/api/library/folders", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -175,6 +228,7 @@ export function libraryTotalBytes(clips: LibraryClip[]): number {
  */
 export async function migrateLegacyClips(): Promise<number> {
   if (typeof window === "undefined") return 0;
+  if (browserLibraryMode()) return 0;
   if (localStorage.getItem("ayahclip:library-migrated") === "1") return 0;
   // Bail if the server store isn't reachable — try again next load.
   try {

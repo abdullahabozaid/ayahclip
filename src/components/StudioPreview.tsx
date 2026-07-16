@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppStore } from "@/lib/store";
 import { reciters } from "@/lib/reciters";
 import { preloadVerseAudios } from "@/lib/audio";
@@ -24,6 +24,7 @@ import { DevicePreview } from "./DevicePreview";
 import { importedPlayer } from "@/lib/imported-player";
 import { verseTextAt, snapToSentenceBoundary } from "@/lib/audio-import";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
+import { resolveBackgroundScene } from "@/lib/background-sequence";
 
 // One segment spanning a whole verse — used when a reciter verse has no manual
 // word-parts, so playback simply shows the full verse.
@@ -49,6 +50,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.selectedVerseNumbers.includes(v.verse_number)
   );
   const currentVerse = selectedVerses[store.currentVerseIndex] ?? selectedVerses[0];
+  const importedTimings = store.audioSource.mode === "imported" ? store.audioSource.timings : null;
   const size = FORMAT_SIZES[store.videoFormat];
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -61,6 +63,57 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   const prevSegmentRef = useRef<number>(-1);
   const animFrameRef = useRef<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const sceneImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  const sceneVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const reframeDragRef = useRef<{ x: number; y: number; mediaX: number; mediaY: number } | null>(null);
+
+  const sequenceMediaKey = store.backgroundScenes
+    .map((scene) => `${scene.id}:${scene.background.type}:${scene.background.value}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!store.backgroundSequenceEnabled) {
+      sceneImagesRef.current = new Map();
+      for (const video of sceneVideosRef.current.values()) {
+        video.pause();
+        video.src = "";
+      }
+      sceneVideosRef.current = new Map();
+      return;
+    }
+
+    const images = new Map<string, HTMLImageElement>();
+    const videos = new Map<string, HTMLVideoElement>();
+    for (const scene of useAppStore.getState().backgroundScenes) {
+      if (scene.background.type === "image") {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => drawRef.current();
+        img.src = scene.background.value;
+        images.set(scene.id, img);
+      } else if (scene.background.type === "video") {
+        const video = document.createElement("video");
+        video.src = scene.background.value;
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.crossOrigin = "anonymous";
+        video.addEventListener("loadeddata", () => {
+          video.play().catch(() => {});
+          drawRef.current();
+        });
+        videos.set(scene.id, video);
+      }
+    }
+    sceneImagesRef.current = images;
+    sceneVideosRef.current = videos;
+    return () => {
+      for (const video of videos.values()) {
+        video.pause();
+        video.src = "";
+      }
+    };
+  }, [store.backgroundSequenceEnabled, sequenceMediaKey]);
 
   // Verse entrance animation: reset the timestamp whenever the verse (or intro
   // setting) changes. The fade/blur/slide is drawn by the unified animation loop
@@ -419,6 +472,61 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       clipFadeProgress: clipFade,
     };
 
+    let sceneMedia: Parameters<typeof drawScene>[3] | undefined;
+    if (s.backgroundSequenceEnabled && s.backgroundScenes.length > 0) {
+      let clipTime = 0;
+      if (playing && s.audioSource.mode === "imported") {
+        const timings = s.audioSource.timings;
+        for (let i = 0; i < s.currentVerseIndex; i++) {
+          clipTime += Math.max(0, timings[i].end - timings[i].start);
+        }
+        const currentTiming = timings[s.currentVerseIndex];
+        if (currentTiming) {
+          clipTime += Math.max(0, importedPlayer.currentTime() - currentTiming.start);
+        }
+      } else if (playing) {
+        for (let i = 0; i < s.currentVerseIndex; i++) {
+          const audio = audioMap.get(s.selectedVerseNumbers[i]);
+          clipTime += Number.isFinite(audio?.duration) ? audio!.duration : 5;
+        }
+        clipTime += currentAudioRef.current?.currentTime ?? 0;
+      }
+
+      const selectedScene = s.backgroundScenes.find((scene) => scene.id === s.activeBackgroundSceneId);
+      const resolved = playing
+        ? resolveBackgroundScene(s.backgroundScenes, clipTime)
+        : selectedScene
+          ? { index: s.backgroundScenes.indexOf(selectedScene), scene: selectedScene, localTime: 0, transitionProgress: 0 }
+          : resolveBackgroundScene(s.backgroundScenes, 0);
+      if (resolved) {
+        const currentVideo = sceneVideosRef.current.get(resolved.scene.id);
+        if (playing && currentVideo && Number.isFinite(currentVideo.duration) && currentVideo.duration > 0) {
+          const target = resolved.localTime % currentVideo.duration;
+          if (Math.abs(currentVideo.currentTime - target) > 0.35) currentVideo.currentTime = target;
+        }
+        const nextVideo = resolved.next ? sceneVideosRef.current.get(resolved.next.id) : undefined;
+        if (playing && nextVideo && Number.isFinite(nextVideo.duration) && nextVideo.duration > 0) {
+          const nextLocal = resolved.transitionProgress * resolved.scene.transitionDuration;
+          if (Math.abs(nextVideo.currentTime - nextLocal) > 0.35) nextVideo.currentTime = nextLocal;
+        }
+        sceneMedia = {
+          background: resolved.scene.background,
+          image: sceneImagesRef.current.get(resolved.scene.id),
+          video: currentVideo,
+          fit: resolved.scene.fit,
+          backdrop: resolved.scene.backdrop,
+          transform: resolved.scene.transform,
+          nextBackground: resolved.next?.background,
+          nextImage: resolved.next ? sceneImagesRef.current.get(resolved.next.id) : undefined,
+          nextVideo,
+          nextFit: resolved.next?.fit,
+          nextBackdrop: resolved.next?.backdrop,
+          nextTransform: resolved.next?.transform,
+          transitionProgress: resolved.transitionProgress,
+        };
+      }
+    }
+
     drawScene(
       ctx,
       {
@@ -427,7 +535,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
           .direction as "ltr" | "rtl",
       },
       content,
-      {
+      sceneMedia ?? {
         image: s.background.type === "image" ? bgImageElRef.current ?? undefined : undefined,
         video: s.background.type === "video" ? videoRef.current ?? undefined : undefined,
       }
@@ -485,7 +593,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   // here without touching React state.
   useEffect(() => {
     let raf = 0;
-    const hasVideoBg = store.background.type === "video";
+    const hasVideoBg = store.background.type === "video" ||
+      (store.backgroundSequenceEnabled && store.backgroundScenes.some((scene) => scene.background.type === "video"));
     const loop = () => {
       drawRef.current();
       const s = useAppStore.getState();
@@ -499,7 +608,11 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     return () => cancelAnimationFrame(raf);
   }, [
     store.background,
+    store.backgroundSequenceEnabled,
+    store.backgroundScenes,
+    store.activeBackgroundSceneId,
     store.backgroundFit,
+    store.mediaTransform,
     store.fitBackdrop,
     store.overlayOpacity,
     store.overlayColor,
@@ -527,6 +640,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.arabicFontSize,
     store.arabicFont,
     store.translationEnabled,
+    store.arabicEnabled,
     store.translationFontSize,
     store.translationFont,
     store.textShadow,
@@ -537,7 +651,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.playbackSegmentTranslation,
     // For imported mode: edits to timings (splits / wordRange / boundaries)
     // must rerun the draw effect so the preview reflects them immediately.
-    store.audioSource.mode === "imported" ? store.audioSource.timings : null,
+    importedTimings,
     store.verseParts,
     store.activePartIndex,
     currentVerse,
@@ -548,6 +662,31 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
 
   const framed = frameMode !== "studio";
   const displayWidth = framed ? 348 : size.w >= size.h ? 460 : 360;
+  const canReframe = store.backgroundFit === "cover" &&
+    (store.background.type === "image" || store.background.type === "video");
+
+  const startReframe = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!canReframe) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    reframeDragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      mediaX: store.mediaTransform.x,
+      mediaY: store.mediaTransform.y,
+    };
+  };
+
+  const moveReframe = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const start = reframeDragRef.current;
+    if (!start || !canReframe) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+    store.setMediaTransform({
+      ...store.mediaTransform,
+      x: clamp(start.mediaX + ((event.clientX - start.x) / rect.width) * 2),
+      y: clamp(start.mediaY + ((event.clientY - start.y) / rect.height) * 2),
+    });
+  };
 
   return (
     <div className="flex flex-col items-center gap-6">
@@ -558,8 +697,21 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         showSafeZones={showSafeZones}
         safePadding={store.safePadding / 100}
       >
-        <canvas ref={canvasRef} className="h-full w-full" />
+        <canvas
+          ref={canvasRef}
+          className={`h-full w-full ${canReframe ? "cursor-grab touch-none active:cursor-grabbing" : ""}`}
+          onPointerDown={startReframe}
+          onPointerMove={moveReframe}
+          onPointerUp={() => { reframeDragRef.current = null; }}
+          onPointerCancel={() => { reframeDragRef.current = null; }}
+        />
       </DevicePreview>
+
+      {canReframe && (
+        <p className="-mt-4 text-[11px] text-[var(--muted)]">
+          Drag the preview to reframe · use Style → Background to zoom
+        </p>
+      )}
 
       {selectedVerses.length > 0 && (
         <div className="flex items-center gap-3">

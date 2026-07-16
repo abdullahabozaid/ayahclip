@@ -8,19 +8,23 @@ import {
   originAllowed,
   canonicalVideoType,
   MAX_VIDEO_BYTES,
+  localRequestAllowed,
 } from "@/lib/library-server";
 
 export const runtime = "nodejs";
 
 // GET /api/library → every stored clip's metadata + the folder list.
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!localRequestAllowed(req)) {
+    return NextResponse.json({ error: "Not available" }, { status: 404 });
+  }
   const [clips, folders] = await Promise.all([listMeta(), listFolders()]);
   return NextResponse.json({ clips, folders });
 }
 
 // POST /api/library → save a clip (multipart: `file` video + `meta` JSON).
 export async function POST(req: NextRequest) {
-  if (!originAllowed(req)) {
+  if (!localRequestAllowed(req) || !originAllowed(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

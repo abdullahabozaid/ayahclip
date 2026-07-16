@@ -37,6 +37,12 @@ export async function deleteProject(id: string): Promise<void> {
     // Drop any uploaded media blobs that belonged to this project.
     await del(`audio:${id}`).catch(() => {});
     await del(`video:${id}`).catch(() => {});
+    const allKeys = await keys();
+    await Promise.all(
+      allKeys
+        .filter((key) => String(key).startsWith(`background:${id}:`))
+        .map((key) => del(key).catch(() => {}))
+    );
   } catch (err) {
     warnStorage("deleteProject", err);
   }

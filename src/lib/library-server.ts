@@ -132,3 +132,15 @@ export function originAllowed(req: NextRequest): boolean {
     /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)
   );
 }
+
+/** The disk-backed library is a localhost/LAN feature. Public deployments use
+ * private browser storage and must never expose a shared server filesystem. */
+export function localRequestAllowed(req: NextRequest): boolean {
+  const host = req.nextUrl.hostname;
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+  return (
+    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)
+  );
+}

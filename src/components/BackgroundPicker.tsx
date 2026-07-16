@@ -73,11 +73,13 @@ function VideoThumb({
 interface BackgroundPickerProps {
   value: Background;
   onChange: (bg: Background) => void;
+  /** False when uploads are appended to a B-roll sequence instead of replacing media. */
+  revokePrevious?: boolean;
 }
 
 type Tab = "presets" | "pexels" | "video" | "upload";
 
-export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
+export function BackgroundPicker({ value, onChange, revokePrevious = true }: BackgroundPickerProps) {
   const [tab, setTab] = useState<Tab>("presets");
 
   const tabs: { id: Tab; label: string }[] = [
@@ -107,8 +109,8 @@ export function BackgroundPicker({ value, onChange }: BackgroundPickerProps) {
 
       {tab === "presets" && <PresetsGrid value={value} onChange={onChange} />}
       {tab === "pexels" && <StockLibrary onSelect={onChange} />}
-      {tab === "video" && <VideoSection value={value} onChange={onChange} />}
-      {tab === "upload" && <UploadSection value={value} onChange={onChange} />}
+      {tab === "video" && <VideoSection value={value} onChange={onChange} revokePrevious={revokePrevious} />}
+      {tab === "upload" && <UploadSection value={value} onChange={onChange} revokePrevious={revokePrevious} />}
     </div>
   );
 }
@@ -179,6 +181,8 @@ function PresetsGrid({
               aria-label={bg.label}
               title={bg.label}
             >
+              {/* Direct media preview: sources may be blob URLs or user-selected remote files. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={bg.value}
                 alt={bg.label}
@@ -195,19 +199,24 @@ function PresetsGrid({
 function VideoSection({
   value,
   onChange,
+  revokePrevious,
 }: {
   value: Background;
   onChange: (bg: Background) => void;
+  revokePrevious: boolean;
 }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 50 * 1024 * 1024) {
-      alert("Video must be under 50MB");
+      setUploadError("Choose a video under 50 MB.");
+      e.target.value = "";
       return;
     }
-    revokeIfBlob(value.value);
+    setUploadError(null);
+    if (revokePrevious) revokeIfBlob(value.value);
     const url = URL.createObjectURL(file);
     onChange({ type: "video", value: url, label: file.name });
   };
@@ -280,6 +289,7 @@ function VideoSection({
         <span className="text-lg text-[var(--muted-deep)]">+</span>
         <span className="text-xs text-[var(--muted)]">Upload video (MP4/WebM, max 50MB)</span>
       </button>
+      {uploadError && <p className="text-xs text-red-400" role="alert">{uploadError}</p>}
     </div>
   );
 }
@@ -287,17 +297,27 @@ function VideoSection({
 function UploadSection({
   value,
   onChange,
+  revokePrevious,
 }: {
   value: Background;
   onChange: (bg: Background) => void;
+  revokePrevious: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    revokeIfBlob(value.value);
-    const url = URL.createObjectURL(file);
     const isVideo = file.type.startsWith("video/");
+    const maxBytes = (isVideo ? 50 : 20) * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setUploadError(`Choose ${isVideo ? "a video under 50 MB" : "an image under 20 MB"}.`);
+      e.target.value = "";
+      return;
+    }
+    setUploadError(null);
+    if (revokePrevious) revokeIfBlob(value.value);
+    const url = URL.createObjectURL(file);
     onChange({
       type: isVideo ? "video" : "image",
       value: url,
@@ -328,8 +348,10 @@ function UploadSection({
         className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-6 transition-colors hover:border-white/20 focus-visible:border-gold"
       >
         <span className="text-2xl text-[var(--muted-deep)]">+</span>
-        <span className="text-xs text-[var(--muted)]">Click to upload image or video</span>
+        <span className="text-xs text-[var(--muted)]">Upload image or video</span>
+        <span className="text-[10px] text-[var(--muted-deep)]">Images up to 20 MB · videos up to 50 MB</span>
       </button>
+      {uploadError && <p className="mt-2 text-xs text-red-400" role="alert">{uploadError}</p>}
     </>
   );
 }
