@@ -21,6 +21,7 @@ function appStateSettingFields(): Set<string> {
     "surah", "verses", "selectedVerseNumbers", "currentVerseIndex", "projectId",
     "playbackSegmentArabic", "playbackSegmentTranslation", "playbackSegmentIsLast",
     "activeWordIndex", "audioSource", "verseParts", "activePartIndex",
+    "pendingTemplateMedia",
   ]) fields.delete(t);
   return fields;
 }

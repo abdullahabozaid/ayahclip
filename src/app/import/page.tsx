@@ -12,6 +12,7 @@ import {
 } from "@/lib/audio-import";
 import { loadCorpus, matchVerses, getVerseWeights } from "@/lib/verse-match";
 import { Surah } from "@/types";
+import { importSizeError, RECOMMENDED_IMPORT_BYTES } from "@/lib/import-limits";
 
 export default function ImportPage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [sourceAudio, setSourceAudio] = useState<Blob | null>(null); // audio used for the clip (extracted for video)
   const [videoUrl, setVideoUrl] = useState<string | null>(null); // original video, to optionally use as background
-  const [useVideoBg, setUseVideoBg] = useState(true);
+  const [videoMode, setVideoMode] = useState<"replace-visuals" | "keep-video">("replace-visuals");
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [decoding, setDecoding] = useState(false);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export default function ImportPage() {
   const [to, setTo] = useState("1");
   const [building, setBuilding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const decodeOperationRef = useRef(0);
 
   const openFilePicker = () => {
     const el = fileInputRef.current;
@@ -92,6 +94,12 @@ export default function ImportPage() {
 
   const handleFile = async (f: File | undefined) => {
     if (!f) return;
+    const sizeError = importSizeError(f.size);
+    if (sizeError) {
+      setError(sizeError);
+      return;
+    }
+    const operation = ++decodeOperationRef.current;
     setFile(f);
     setBuffer(null);
     setSourceAudio(null);
@@ -100,7 +108,7 @@ export default function ImportPage() {
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const isVideo = f.type.startsWith("video/");
     setVideoUrl(isVideo ? URL.createObjectURL(f) : null);
-    setUseVideoBg(true);
+    setVideoMode("replace-visuals");
     setDecoding(true);
     try {
       let audioBlob: Blob = f;
@@ -109,19 +117,37 @@ export default function ImportPage() {
         setDecodeMsg("Extracting audio from video (first time loads ffmpeg)…");
         const { extractAudioFromVideo } = await import("@/lib/video-audio");
         audioBlob = await extractAudioFromVideo(f);
+        if (decodeOperationRef.current !== operation) return;
       }
       setDecodeMsg("Reading audio…");
       const buf = await decodeAudioFile(audioBlob);
+      if (decodeOperationRef.current !== operation) return;
       setSourceAudio(audioBlob);
       setBuffer(buf);
     } catch {
+      if (decodeOperationRef.current !== operation) return;
       setError(
         "Couldn't read the audio from this file. Try an MP3/M4A/WAV, or a different video."
       );
     } finally {
-      setDecoding(false);
-      setDecodeMsg(null);
+      if (decodeOperationRef.current === operation) {
+        setDecoding(false);
+        setDecodeMsg(null);
+      }
     }
+  };
+
+  const cancelDecode = async () => {
+    decodeOperationRef.current += 1;
+    setDecoding(false);
+    setDecodeMsg(null);
+    setFile(null);
+    setSourceAudio(null);
+    setBuffer(null);
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setVideoUrl(null);
+    const { cancelAudioExtraction } = await import("@/lib/video-audio");
+    cancelAudioExtraction();
   };
 
   const create = async () => {
@@ -157,12 +183,15 @@ export default function ImportPage() {
     store.setImportedAudio(url, file?.name ?? "Imported audio", timings);
     // Use the uploaded video itself as the clip background, if requested — shown
     // whole (contain) so it isn't cropped/zoomed to fill the 9:16 frame.
-    if (videoUrl && useVideoBg) {
+    if (videoUrl && videoMode === "keep-video") {
       store.setBackground({ type: "video", value: videoUrl, label: file?.name ?? "Uploaded video" });
       store.setBackgroundFit("contain");
       store.setBackgroundVideoSync(true); // lip-sync the video to the recitation
     }
-    router.push("/studio");
+    if (videoUrl && videoMode === "replace-visuals") {
+      URL.revokeObjectURL(videoUrl);
+    }
+    router.push(videoUrl && videoMode === "keep-video" ? "/studio" : "/styles?from=import");
   };
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${Math.round(s % 60).toString().padStart(2, "0")}`;
@@ -204,7 +233,7 @@ export default function ImportPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="audio/*,video/mp4,video/webm"
+            accept="audio/*,video/*,.mov,.m4v"
             onChange={(e) => handleFile(e.target.files?.[0])}
             className="sr-only"
             aria-hidden="true"
@@ -224,25 +253,47 @@ export default function ImportPage() {
                 ? decodeMsg ?? "Reading audio…"
                 : buffer
                   ? `Loaded · ${fmt(buffer.duration)}`
-                  : "MP3, M4A, WAV, MP4 or WebM · processed locally"}
+                  : "MP3, M4A, WAV, MP4, WebM or MOV · processed locally"}
             </span>
           </button>
+          <div className="mt-3 flex items-start justify-between gap-4 text-[11px] leading-4 text-[var(--muted-deep)]">
+            <p>
+              Best under 20 minutes or {Math.round(RECOMMENDED_IMPORT_BYTES / 1024 / 1024)} MB. Longer media can use substantial browser memory during decoding and export.
+            </p>
+            {decoding && (
+              <button type="button" onClick={cancelDecode} className="min-h-9 shrink-0 rounded-full border border-[var(--hairline)] px-3 text-[var(--muted)] hover:border-gold hover:text-parchment">
+                Cancel
+              </button>
+            )}
+          </div>
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
-          {/* Use the uploaded video as the clip background */}
-          {videoUrl && (
-            <label className="mt-3 flex cursor-pointer items-center justify-between rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-3 py-2.5">
-              <span className="flex items-center gap-2 text-sm text-parchment">
-                <span className="text-gold-soft">🎬</span>
-                Use this video as the background
-              </span>
-              <input
-                type="checkbox"
-                checked={useVideoBg}
-                onChange={(e) => setUseVideoBg(e.target.checked)}
-                className="h-4 w-4 accent-[var(--gold)]"
-              />
-            </label>
+          {/* A video may be used intact or treated as an audio source. */}
+          {videoUrl && buffer && (
+            <fieldset className="mt-4">
+              <legend className="mb-2 text-xs font-medium text-[var(--muted)]">What should AyahClip keep?</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <VideoChoice
+                  checked={videoMode === "replace-visuals"}
+                  onChange={() => setVideoMode("replace-visuals")}
+                  title="Keep audio, replace visuals"
+                  description="Recommended · choose a template and add your own reciter image or B-roll."
+                />
+                <VideoChoice
+                  checked={videoMode === "keep-video"}
+                  onChange={() => setVideoMode("keep-video")}
+                  title="Keep video and audio"
+                  description="Use the uploaded video intact and keep it lip-synced in Studio."
+                />
+              </div>
+              <p className="mt-3 text-[11px] leading-4 text-[var(--muted-deep)]">
+                Using your own YouTube upload? Download it from{" "}
+                <a href="https://support.google.com/youtube/answer/56100" target="_blank" rel="noopener noreferrer" className="text-gold-soft underline-offset-2 hover:underline">
+                  YouTube Studio or Google Takeout
+                </a>
+                , then upload the permitted file here. AyahClip does not download other people&apos;s videos.
+              </p>
+            </fieldset>
           )}
         </div>
 
@@ -333,9 +384,47 @@ export default function ImportPage() {
           disabled={!buffer || building}
           className="btn-gold mt-6 w-full rounded-xl py-3.5 text-sm disabled:opacity-40"
         >
-          {building ? "Preparing…" : "Open in studio"}
+          {building
+            ? "Preparing…"
+            : videoUrl && videoMode === "keep-video"
+              ? "Open in Studio"
+              : "Choose a template"}
         </button>
       </div>
     </main>
+  );
+}
+
+function VideoChoice({
+  checked,
+  onChange,
+  title,
+  description,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <label
+      className={`flex min-h-24 cursor-pointer gap-3 rounded-xl border p-3 transition-colors ${
+        checked
+          ? "border-[var(--gold)] bg-[rgba(201,162,75,0.07)]"
+          : "border-[var(--hairline-soft)] bg-[var(--ink-deep)] hover:border-[var(--hairline)]"
+      }`}
+    >
+      <input
+        type="radio"
+        name="video-mode"
+        checked={checked}
+        onChange={onChange}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--gold)]"
+      />
+      <span>
+        <span className="block text-sm font-medium text-parchment">{title}</span>
+        <span className="mt-1 block text-[11px] leading-4 text-[var(--muted)]">{description}</span>
+      </span>
+    </label>
   );
 }

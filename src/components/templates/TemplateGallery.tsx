@@ -1,0 +1,144 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { applyTemplate } from "@/lib/apply-template";
+import {
+  deleteSavedTemplate,
+  duplicateSavedTemplate,
+  getSavedTemplates,
+} from "@/lib/saved-templates";
+import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "@/lib/templates";
+import type { SavedTemplate, TemplateDefinition, TemplateFamily } from "@/lib/template-model";
+import { TemplateCard } from "./TemplateCard";
+import { TemplateIcon } from "./TemplateIcon";
+
+type Filter = "featured" | "all" | "mine" | TemplateFamily;
+
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "featured", label: "Featured" },
+  { id: "ayahclip", label: "AyahClip" },
+  { id: "reciter", label: "Reciter" },
+  { id: "nature", label: "Nature" },
+  { id: "minimal", label: "Minimal" },
+  { id: "broll", label: "B-roll" },
+  { id: "mine", label: "My templates" },
+];
+
+export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }) {
+  const router = useRouter();
+  const [saved, setSaved] = useState<SavedTemplate[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [filter, setFilter] = useState<Filter>("featured");
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      setSaved(getSavedTemplates(DEFAULT_TEMPLATE_STYLE));
+      setLoaded(true);
+    });
+  }, []);
+
+  const visible = useMemo(() => {
+    const all: TemplateDefinition[] = [...TEMPLATES, ...saved];
+    if (filter === "all") return all;
+    if (filter === "mine") return saved;
+    if (filter === "featured") return all.filter((template) => template.featured);
+    return all.filter((template) => template.family === filter);
+  }, [filter, saved]);
+
+  const handleUseTemplate = (template: TemplateDefinition) => {
+    applyTemplate(template);
+    router.push("/studio");
+  };
+
+  return (
+    <main className="bg-mihrab min-h-[calc(100dvh-65px)] px-5 pb-24 pt-10">
+      <div className="mx-auto max-w-6xl">
+        {fromImport && (
+          <div className="mb-8 flex flex-col gap-3 rounded-2xl border border-[var(--hairline)] bg-[rgba(201,162,75,0.06)] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(201,162,75,0.12)] text-gold-soft">
+                <TemplateIcon name="check" className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-parchment">Your recitation audio is ready</p>
+                <p className="mt-0.5 text-xs text-[var(--muted)]">Choose a template, customize it if you like, then continue to Studio to add your visuals.</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => setFilter("featured")} className="self-start text-xs font-medium text-gold-soft hover:text-gold sm:self-auto">
+              Show recommended
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-gold-soft/70">Templates</p>
+            <h1 className="font-display text-4xl text-parchment sm:text-5xl">Start with a look that works</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Curated Quran clip compositions inspired by @ayahclip and current short-form formats. Every preview uses the real export renderer.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push("/styles/editor?template=new")}
+            className="btn-gold flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-full px-5 text-sm sm:self-auto"
+          >
+            <TemplateIcon name="sparkles" className="h-4 w-4" />
+            Create template
+          </button>
+        </div>
+
+        <div className="mt-8 flex gap-2 overflow-x-auto pb-2" aria-label="Template filters">
+          {FILTERS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setFilter(item.id)}
+              aria-pressed={filter === item.id}
+              className={`min-h-10 shrink-0 rounded-full border px-4 text-xs font-medium transition-colors ${
+                filter === item.id
+                  ? "border-[var(--gold)] bg-[rgba(201,162,75,0.12)] text-parchment"
+                  : "border-[var(--hairline-soft)] bg-white/[0.025] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {loaded && visible.length === 0 ? (
+          <div className="mt-8 rounded-2xl border border-dashed border-[var(--hairline)] px-6 py-20 text-center">
+            <TemplateIcon name="layout" className="mx-auto h-8 w-8 text-gold-soft/60" />
+            <h2 className="font-display mt-4 text-xl text-parchment">No templates here yet</h2>
+            <p className="mt-2 text-sm text-[var(--muted)]">Create your first reusable composition on the phone canvas.</p>
+            <button type="button" onClick={() => router.push("/styles/editor?template=new")} className="btn-gold mt-5 min-h-11 rounded-full px-5 text-sm">
+              Create template
+            </button>
+          </div>
+        ) : (
+          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
+            {visible.map((template) => (
+              <TemplateCard
+                key={template.id}
+                template={template}
+                onUse={() => handleUseTemplate(template)}
+                onCustomize={() => router.push(`/styles/editor?template=${encodeURIComponent(template.id)}`)}
+                onDuplicate={() => setSaved(duplicateSavedTemplate(template))}
+                onDelete={
+                  template.source === "user"
+                    ? () => {
+                        if (window.confirm(`Delete template “${template.name}”?`)) {
+                          setSaved(deleteSavedTemplate(template.id));
+                        }
+                      }
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}

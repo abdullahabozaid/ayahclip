@@ -15,7 +15,7 @@ const LINKS: NavItem[] = [
     match: (p) => p.startsWith("/browse") || p.startsWith("/surah"),
   },
   { href: "/library", label: "Library", match: (p) => p.startsWith("/library") },
-  { href: "/styles", label: "Styles", match: (p) => p.startsWith("/styles") },
+  { href: "/styles", label: "Templates", match: (p) => p.startsWith("/styles") },
   { href: "/support", label: "Support", match: (p) => p.startsWith("/support") },
 ];
 
@@ -25,7 +25,7 @@ export function SiteNav() {
   const closeMenu = () => setOpen(false);
 
   // The studio is a focused, full-bleed editor — it has its own chrome.
-  if (pathname.startsWith("/studio")) return null;
+  if (pathname.startsWith("/studio") || pathname.startsWith("/styles/editor")) return null;
 
   return (
     <nav className="sticky top-0 z-40 border-b border-[var(--hairline-soft)] bg-[var(--ink)]/80 pt-[env(safe-area-inset-top)] backdrop-blur-xl">

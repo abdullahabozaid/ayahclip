@@ -1,24 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { applyTemplate } from "@/lib/apply-template";
 import { useAppStore } from "@/lib/store";
-import { extractPresetStyle, stripBackgroundKeys } from "@/lib/style";
-import { TEMPLATES } from "@/lib/templates";
+import { extractStyle } from "@/lib/style";
+import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "@/lib/templates";
 import {
-  SavedStyle,
-  getSavedStyles,
-  saveStyle,
-  deleteSavedStyle,
-} from "@/lib/saved-styles";
+  deleteSavedTemplate,
+  getSavedTemplates,
+  saveTemplate,
+} from "@/lib/saved-templates";
+import type { SavedTemplate } from "@/lib/template-model";
 
 export function StylePanel() {
-  const applyStyle = useAppStore((s) => s.applyStyle);
-  const [saved, setSaved] = useState<SavedStyle[]>(() => getSavedStyles());
+  const [saved, setSaved] = useState<SavedTemplate[]>([]);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
 
+  useEffect(() => {
+    Promise.resolve().then(() => setSaved(getSavedTemplates(DEFAULT_TEMPLATE_STYLE)));
+  }, []);
+
   const handleSave = () => {
-    setSaved(saveStyle(name, extractPresetStyle(useAppStore.getState())));
+    const state = useAppStore.getState();
+    const firstScene = state.backgroundScenes[0];
+    setSaved(saveTemplate({
+      name,
+      description: "Saved from Studio",
+      family: state.backgroundSequenceEnabled ? "broll" : "minimal",
+      mediaPolicy: "use-template-media",
+      settings: extractStyle(state),
+      extras: {
+        wordHighlight: state.wordHighlight,
+        clipFadeMs: state.clipFadeMs,
+        audioFadeIn: state.audioFadeIn,
+        safeAreaTarget: state.safeAreaTarget,
+        safePadding: state.safePadding,
+        backgroundSequence: state.backgroundSequenceEnabled
+          ? {
+              enabled: true,
+              sceneCount: Math.max(2, state.backgroundScenes.length),
+              duration: firstScene?.duration ?? 5,
+              transition: firstScene?.transition ?? "crossfade",
+              transitionDuration: firstScene?.transitionDuration ?? 0.6,
+            }
+          : { enabled: false, sceneCount: 1, duration: 5, transition: "cut", transitionDuration: 0.1 },
+      },
+    }));
     setName("");
     setNaming(false);
   };
@@ -36,7 +64,7 @@ export function StylePanel() {
           {TEMPLATES.slice(0, 4).map((template) => (
             <button
               key={template.id}
-              onClick={() => applyStyle(template.settings)}
+              onClick={() => applyTemplate(template)}
               className="group overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] text-left transition-colors hover:border-[var(--hairline)] focus-visible:border-[var(--gold)]"
               title={`Apply ${template.name}`}
             >
@@ -49,7 +77,7 @@ export function StylePanel() {
         </div>
       </div>
 
-      {/* Saved layout presets — font size, position, spacing (no colors/bg) */}
+      {/* Saved full templates — composition, typography, treatment and media structure. */}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs text-[var(--muted)]">My presets</p>
@@ -87,7 +115,7 @@ export function StylePanel() {
 
         {saved.length === 0 ? (
           <p className="text-[11px] text-[var(--muted-deep)]">
-            Save font sizes, spacing &amp; layout to reuse across clips.
+            Save this complete visual composition to reuse across clips.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -97,14 +125,14 @@ export function StylePanel() {
                 className="group flex items-center gap-1 rounded-full border border-[var(--hairline-soft)] py-1 pl-3 pr-1 text-xs"
               >
                 <button
-                  onClick={() => applyStyle(stripBackgroundKeys(s.settings))}
+                  onClick={() => applyTemplate(s)}
                   className="text-parchment transition-colors hover:text-gold"
                   title="Apply this style"
                 >
                   {s.name}
                 </button>
                 <button
-                  onClick={() => setSaved(deleteSavedStyle(s.id))}
+                  onClick={() => setSaved(deleteSavedTemplate(s.id))}
                   aria-label={`Delete ${s.name}`}
                   className="flex h-4 w-4 items-center justify-center rounded-full text-[var(--muted-deep)] hover:text-red-400"
                 >

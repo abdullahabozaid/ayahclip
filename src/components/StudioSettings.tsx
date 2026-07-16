@@ -12,6 +12,7 @@ import { TRANSLATION_LANGUAGES } from "@/lib/translations";
 import { getProject, saveProject } from "@/lib/projects";
 import { BackgroundThumb } from "./BackgroundThumb";
 import { sequenceDuration } from "@/lib/background-sequence";
+import type { Background } from "@/types";
 
 /** Capture the current preview frame as the clip's dashboard cover thumbnail. */
 function SetCoverButton() {
@@ -91,15 +92,17 @@ const TRANSLATION_FONT_OPTIONS = [
 function Section({
   title,
   defaultOpen = true,
+  id,
   children,
 }: {
   title: string;
   defaultOpen?: boolean;
+  id?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-[var(--hairline-soft)]">
+    <div id={id} className="scroll-mt-4 border-b border-[var(--hairline-soft)]">
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between py-4"
@@ -230,6 +233,36 @@ export function StudioSettings() {
       ? `~${estimatedDuration}s`
       : `~${Math.floor(estimatedDuration / 60)}m ${estimatedDuration % 60}s`;
 
+  const handleBackgroundSelection = (background: Background) => {
+    const pendingSlot = store.pendingTemplateMedia?.slots[0];
+    if (!pendingSlot) {
+      if (store.backgroundSequenceEnabled) store.addBackgroundScene(background);
+      else store.setBackground(background);
+      return;
+    }
+
+    if (pendingSlot.id.startsWith("scene:")) {
+      const index = Number(pendingSlot.id.slice("scene:".length));
+      const scene = store.backgroundScenes[index];
+      if (scene) store.updateBackgroundScene(scene.id, { background });
+      else store.addBackgroundScene(background);
+      store.fulfillTemplateMediaSlot(pendingSlot.id);
+
+      const nextSlot = useAppStore
+        .getState()
+        .pendingTemplateMedia?.slots.find((slot) => slot.id.startsWith("scene:"));
+      if (nextSlot) {
+        const nextIndex = Number(nextSlot.id.slice("scene:".length));
+        const nextScene = useAppStore.getState().backgroundScenes[nextIndex];
+        if (nextScene) useAppStore.getState().selectBackgroundScene(nextScene.id);
+      }
+      return;
+    }
+
+    store.setBackground(background);
+    store.fulfillTemplateMediaSlot(pendingSlot.id);
+  };
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto px-5">
@@ -248,6 +281,42 @@ export function StudioSettings() {
             )}
           </p>
         </div>
+
+        {store.pendingTemplateMedia && (
+          <div className="border-b border-[var(--hairline-soft)] py-5" role="status" aria-live="polite">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--hairline)] bg-[rgba(201,162,75,0.07)] text-gold-soft" aria-hidden="true">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <circle cx="9" cy="10" r="2" />
+                  <path d="M21 15l-5-5L5 20" />
+                </svg>
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-parchment">Add the template visuals</p>
+                <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                  {store.pendingTemplateMedia.templateName} needs {store.pendingTemplateMedia.slots.length} more {store.pendingTemplateMedia.slots.length === 1 ? "visual" : "visuals"}. Next: <span className="text-gold-soft">{store.pendingTemplateMedia.slots[0].label}</span>.
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById("studio-background-section")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    className="min-h-10 rounded-full border border-[var(--hairline)] px-3 text-xs text-parchment hover:border-gold"
+                  >
+                    Choose next visual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => store.setPendingTemplateMedia(null)}
+                    className="min-h-10 px-2 text-xs text-[var(--muted)] hover:text-parchment"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Saved layout presets (font size, position, line height — no colors) */}
         <Section title="Presets">
@@ -668,7 +737,7 @@ export function StudioSettings() {
         </Section>
 
         {/* Background */}
-        <Section title="Background">
+        <Section title="Background" id="studio-background-section">
           <div className="mb-4 border-b border-[var(--hairline-soft)] pb-4">
             <Toggle
               label="B-roll sequence"
@@ -911,11 +980,15 @@ export function StudioSettings() {
           />
           <ColorRow label="Overlay Color" value={store.overlayColor} onChange={store.setOverlayColor} />
           <p className="mb-2 text-[11px] text-[var(--muted)]">
-            {store.backgroundSequenceEnabled ? "Choose media to add as a new scene" : "Choose one background"}
+            {store.pendingTemplateMedia
+              ? `Choose ${store.pendingTemplateMedia.slots[0].label}`
+              : store.backgroundSequenceEnabled
+                ? "Choose media to add as a new scene"
+                : "Choose one background"}
           </p>
           <BackgroundPicker
             value={store.background}
-            onChange={store.backgroundSequenceEnabled ? store.addBackgroundScene : store.setBackground}
+            onChange={handleBackgroundSelection}
             revokePrevious={!store.backgroundSequenceEnabled}
           />
         </Section>

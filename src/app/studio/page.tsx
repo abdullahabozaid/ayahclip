@@ -66,6 +66,13 @@ export default function StudioPage() {
     if (next) setSettingsOpen(false);
   };
 
+  const pendingTemplateName = store.pendingTemplateMedia?.templateName;
+  useEffect(() => {
+    if (!pendingTemplateName) return;
+    setSettingsOpen(true);
+    setTimelineOpen(false);
+  }, [pendingTemplateName]);
+
   // Whole-editor zoom: a header control plus Cmd/Ctrl + scroll (or trackpad
   // pinch) over the studio. Applied as CSS `zoom` to <main>.
   const [zoom, setZoom] = useState(1);

@@ -39,10 +39,18 @@ export const ARABIC_FONTS: Record<string, string> = {
 export const TRANSLATION_FONTS: Record<string, string> = {
   serif: '"Georgia", serif',
   "sans-serif": '"Arial", sans-serif',
+  outfit: '"Outfit", "Arial", sans-serif',
   cinzel: '"Cinzel", serif',
   "times-new-roman": '"Times New Roman", serif',
   lora: '"Lora", serif',
   "playfair-display": '"Playfair Display", serif',
+};
+
+const TRANSLATION_FONT_VARIABLES: Record<string, string> = {
+  outfit: "--font-outfit",
+  cinzel: "--font-cinzel",
+  lora: "--font-lora",
+  "playfair-display": "--font-playfair",
 };
 
 export function getArabicFontFamily(font: string): string {
@@ -50,6 +58,13 @@ export function getArabicFontFamily(font: string): string {
 }
 
 export function getTranslationFontFamily(font: string): string {
+  const variable = TRANSLATION_FONT_VARIABLES[font];
+  if (variable && typeof document !== "undefined") {
+    const resolved = getComputedStyle(document.documentElement)
+      .getPropertyValue(variable)
+      .trim();
+    if (resolved) return `${resolved}, sans-serif`;
+  }
   return TRANSLATION_FONTS[font] ?? '"Georgia", serif';
 }
 
@@ -64,6 +79,7 @@ const ARABIC_PRIMARY: Record<string, string> = {
 const TRANSLATION_PRIMARY: Record<string, string> = {
   serif: "Georgia",
   "sans-serif": "Arial",
+  outfit: '"Outfit"',
   cinzel: '"Cinzel"',
   "times-new-roman": '"Times New Roman"',
   lora: '"Lora"',
@@ -82,13 +98,20 @@ export async function ensureFontsReady(
 ): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
   const ar = ARABIC_PRIMARY[arabicFont] ?? '"UthmanicHafs"';
-  const tr = TRANSLATION_PRIMARY[translationFont] ?? "Georgia";
+  const tr = getTranslationFontFamily(translationFont) || TRANSLATION_PRIMARY[translationFont] || "Georgia";
   const sample = "بِسْمِ ٱللَّهِ ﴿١﴾";
   try {
-    await Promise.all([
+    const fontLoads = Promise.all([
       document.fonts.load(`400 32px ${ar}`, sample),
       document.fonts.load(`700 32px ${ar}`, sample),
       document.fonts.load(`400 24px ${tr}`, "Aa"),
+    ]);
+    // A missing or browser-generated font family can leave FontFaceSet.load()
+    // pending indefinitely. Canvas callers must still be able to paint with a
+    // safe fallback instead of freezing previews or export preparation.
+    await Promise.race([
+      fontLoads,
+      new Promise<void>((resolve) => window.setTimeout(resolve, 800)),
     ]);
   } catch {
     /* best-effort: fall through to whatever is available */

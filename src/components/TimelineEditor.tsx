@@ -13,6 +13,12 @@ import {
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
 import { forceAlignVerses } from "@/lib/forced-align";
 import { importedPlayer } from "@/lib/imported-player";
+import { pinchZoom, timelinePointerTime } from "@/lib/timeline-gestures";
+import {
+  appendTimelineSnapshot,
+  cloneVerseTimings,
+  type TimelineSnapshot,
+} from "@/lib/timeline-history";
 
 function fmt(s: number): string {
   if (!isFinite(s) || s < 0) s = 0;
@@ -75,6 +81,8 @@ interface Drag {
   index: number;
   kind: DragKind;
   grabOffset: number;
+  pointerStartX: number;
+  initialTargetTime: number;
   /** Position of the split within timings[index].splits when kind === "split". */
   splitIdx?: number;
 }
@@ -103,7 +111,6 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const trackRef = useRef<HTMLDivElement>(null);
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
   const progressCanvasRef = useRef<HTMLCanvasElement>(null);
-  const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
   const bufferRef = useRef<AudioBuffer | null>(null);
   // Cached min/max peaks (one amplitude per bucket), computed once at decode so
   // zoom/scroll redraws never re-scan the raw samples (millions of them).
@@ -119,13 +126,13 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const [playing, setPlaying] = useState(false);
   const [headTime, setHeadTime] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [precisionMode, setPrecisionMode] = useState(false);
   const [dragInfo, setDragInfo] = useState<{ pct: number; time: number; snapped: boolean } | null>(null);
   const lastSnapRef = useRef<number | null>(null);
   const [redetecting, setRedetecting] = useState(false);
   const [deepMsg, setDeepMsg] = useState<string | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [looping, setLooping] = useState(false);
-  const [viewport, setViewport] = useState({ left: 0, width: 100 });
   const [viewportW, setViewportW] = useState(0);
   // True while WE set scrollLeft (playback follow / zoom recenter), so the scroll
   // handler doesn't treat our own scroll as the user scrubbing.
@@ -139,21 +146,32 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   // Bounded stack; each entry is a deep copy of timings (splits is the only
   // nested array). Drag operations push ONCE on release (the start snapshot),
   // not on every pointermove — otherwise undo would step pixel-by-pixel.
-  const HISTORY_MAX = 50;
-  const historyRef = useRef<VerseTiming[][]>([]);
-  const futureRef = useRef<VerseTiming[][]>([]);
-  const dragSnapshotRef = useRef<VerseTiming[] | null>(null);
+  const historyRef = useRef<TimelineSnapshot[]>([]);
+  const futureRef = useRef<TimelineSnapshot[]>([]);
+  const dragSnapshotRef = useRef<TimelineSnapshot | null>(null);
   // Tick state so the Undo/Redo buttons re-render when history changes
   // (refs alone wouldn't trigger React updates).
   const [, setHistoryTick] = useState(0);
   const bumpHistory = () => setHistoryTick((n) => n + 1);
 
-  const cloneTimings = (timings: readonly VerseTiming[]): VerseTiming[] =>
-    timings.map((t) => ({ ...t, splits: t.splits ? [...t.splits] : undefined, splitWords: t.splitWords ? [...t.splitWords] : undefined }));
+  const currentSnapshot = (): TimelineSnapshot => {
+    const state = useAppStore.getState();
+    return {
+      timings: state.audioSource.mode === "imported" ? cloneVerseTimings(state.audioSource.timings) : [],
+      selectedVerseNumbers: [...state.selectedVerseNumbers],
+      currentVerseIndex: state.currentVerseIndex,
+    };
+  };
 
-  const pushHistory = (snapshot: readonly VerseTiming[]) => {
-    historyRef.current.push(cloneTimings(snapshot));
-    if (historyRef.current.length > HISTORY_MAX) historyRef.current.shift();
+  const restoreSnapshot = (snapshot: TimelineSnapshot) => {
+    const state = useAppStore.getState();
+    state.setVerseTimings(cloneVerseTimings(snapshot.timings));
+    state.setSelectedVerseNumbers(snapshot.selectedVerseNumbers);
+    state.setCurrentVerseIndex(snapshot.currentVerseIndex);
+  };
+
+  const pushHistory = (snapshot: TimelineSnapshot) => {
+    historyRef.current = appendTimelineSnapshot(historyRef.current, snapshot);
     futureRef.current = []; // a new action breaks the redo chain
     bumpHistory();
   };
@@ -162,7 +180,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const commit = (next: VerseTiming[], record = true) => {
     if (record) {
       const cur = useAppStore.getState().audioSource;
-      if (cur.mode === "imported") pushHistory(cur.timings);
+      if (cur.mode === "imported") pushHistory(currentSnapshot());
     }
     useAppStore.getState().setVerseTimings(next);
   };
@@ -172,9 +190,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     if (cur.mode !== "imported") return;
     const prev = historyRef.current.pop();
     if (!prev) return;
-    futureRef.current.push(cloneTimings(cur.timings));
-    if (futureRef.current.length > HISTORY_MAX) futureRef.current.shift();
-    useAppStore.getState().setVerseTimings(prev);
+    futureRef.current = appendTimelineSnapshot(futureRef.current, currentSnapshot());
+    restoreSnapshot(prev);
     bumpHistory();
   };
 
@@ -183,9 +200,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     if (cur.mode !== "imported") return;
     const next = futureRef.current.pop();
     if (!next) return;
-    historyRef.current.push(cloneTimings(cur.timings));
-    if (historyRef.current.length > HISTORY_MAX) historyRef.current.shift();
-    useAppStore.getState().setVerseTimings(next);
+    historyRef.current = appendTimelineSnapshot(historyRef.current, currentSnapshot());
+    restoreSnapshot(next);
     bumpHistory();
   };
 
@@ -333,29 +349,6 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     });
   }, [decoded, drawWaveform, setPlayheadVisual]);
 
-  // ---- Minimap: a coarse overview of the whole clip with a viewport box ----
-  // Reuses the cached peaks (no second raw-sample scan).
-  useEffect(() => {
-    const canvas = minimapCanvasRef.current;
-    const peaks = peaksRef.current;
-    if (!canvas || !peaks) return;
-    const W = (canvas.width = 1000);
-    const H = (canvas.height = 48);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(236,231,218,0.4)";
-    const mid = H / 2;
-    const n = peaks.length;
-    for (let x = 0; x < W; x++) {
-      const b0 = Math.floor((x / W) * n);
-      const b1 = Math.min(n - 1, Math.floor(((x + 1) / W) * n));
-      let peak = 0;
-      for (let b = b0; b <= b1; b++) if (peaks[b] > peak) peak = peaks[b];
-      ctx.fillRect(x, mid - (peak * H * 0.9) / 2, 1, Math.max(1, peak * H * 0.9));
-    }
-  }, [decoded]);
-
   // ---- Shared player subscription: centre the track on the playhead ----
   // setPlayheadVisual already scrolls the track so the current time sits under
   // the fixed centre line, so no separate follow-scroll is needed.
@@ -409,12 +402,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     const cont = scrollRef.current;
     if (!cont) return;
     const onScroll = () => {
-      // Minimap viewport box: centred on the current time, width = visible span.
       const dur = durationRef.current;
       const tw = trackWRef.current || 1;
-      const boxW = Math.min(100, (cont.clientWidth / tw) * 100);
       const centerFrac = tw > 0 ? cont.scrollLeft / tw : 0;
-      setViewport({ left: Math.max(0, centerFrac * 100 - boxW / 2), width: boxW });
       if (programmaticScrollRef.current || dur <= 0) return;
       const t = Math.min(dur, Math.max(0, centerFrac * dur));
       seek(t);
@@ -422,14 +412,6 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     cont.addEventListener("scroll", onScroll, { passive: true });
     return () => cont.removeEventListener("scroll", onScroll);
   }, [seek]);
-
-  const onMinimapPointer = (e: React.PointerEvent) => {
-    const dur = durationRef.current;
-    if (dur <= 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    seek(frac * dur);
-  };
 
   // Keep zoom centred on the playhead: trackW changed, so re-scroll to keep the
   // current time under the centre line.
@@ -550,31 +532,50 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   // then maps the new centre time and seeks — so dragging left/right scrubs.
   const panStartX = useRef(0);
   const panStartScroll = useRef(0);
+  const panCaptureRef = useRef<{ element: HTMLElement; pointerId: number } | null>(null);
   const onPanMove = useCallback((e: PointerEvent) => {
     const cont = scrollRef.current;
     if (!cont) return;
     cont.scrollLeft = panStartScroll.current - (e.clientX - panStartX.current);
   }, []);
   const onPanEnd = useCallback(() => {
+    const capture = panCaptureRef.current;
+    if (capture?.element.hasPointerCapture(capture.pointerId)) {
+      capture.element.releasePointerCapture(capture.pointerId);
+    }
+    panCaptureRef.current = null;
     window.removeEventListener("pointermove", onPanMove);
     window.removeEventListener("pointerup", onPanEnd);
+    window.removeEventListener("pointercancel", onPanEnd);
   }, [onPanMove]);
-  const startPan = (clientX: number) => {
+  const pinchingRef = useRef(false);
+  const startPan = (event: React.PointerEvent<HTMLElement>) => {
     const cont = scrollRef.current;
-    if (!cont) return;
-    panStartX.current = clientX;
+    if (!cont || pinchingRef.current) return;
+    panStartX.current = event.clientX;
     panStartScroll.current = cont.scrollLeft;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panCaptureRef.current = { element: event.currentTarget, pointerId: event.pointerId };
     window.addEventListener("pointermove", onPanMove);
     window.addEventListener("pointerup", onPanEnd);
+    window.addEventListener("pointercancel", onPanEnd);
   };
 
   // ---- Dragging block edges / bodies (snap to pauses; push neighbours) ----
-  const applyDrag = useCallback((clientX: number) => {
+  const applyDrag = useCallback((clientX: number, precision = false) => {
     const drag = dragRef.current;
     const dur = durationRef.current;
     const rect = trackRef.current?.getBoundingClientRect();
     if (!drag || !rect || dur <= 0) return;
-    let t = Math.min(dur, Math.max(0, ((clientX - rect.left) / rect.width) * dur));
+    let t = timelinePointerTime({
+      clientX,
+      trackLeft: rect.left,
+      trackWidth: rect.width,
+      duration: dur,
+      precision,
+      pointerStartX: drag.pointerStartX,
+      initialTargetTime: drag.initialTargetTime,
+    });
 
     // Snap a dragged edge onto a nearby pause OR the playhead (within ~10px) for
     // easy precision. The playhead lets you click the exact break point first,
@@ -651,7 +652,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onDragMove = useCallback((e: PointerEvent) => applyDrag(e.clientX), [applyDrag]);
+  const onDragMove = useCallback(
+    (e: PointerEvent) => applyDrag(e.clientX, precisionMode || e.shiftKey || e.altKey),
+    [applyDrag, precisionMode]
+  );
+  const dragCaptureRef = useRef<{ element: Element; pointerId: number } | null>(null);
   const onDragEnd = useCallback(() => {
     // Push the pre-drag snapshot so undo rewinds the entire drag in one step.
     if (dragSnapshotRef.current) {
@@ -659,9 +664,16 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       dragSnapshotRef.current = null;
     }
     dragRef.current = null;
+    tapDownRef.current = null;
     setDragInfo(null);
+    const capture = dragCaptureRef.current;
+    if (capture?.element.hasPointerCapture(capture.pointerId)) {
+      capture.element.releasePointerCapture(capture.pointerId);
+    }
+    dragCaptureRef.current = null;
     window.removeEventListener("pointermove", onDragMove);
     window.removeEventListener("pointerup", onDragEnd);
+    window.removeEventListener("pointercancel", onDragEnd);
     // pushHistory only mutates stable refs; keeping this listener stable avoids
     // removing a different pointerup callback mid-drag.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -676,15 +688,25 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const startDrag = (index: number, kind: DragKind, splitIdx?: number) => (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (pinchingRef.current) return;
     const seg = timings[index];
     const t = pxToTime(e.clientX);
+    const initialTargetTime = kind === "end"
+      ? seg.end
+      : kind === "split"
+        ? seg.splits?.[splitIdx ?? 0] ?? t
+        : kind === "body"
+          ? t
+          : seg.start;
     // Snapshot for undo — anything mutated during this drag rewinds in one step.
-    dragSnapshotRef.current = cloneTimings(timings);
+    dragSnapshotRef.current = currentSnapshot();
     dragRef.current = {
       index,
       kind,
       splitIdx,
       grabOffset: kind === "body" ? t - seg.start : 0,
+      pointerStartX: e.clientX,
+      initialTargetTime,
     };
     if (kind === "body") {
       tapDownRef.current = { x: e.clientX, t: performance.now(), idx: index };
@@ -695,8 +717,52 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         seek(seg.start);
       }
     }
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragCaptureRef.current = { element: e.currentTarget, pointerId: e.pointerId };
     window.addEventListener("pointermove", onDragMove);
     window.addEventListener("pointerup", onDragEnd);
+    window.addEventListener("pointercancel", onDragEnd);
+  };
+
+  // Two-finger pinch zoom for phones and tablets. The first touch can begin a
+  // normal pan/drag; the second converts the gesture into zoom and safely ends
+  // that pending edit before changing scale.
+  const pinchPointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchStartRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const pinchDistance = () => {
+    const points = [...pinchPointersRef.current.values()];
+    if (points.length < 2) return 0;
+    return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+  };
+  const onTimelinePointerDownCapture = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    pinchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pinchPointersRef.current.size === 2) {
+      pinchingRef.current = true;
+      pinchStartRef.current = { distance: Math.max(1, pinchDistance()), zoom };
+      onPanEnd();
+      if (dragRef.current) onDragEnd();
+    }
+  };
+  const onTimelinePointerMoveCapture = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch" || !pinchPointersRef.current.has(event.pointerId)) return;
+    pinchPointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const start = pinchStartRef.current;
+    if (!start || pinchPointersRef.current.size < 2) return;
+    event.preventDefault();
+    setZoom(pinchZoom({
+      startZoom: start.zoom,
+      startDistance: start.distance,
+      currentDistance: pinchDistance(),
+    }));
+  };
+  const onTimelinePointerEndCapture = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    pinchPointersRef.current.delete(event.pointerId);
+    if (pinchPointersRef.current.size < 2) {
+      pinchingRef.current = false;
+      pinchStartRef.current = null;
+    }
   };
 
   // Tap-up on the active verse → split at the tapped position. Cancels if the
@@ -880,17 +946,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     useAppStore.getState().setCurrentVerseIndex(verseIdx + 1);
   };
 
-  // Remove a mis-detected verse from the timeline. deleteImportedVerse also
-  // touches selectedVerseNumbers, so we clear the timings-only undo history — a
-  // later ⌘Z restoring an old snapshot would reintroduce the verse and desync it
-  // from the selection (same guard as VerseCardEditor).
+  // Remove a mis-detected verse from the timeline. History snapshots include
+  // selection and active index as well as timings, so deletion is safely
+  // reversible without desynchronising preview/export state.
   const deleteVerse = (verseIdx: number) => {
     const cur = useAppStore.getState().audioSource;
     if (cur.mode !== "imported" || cur.timings.length <= 1) return;
-    historyRef.current = [];
-    futureRef.current = [];
+    pushHistory(currentSnapshot());
     useAppStore.getState().deleteImportedVerse(verseIdx);
-    bumpHistory();
   };
 
   // Snap the selected verse's start/end to the current playhead — play, pause at the
@@ -945,6 +1008,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         e.preventDefault();
         setZoom((z) => Math.min(24, Math.max(1, +(z * (e.deltaY < 0 ? 1.15 : 0.87)).toFixed(2))));
       } else if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
         cont.scrollLeft += e.deltaY;
       }
     };
@@ -1110,7 +1174,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         </span>
 
         {/* Right cluster: Tools toggle + zoom */}
-        <div className="ml-auto flex items-center gap-2.5">
+        <div className="ml-auto flex items-center gap-2.5 max-sm:ml-0 max-sm:w-full max-sm:justify-between">
           <button
             onClick={() => setToolsOpen((v) => !v)}
             disabled={loading || duration === 0}
@@ -1131,6 +1195,18 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
             </svg>
           </button>
+          <button
+            onClick={() => setPrecisionMode((value) => !value)}
+            aria-pressed={precisionMode}
+            className={`flex h-9 items-center rounded-full border px-3 text-[11px] transition-colors ${
+              precisionMode
+                ? "border-gold/50 bg-gold/10 text-parchment"
+                : "border-[var(--hairline)] text-[var(--muted)] hover:border-gold hover:text-parchment"
+            }`}
+            title="Slow boundary and split dragging for precise adjustments (Shift also works)"
+          >
+            Precision
+          </button>
           <div className="flex items-center gap-1">
             <button
               onClick={() => {
@@ -1142,7 +1218,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                 }
               }}
               disabled={loading || duration === 0}
-              className="flex h-7 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-30"
+              className="hidden h-9 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-30 sm:flex"
               title="Zoom to the selected verse"
             >
               <TlIcon d={TL_ICON.focus} className="h-3.5 w-3.5" /> Focus
@@ -1150,7 +1226,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             <button
               onClick={() => setZoom(1)}
               disabled={zoom <= 1}
-              className="flex h-7 items-center rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-30"
+              className="hidden h-9 items-center rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-30 sm:flex"
               title="Fit the whole clip"
             >
               Fit
@@ -1158,7 +1234,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             <button
               onClick={() => setZoom((z) => Math.max(1, +(z / 1.5).toFixed(2)))}
               disabled={zoom <= 1}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
               aria-label="Zoom out"
             >
               −
@@ -1169,7 +1245,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             <button
               onClick={() => setZoom((z) => Math.min(24, +(z * 1.5).toFixed(2)))}
               disabled={zoom >= 24}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
               aria-label="Zoom in"
             >
               +
@@ -1410,26 +1486,20 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
 
       {loading && <p className="text-[11px] text-[var(--muted-deep)]">Loading waveform…</p>}
 
-      {/* Minimap overview (only when zoomed in) */}
-      {zoom > 1 && (
-        <div
-          onPointerDown={onMinimapPointer}
-          className="relative h-8 cursor-pointer overflow-hidden rounded-md border border-[var(--hairline-soft)] bg-[var(--ink-deep)]"
-          title="Jump anywhere in the clip"
-        >
-          <canvas ref={minimapCanvasRef} className="pointer-events-none absolute inset-0 h-full w-full opacity-70" />
-          <div
-            className="pointer-events-none absolute top-0 bottom-0 rounded-sm border border-gold bg-gold/15"
-            style={{ left: `${viewport.left}%`, width: `${viewport.width}%` }}
-          />
-        </div>
-      )}
-
       {/* Scroll viewport — fixed-centre model: the content is an explicit-pixel
           track padded by half a viewport each side, and it scrolls under a
           stationary centre playhead (below). Drag / wheel / trackpad to scrub. */}
       <div className="relative">
-      <div ref={scrollRef} className="overflow-x-auto overflow-y-hidden overscroll-x-contain">
+      <div
+        ref={scrollRef}
+        onPointerDownCapture={onTimelinePointerDownCapture}
+        onPointerMoveCapture={onTimelinePointerMoveCapture}
+        onPointerUpCapture={onTimelinePointerEndCapture}
+        onPointerCancelCapture={onTimelinePointerEndCapture}
+        role="region"
+        aria-label="Timeline waveform. Drag to scrub, pinch to zoom."
+        className="overflow-x-auto overflow-y-hidden overscroll-x-contain"
+      >
         <div className="flex">
         <div className="shrink-0" style={{ width: padPx }} aria-hidden />
         <div className="shrink-0" style={{ width: trackW }}>
@@ -1454,10 +1524,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             ref={trackRef}
             onPointerDown={(e) => {
               if (e.target === trackRef.current || (e.target as HTMLElement).dataset.wave) {
-                startPan(e.clientX); // drag left/right to scrub (scroll under the centre line)
+                startPan(e); // drag left/right to scrub (scroll under the centre line)
               }
             }}
-            className={`relative cursor-ew-resize touch-pan-x overflow-hidden rounded-xl border border-[var(--hairline)] bg-[var(--ink-deep)] ${
+            className={`relative cursor-ew-resize touch-none overflow-hidden rounded-xl border border-[var(--hairline)] bg-[var(--ink-deep)] ${
               fullscreen ? "h-[clamp(180px,38dvh,420px)]" : "h-24"
             }`}
           >
@@ -1528,7 +1598,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     </span>
                     <div
                       onPointerDown={startDrag(seg.tIdx, leftDrag, leftSplitIdx)}
-                      className={`group/h absolute left-0 top-0 bottom-0 z-10 flex w-5 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isFirst ? "rounded-l-md" : ""}`}
+                      className={`group/h absolute left-0 top-0 bottom-0 z-10 flex w-11 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isFirst ? "rounded-l-md" : ""}`}
                       title={isFirst ? "Drag the verse start" : "Drag to adjust split boundary"}
                     >
                       <span className="h-1/2 w-0.5 rounded-full bg-gold/50 transition-all group-hover/h:h-2/3 group-hover/h:bg-gold group-active/h:h-3/4" />
@@ -1545,7 +1615,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     />
                     <div
                       onPointerDown={startDrag(seg.tIdx, rightDrag, rightSplitIdx)}
-                      className={`group/h absolute right-0 top-0 bottom-0 z-10 flex w-5 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isLast ? "rounded-r-md" : ""}`}
+                      className={`group/h absolute right-0 top-0 bottom-0 z-10 flex w-11 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isLast ? "rounded-r-md" : ""}`}
                       title={isLast ? "Drag the verse end" : "Drag to adjust split boundary"}
                     >
                       <span className="h-1/2 w-0.5 rounded-full bg-gold/50 transition-all group-hover/h:h-2/3 group-hover/h:bg-gold group-active/h:h-3/4" />
@@ -1556,7 +1626,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                           e.stopPropagation();
                           removeSplit(seg.tIdx, seg.pIdx);
                         }}
-                        className="absolute -right-3 top-1/2 z-[16] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-emerald-soft ring-1 ring-[var(--hairline)] transition-colors hover:text-gold-soft"
+                        className="absolute -right-[22px] top-1/2 z-[16] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-emerald-soft ring-1 ring-[var(--hairline)] transition-colors hover:text-gold-soft"
                         title="Merge with next part"
                         aria-label="Merge with next part"
                       >

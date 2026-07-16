@@ -11,6 +11,7 @@ import {
   moveBackgroundScene,
   type BackgroundScene,
 } from "./background-sequence";
+import type { TemplateMediaSlot } from "./template-model";
 
 export interface VerseEmphasis {
   arabic: number[];
@@ -20,6 +21,11 @@ export interface VerseEmphasis {
 export type AudioSource =
   | { mode: "reciter" }
   | { mode: "imported"; url: string; name: string; timings: VerseTiming[] };
+
+export interface PendingTemplateMedia {
+  templateName: string;
+  slots: TemplateMediaSlot[];
+}
 
 interface AppState {
   surah: Surah | null;
@@ -54,6 +60,7 @@ interface AppState {
   backgroundSequenceEnabled: boolean;
   backgroundScenes: BackgroundScene[];
   activeBackgroundSceneId: string | null;
+  pendingTemplateMedia: PendingTemplateMedia | null;
   fitBackdrop: FitBackdrop;
   backgroundVideoSync: boolean; // sync the bg video's frames to the recitation (lip-sync)
   videoLoopMode: "loop" | "freeze"; // when the bg video ends: loop it, or hold the last frame
@@ -130,6 +137,8 @@ interface AppState {
   updateBackgroundScene: (id: string, patch: Partial<BackgroundScene>) => void;
   removeBackgroundScene: (id: string) => void;
   moveBackgroundScene: (id: string, direction: -1 | 1) => void;
+  setPendingTemplateMedia: (request: PendingTemplateMedia | null) => void;
+  fulfillTemplateMediaSlot: (id: TemplateMediaSlot["id"]) => void;
   setFitBackdrop: (b: FitBackdrop) => void;
   setBackgroundVideoSync: (on: boolean) => void;
   setVideoLoopMode: (m: "loop" | "freeze") => void;
@@ -206,6 +215,7 @@ export const useAppStore = create<AppState>((set) => ({
   backgroundSequenceEnabled: false,
   backgroundScenes: [],
   activeBackgroundSceneId: null,
+  pendingTemplateMedia: null,
   fitBackdrop: "blur",
   backgroundVideoSync: false,
   videoLoopMode: "loop",
@@ -400,6 +410,23 @@ export const useAppStore = create<AppState>((set) => ({
   moveBackgroundScene: (id, direction) => set((state) => ({
     backgroundScenes: moveBackgroundScene(state.backgroundScenes, id, direction),
   })),
+  setPendingTemplateMedia: (request) => set({
+    pendingTemplateMedia: request
+      ? {
+          templateName: request.templateName,
+          slots: request.slots.map((slot) => ({ ...slot })),
+        }
+      : null,
+  }),
+  fulfillTemplateMediaSlot: (id) => set((state) => {
+    if (!state.pendingTemplateMedia) return {};
+    const slots = state.pendingTemplateMedia.slots.filter((slot) => slot.id !== id);
+    return {
+      pendingTemplateMedia: slots.length > 0
+        ? { ...state.pendingTemplateMedia, slots }
+        : null,
+    };
+  }),
   setBackgroundVideoSync: (on) => set({ backgroundVideoSync: on }),
   setVideoLoopMode: (m) => set({ videoLoopMode: m }),
   setTextShadow: (shadow) => set({ textShadow: shadow }),
@@ -546,5 +573,6 @@ export const useAppStore = create<AppState>((set) => ({
     backgroundSequenceEnabled: false,
     backgroundScenes: [],
     activeBackgroundSceneId: null,
+    pendingTemplateMedia: null,
   }),
 }));
