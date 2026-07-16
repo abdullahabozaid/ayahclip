@@ -31,6 +31,51 @@ const cases = [
     mean: 0.4,
     max: 0.8,
   },
+  {
+    name: "Alafasy Al-Baqarah opening",
+    dir: "alafasy-baqarah-opening",
+    args: [],
+    range: "2:1-5",
+    confidence: "high",
+    mean: 0.4,
+    max: 0.8,
+  },
+  {
+    name: "Alafasy Ayat al-Kursi context",
+    dir: "alafasy-long-ayah",
+    args: [],
+    range: "2:254-256",
+    confidence: "high",
+    mean: 0.4,
+    max: 0.8,
+  },
+  {
+    name: "Alafasy mid-surah start",
+    dir: "alafasy-mid-surah",
+    args: [],
+    range: "89:6-10",
+    confidence: "high",
+    mean: 0.4,
+    max: 0.8,
+  },
+  {
+    name: "Alafasy repeated refrain",
+    dir: "alafasy-repeated",
+    args: [],
+    range: "55:13-16",
+    confidence: "medium",
+    mean: 0.4,
+    max: 0.8,
+  },
+  {
+    name: "Alafasy mid-surah phone + background audio",
+    dir: "alafasy-mid-surah",
+    args: ["--phone", "--music-snr", "12"],
+    range: "89:6-10",
+    confidence: "high",
+    mean: 0.45,
+    max: 0.9,
+  },
 ];
 
 let failed = 0;
@@ -45,9 +90,11 @@ for (const testCase of cases) {
     maxBuffer: 8 * 1024 * 1024,
   });
   const result = JSON.parse(output);
+  const expectedRange = testCase.range ?? "1:1-7";
+  const expectedConfidence = testCase.confidence ?? "high";
   const passed =
-    result.recognition.detectedRange === "1:1-7" &&
-    result.recognition.detectionConfidence === "high" &&
+    result.recognition.detectedRange === expectedRange &&
+    result.recognition.detectionConfidence === expectedConfidence &&
     result.cutMeanAbsoluteErrorSeconds <= testCase.mean &&
     result.cutMaxAbsoluteErrorSeconds <= testCase.max;
   console.log(
