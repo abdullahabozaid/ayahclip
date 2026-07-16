@@ -53,6 +53,17 @@ export interface Background {
   label: string;
 }
 
+export interface SplitMaskConfig {
+  side: "left" | "right";
+  color: string;
+  /** 0–1 alpha applied before the fade. */
+  opacity: number;
+  /** Solid portion as a percentage of the frame width. */
+  solidWidth: number;
+  /** Fade portion as a percentage of the frame width. */
+  fadeWidth: number;
+}
+
 export interface TextShadow {
   enabled: boolean;
   color: string;
@@ -95,6 +106,7 @@ export interface Project {
     arabicTranslationGap?: number;
     textPosition: number;
     textLayout?: "center" | "left-panel";
+    splitMask?: SplitMaskConfig;
     overlayOpacity: number;
     overlayColor: string;
     safeAreaTarget?: "none" | "tiktok" | "reels";

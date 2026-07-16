@@ -1,4 +1,4 @@
-import { Verse, VideoFormat, Background, TextShadow, LetterboxConfig } from "@/types";
+import { Verse, VideoFormat, Background, TextShadow, LetterboxConfig, SplitMaskConfig } from "@/types";
 import type { VerseEmphasis } from "./store";
 import { getAudioUrl } from "./api";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
@@ -50,6 +50,7 @@ interface ExportOptions {
   arabicTranslationGap: number;
   textPosition: number;
   textLayout?: "center" | "left-panel";
+  splitMask?: SplitMaskConfig;
   overlayOpacity: number;
   overlayColor: string;
   safeAreaTarget: SafeAreaTarget;

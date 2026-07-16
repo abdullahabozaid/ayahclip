@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { Surah, Verse, VideoFormat, Background, TextShadow, LetterboxConfig, Project } from "@/types";
-import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, MediaTransform } from "./canvas-utils";
+import { Surah, Verse, VideoFormat, Background, TextShadow, LetterboxConfig, Project, SplitMaskConfig } from "@/types";
+import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, MediaTransform, DEFAULT_SPLIT_MASK } from "./canvas-utils";
 import { StyleSettings } from "./style";
 import { VerseTiming } from "./audio-import";
 import { normalizeTimings } from "./timing-ops";
@@ -50,6 +50,7 @@ interface AppState {
   arabicTranslationGap: number;
   textPosition: number;
   textLayout: "center" | "left-panel";
+  splitMask: SplitMaskConfig;
   overlayOpacity: number;
   overlayColor: string;
   safeAreaTarget: SafeAreaTarget;
@@ -124,6 +125,7 @@ interface AppState {
   setArabicTranslationGap: (gap: number) => void;
   setTextPosition: (pos: number) => void;
   setTextLayout: (layout: "center" | "left-panel") => void;
+  setSplitMask: (config: SplitMaskConfig) => void;
   setOverlayOpacity: (opacity: number) => void;
   setOverlayColor: (color: string) => void;
   setSafeAreaTarget: (target: SafeAreaTarget) => void;
@@ -205,6 +207,7 @@ export const useAppStore = create<AppState>((set) => ({
   arabicTranslationGap: 0.6,
   textPosition: 50,
   textLayout: "center",
+  splitMask: { ...DEFAULT_SPLIT_MASK },
   overlayOpacity: 50,
   overlayColor: "#000000",
   safeAreaTarget: "none",
@@ -293,6 +296,7 @@ export const useAppStore = create<AppState>((set) => ({
   setArabicTranslationGap: (gap) => set({ arabicTranslationGap: gap }),
   setTextPosition: (pos) => set({ textPosition: pos }),
   setTextLayout: (textLayout) => set({ textLayout }),
+  setSplitMask: (splitMask) => set({ splitMask }),
   setOverlayOpacity: (opacity) => set({ overlayOpacity: opacity }),
   setOverlayColor: (color) => set({ overlayColor: color }),
   setSafeAreaTarget: (target) => set({ safeAreaTarget: target }),
@@ -476,6 +480,7 @@ export const useAppStore = create<AppState>((set) => ({
       clipFadeMs: settings.clipFadeMs ?? 0,
       audioFadeIn: settings.audioFadeIn ?? false,
       textLayout: settings.textLayout ?? "center",
+      splitMask: settings.splitMask ?? { ...DEFAULT_SPLIT_MASK },
       arabicEnabled: settings.arabicEnabled ?? true,
       mediaTransform: settings.mediaTransform ?? { scale: 1, x: 0, y: 0 },
       backgroundSequenceEnabled: settings.backgroundSequenceEnabled ?? false,

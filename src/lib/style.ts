@@ -1,4 +1,4 @@
-import { Background, TextShadow, LetterboxConfig } from "@/types";
+import { Background, TextShadow, LetterboxConfig, SplitMaskConfig } from "@/types";
 import { MediaFit, FitBackdrop, VerseIntro, MediaTransform } from "./canvas-utils";
 
 /** The visual style of a clip — the bundle a Template or Saved Style captures/applies.
@@ -15,6 +15,7 @@ export interface StyleSettings {
   textPosition: number;
   /** Composition of the text and media, not just a cosmetic preset. */
   textLayout?: "center" | "left-panel";
+  splitMask?: SplitMaskConfig;
   translationEnabled: boolean;
   arabicEnabled?: boolean;
   translationFont: string;
@@ -52,6 +53,7 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "arabicTranslationGap",
   "textPosition",
   "textLayout",
+  "splitMask",
   "translationEnabled",
   "arabicEnabled",
   "translationFont",

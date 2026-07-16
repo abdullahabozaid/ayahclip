@@ -63,6 +63,9 @@ function cloneTemplate(template: TemplateDefinition): TemplateDefinition {
       mediaTransform: template.settings.mediaTransform
         ? { ...template.settings.mediaTransform }
         : undefined,
+      splitMask: template.settings.splitMask
+        ? { ...template.settings.splitMask }
+        : undefined,
     },
     extras: {
       ...template.extras,
@@ -91,6 +94,9 @@ function blankTemplate(): TemplateDefinition {
       letterbox: { ...DEFAULT_TEMPLATE_STYLE.letterbox },
       mediaTransform: DEFAULT_TEMPLATE_STYLE.mediaTransform
         ? { ...DEFAULT_TEMPLATE_STYLE.mediaTransform }
+        : undefined,
+      splitMask: DEFAULT_TEMPLATE_STYLE.splitMask
+        ? { ...DEFAULT_TEMPLATE_STYLE.splitMask }
         : undefined,
     },
     extras: { clipFadeMs: 300, safeAreaTarget: "tiktok", safePadding: 0 },

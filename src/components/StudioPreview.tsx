@@ -630,6 +630,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.fitBackdrop,
     store.overlayOpacity,
     store.overlayColor,
+    store.textLayout,
+    store.splitMask,
     store.safeAreaTarget,
     store.safePadding,
     store.lineHeight,

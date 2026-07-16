@@ -1,5 +1,6 @@
 import type { StyleSettings } from "./style";
 import type { TemplateDefinition } from "./template-model";
+import { DEFAULT_SPLIT_MASK } from "./canvas-utils";
 
 const noLetterbox = {
   enabled: false,
@@ -19,6 +20,7 @@ const base: StyleSettings = {
   arabicTranslationGap: 0.62,
   textPosition: 50,
   textLayout: "center",
+  splitMask: { ...DEFAULT_SPLIT_MASK },
   translationEnabled: true,
   translationFont: "lora",
   translationFontSize: 15,
@@ -59,6 +61,7 @@ export const DEFAULT_TEMPLATE_STYLE: StyleSettings = {
   background: { ...base.background },
   letterbox: { ...base.letterbox },
   mediaTransform: { ...base.mediaTransform! },
+  splitMask: { ...base.splitMask! },
 };
 
 export const TEMPLATES: TemplateDefinition[] = [
@@ -112,6 +115,13 @@ export const TEMPLATES: TemplateDefinition[] = [
       lineHeight: 1.08,
       textPosition: 49,
       textLayout: "left-panel",
+      splitMask: {
+        side: "left",
+        color: "#050507",
+        opacity: 1,
+        solidWidth: 36,
+        fadeWidth: 36,
+      },
       translationFont: "outfit",
       translationFontSize: 13,
       translationFontWeight: 600,

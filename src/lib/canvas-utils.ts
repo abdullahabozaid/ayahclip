@@ -1,4 +1,4 @@
-import { TextShadow, LetterboxConfig, QcfWord } from "@/types";
+import { TextShadow, LetterboxConfig, QcfWord, SplitMaskConfig } from "@/types";
 import { qcfFontFamily } from "./qcf-font-loader";
 
 export type SafeAreaTarget = "none" | "tiktok" | "reels";
@@ -15,6 +15,68 @@ export const SAFE_ZONES: Record<"tiktok" | "reels", SafeInset> = {
   tiktok: { top: 0.075, bottom: 0.18, left: 0.03, right: 0.15 },
   reels: { top: 0.06, bottom: 0.17, left: 0.06, right: 0.11 },
 };
+
+export const DEFAULT_SPLIT_MASK: SplitMaskConfig = {
+  side: "left",
+  color: "#050507",
+  opacity: 1,
+  solidWidth: 36,
+  fadeWidth: 36,
+};
+
+export function normalizeSplitMask(
+  config: Partial<SplitMaskConfig> | undefined
+): SplitMaskConfig {
+  const source = { ...DEFAULT_SPLIT_MASK, ...config };
+  const solidWidth = Math.max(0, Math.min(100, source.solidWidth));
+  const fadeWidth = Math.max(0, Math.min(100 - solidWidth, source.fadeWidth));
+  return {
+    side: source.side === "right" ? "right" : "left",
+    color: /^(?:#[0-9a-f]{3}|#[0-9a-f]{6})$/i.test(source.color)
+      ? source.color
+      : DEFAULT_SPLIT_MASK.color,
+    opacity: Math.max(0, Math.min(1, source.opacity)),
+    solidWidth,
+    fadeWidth,
+  };
+}
+
+export function drawSplitMask(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  config?: Partial<SplitMaskConfig>
+) {
+  const mask = normalizeSplitMask(config);
+  const solid = (mask.solidWidth / 100) * w;
+  const fade = (mask.fadeWidth / 100) * w;
+  const total = solid + fade;
+  if (total <= 0 || mask.opacity <= 0) return;
+  const opaque = rgbaFromHex(mask.color, mask.opacity);
+  const transparent = rgbaFromHex(mask.color, 0);
+
+  if (fade <= 0) {
+    ctx.fillStyle = opaque;
+    ctx.fillRect(mask.side === "left" ? 0 : w - solid, 0, solid, h);
+    return;
+  }
+
+  if (mask.side === "left") {
+    const gradient = ctx.createLinearGradient(0, 0, total, 0);
+    gradient.addColorStop(0, opaque);
+    gradient.addColorStop(solid / total, opaque);
+    gradient.addColorStop(1, transparent);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, total, h);
+  } else {
+    const gradient = ctx.createLinearGradient(w - total, 0, w, 0);
+    gradient.addColorStop(0, transparent);
+    gradient.addColorStop(fade / total, opaque);
+    gradient.addColorStop(1, opaque);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(w - total, 0, total, h);
+  }
+}
 
 /** Safe inset for a platform, plus an optional uniform extra padding (fraction of the frame). */
 export function safeInsetFor(
@@ -309,6 +371,37 @@ export function parseGradientStops(
 export function parseGradientAngle(css: string): number {
   const match = css.match(/linear-gradient\(\s*(-?[\d.]+)deg\s*,/i);
   return match ? Number(match[1]) : 180;
+}
+
+export interface LinearGradientSpec {
+  angle: number;
+  stops: { offset: number; color: string }[];
+}
+
+export function parseLinearGradient(css: string): LinearGradientSpec {
+  return {
+    angle: parseGradientAngle(css),
+    stops: parseGradientStops(css),
+  };
+}
+
+export function serializeLinearGradient(spec: LinearGradientSpec): string {
+  const angle = ((Number.isFinite(spec.angle) ? spec.angle : 180) % 360 + 360) % 360;
+  const stops = spec.stops
+    .map((stop) => ({
+      color: stop.color,
+      offset: Math.max(0, Math.min(1, stop.offset)),
+    }))
+    .sort((a, b) => a.offset - b.offset);
+  const safeStops = stops.length >= 2
+    ? stops
+    : [
+      { color: "#1a1a2e", offset: 0 },
+      { color: "#0a0a0a", offset: 1 },
+    ];
+  return `linear-gradient(${Number(angle.toFixed(2))}deg, ${safeStops
+    .map((stop) => `${stop.color} ${Number((stop.offset * 100).toFixed(2))}%`)
+    .join(", ")})`;
 }
 
 export function gradientLineForAngle(angleDegrees: number, w: number, h: number) {

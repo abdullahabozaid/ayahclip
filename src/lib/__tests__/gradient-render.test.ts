@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { gradientLineForAngle, parseGradientAngle, parseGradientStops } from "@/lib/canvas-utils";
+import {
+  gradientLineForAngle,
+  parseGradientAngle,
+  parseGradientStops,
+  parseLinearGradient,
+  serializeLinearGradient,
+} from "@/lib/canvas-utils";
 
 describe("canvas gradient parsing", () => {
   it("preserves CSS gradient angles instead of forcing every gradient diagonal", () => {
@@ -26,5 +32,26 @@ describe("canvas gradient parsing", () => {
         { color: "#000", offset: 0.125 },
         { color: "rgba(1,2,3,.5)", offset: 0.8 },
       ]);
+  });
+
+  it("round-trips editable angle and ordered stops", () => {
+    const css = serializeLinearGradient({
+      angle: -90,
+      stops: [
+        { color: "#fff", offset: 1 },
+        { color: "#000", offset: 0 },
+        { color: "#777", offset: 0.425 },
+      ],
+    });
+
+    expect(css).toBe("linear-gradient(270deg, #000 0%, #777 42.5%, #fff 100%)");
+    expect(parseLinearGradient(css)).toEqual({
+      angle: 270,
+      stops: [
+        { color: "#000", offset: 0 },
+        { color: "#777", offset: 0.425 },
+        { color: "#fff", offset: 1 },
+      ],
+    });
   });
 });

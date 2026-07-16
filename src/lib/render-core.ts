@@ -1,5 +1,6 @@
 import {
   Background,
+  SplitMaskConfig,
   TextShadow,
   LetterboxConfig,
   QcfWord,
@@ -12,6 +13,7 @@ import {
   drawVideoFrame,
   drawVerseText,
   drawLetterboxBars,
+  drawSplitMask,
   getLetterboxContentArea,
   rgbaFromHex,
   safeInsetFor,
@@ -57,6 +59,7 @@ export interface SceneStyleSource {
   arabicTranslationGap: number;
   textPosition: number;
   textLayout?: "center" | "left-panel";
+  splitMask?: SplitMaskConfig;
   overlayOpacity: number;
   overlayColor: string;
   safeAreaTarget: SafeAreaTarget;
@@ -233,13 +236,7 @@ export function drawScene(
     ctx.fillStyle = rgbaFromHex(style.overlayColor, style.overlayOpacity / 100);
     ctx.fillRect(0, 0, rw, rh);
     if (style.textLayout === "left-panel") {
-      const panel = ctx.createLinearGradient(0, 0, rw * 0.72, 0);
-      panel.addColorStop(0, "rgba(5, 5, 7, 1)");
-      panel.addColorStop(0.52, "rgba(5, 5, 7, 0.94)");
-      panel.addColorStop(0.78, "rgba(5, 5, 7, 0.45)");
-      panel.addColorStop(1, "rgba(5, 5, 7, 0)");
-      ctx.fillStyle = panel;
-      ctx.fillRect(0, 0, rw * 0.72, rh);
+      drawSplitMask(ctx, rw, rh, style.splitMask);
     }
     drawVerseText(
       ctx, rw, rh,

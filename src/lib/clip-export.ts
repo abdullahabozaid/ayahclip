@@ -120,6 +120,7 @@ export async function renderClipFile(
     arabicTranslationGap: s.arabicTranslationGap,
     textPosition: s.textPosition,
     textLayout: s.textLayout,
+    splitMask: s.splitMask,
     overlayOpacity: s.overlayOpacity,
     overlayColor: s.overlayColor,
     safeAreaTarget: s.safeAreaTarget,

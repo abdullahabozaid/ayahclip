@@ -71,6 +71,9 @@ export function sanitizeTemplateForStorage(
     mediaTransform: input.settings.mediaTransform
       ? { ...input.settings.mediaTransform }
       : undefined,
+    splitMask: input.settings.splitMask
+      ? { ...input.settings.splitMask }
+      : undefined,
   };
   return { settings, mediaSlots };
 }
