@@ -74,3 +74,22 @@ describe("verseWordCount", () => {
     expect(verseWordCount("")).toBe(0);
   });
 });
+
+describe("duplicated verses reach export", () => {
+  it("three timings over two verses yield three rows with distinct spans", () => {
+    const rows = buildClipRows([verse(1), verse(2)], [1, 2], [
+      tm(1, 0, 5),
+      tm(1, 5, 8),
+      tm(2, 8, 12),
+    ]);
+    const spans = rows.map((r) => [r.timing!.start, r.timing!.end]);
+    expect(spans).toEqual([[0, 5], [5, 8], [8, 12]]);
+  });
+
+  it("the old find-by-verse-number model collapses duplicates (regression witness)", () => {
+    const timings = [tm(1, 0, 5), tm(1, 5, 8)];
+    const found = [verse(1)].map((v) => timings.find((t) => t.verseNumber === v.verse_number));
+    expect(found).toHaveLength(1);
+    expect(buildClipRows([verse(1)], [1], timings)).toHaveLength(2);
+  });
+});

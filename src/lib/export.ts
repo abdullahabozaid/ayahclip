@@ -12,7 +12,7 @@ import {
 } from "./render-core";
 import { clipFadeProgress, applyAudioFadeIn } from "./clip-fade";
 import { effectiveAudioBounds, verseTextAt, type VerseTiming } from "./audio-import";
-import { verseWordCount } from "./clip-rows";
+import { verseWordCount, type ClipRow } from "./clip-rows";
 import { ensureQcfFontsReady } from "./qcf-font-loader";
 import { resolveBackgroundScene, type BackgroundScene } from "./background-sequence";
 import {
@@ -24,6 +24,12 @@ import {
 
 interface ExportOptions {
   verses: Verse[];
+  /**
+   * The authoritative row list. One entry per timing in imported mode (so a
+   * duplicated verse appears twice), one per selected verse in reciter mode.
+   * `verses` is retained for the reciter audio path and styling lookups.
+   */
+  rows: ClipRow[];
   reciterFolder: string;
   surahNumber: number;
   videoFormat: VideoFormat;
@@ -446,13 +452,13 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
   const clipStartMs = performance.now();
   const clipFadeAt = () => clipFadeProgress(performance.now() - clipStartMs, clipFadeMs);
 
-  for (let i = 0; i < options.verses.length; i++) {
-    const verse = options.verses[i];
-    options.onProgress(i + 1, options.verses.length);
+  for (let i = 0; i < options.rows.length; i++) {
+    const { verse, timing: tm } = options.rows[i];
+    options.onProgress(i + 1, options.rows.length);
 
-    // Looked up once per verse — used both for audio slicing AND for the
-    // intra-verse segment that drives on-screen text.
-    const tm = options.importedAudio?.timings.find((t) => t.verseNumber === verse.verse_number);
+    // The row's own timing — NOT a lookup by verse number, which cannot
+    // distinguish a duplicated verse's two rows. Drives audio slicing AND the
+    // intra-verse segment that picks on-screen text.
     const sourceStart = tm?.start ?? 0;
     const vSegs = reciterSegs.get(verse.verse_number);
 
@@ -585,8 +591,7 @@ async function assembleAudio(
       const full = await ac.decodeAudioData(
         await (await fetch(options.importedAudio.url)).arrayBuffer()
       );
-      for (const verse of options.verses) {
-        const tm = options.importedAudio.timings.find((t) => t.verseNumber === verse.verse_number);
+      for (const { verse, timing: tm } of options.rows) {
         const [lo, hi] = tm
           ? effectiveAudioBounds(tm, verseWordCount(verse.text_uthmani))
           : [0, full.duration];
@@ -595,7 +600,7 @@ async function assembleAudio(
         slices.push({ buf: full, offset: start, dur: Math.max(0.05, end - start) });
       }
     } else {
-      for (const verse of options.verses) {
+      for (const { verse } of options.rows) {
         const r = await fetch(getAudioUrl(options.reciterFolder, options.surahNumber, verse.verse_number));
         const b = await ac.decodeAudioData(await r.arrayBuffer());
         slices.push({ buf: b, offset: 0, dur: b.duration });
@@ -760,8 +765,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   const videoLoop = !synced && options.videoLoopMode !== "freeze";
   const verseVideoStart: number[] = [];
   if (synced && options.importedAudio) {
-    for (const verse of options.verses) {
-      const tm = options.importedAudio.timings.find((t) => t.verseNumber === verse.verse_number);
+    for (const { timing: tm } of options.rows) {
       verseVideoStart.push(Math.max(0, tm?.start ?? 0));
     }
   }
@@ -804,10 +808,11 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       while (vi < cum.length - 1 && td >= cum[vi + 1]) vi++; // display verse (leads)
       let audioVi = 0;
       while (audioVi < cum.length - 1 && t >= cum[audioVi + 1]) audioVi++; // audio verse
-      const verse = options.verses[vi];
-      const tmFast = options.importedAudio?.timings.find(
-        (x) => x.verseNumber === verse.verse_number
-      );
+      // Row-indexed: vi indexes cum[], which is now one entry per ROW, so the
+      // row's own timing is the right one even for a duplicated verse.
+      const row = options.rows[vi];
+      const verse = row.verse;
+      const tmFast = row.timing;
       const vSegsFast = reciterSegs.get(verse.verse_number);
       // Real-time offset into the displayed verse (0 during the lead window, so a
       // leading verse shows its first part) — parts never lead, only the verse.
@@ -847,7 +852,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   while (f < totalFrames) {
     if (encodeError) throw encodeError;
     const p = plan[f];
-    const verse = options.verses[p.vi];
+    const verse = options.rows[p.vi].verse;
     if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(p.t, p.audioVi));
     const sequenceMedia = sequenceLoadedFast
       ? sequenceMediaAt(sequenceScenesFast, p.t, sequenceLoadedFast)
@@ -893,7 +898,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     if (videoEncoder.encodeQueueSize > 20) {
       while (videoEncoder.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
     }
-    options.onProgress(Math.min(options.verses.length, p.vi + 1), options.verses.length);
+    options.onProgress(Math.min(options.rows.length, p.vi + 1), options.rows.length);
     await new Promise((r) => setTimeout(r, 0));
   }
 
@@ -939,7 +944,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   await audioEncoder.flush();
   if (encodeError) throw encodeError;
   muxer.finalize();
-  options.onProgress(options.verses.length, options.verses.length);
+  options.onProgress(options.rows.length, options.rows.length);
   const { buffer } = muxer.target as ArrayBufferTarget;
   return new Blob([buffer], { type: "video/mp4" });
 }

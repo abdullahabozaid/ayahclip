@@ -5,6 +5,7 @@
 import { useAppStore } from "./store";
 import { reciters } from "./reciters";
 import { exportVideoWithInfo } from "./export";
+import { buildClipRows } from "./clip-rows";
 import { getTranslationLanguage } from "./translations";
 import { getBlob } from "./projects";
 import {
@@ -88,11 +89,17 @@ export async function renderClipFile(
   const selectedVerses = s.verses.filter((v) =>
     s.selectedVerseNumbers.includes(v.verse_number)
   );
-  if (selectedVerses.length === 0 || !s.surah) return null;
+  const rows = buildClipRows(
+    s.verses,
+    s.selectedVerseNumbers,
+    s.audioSource.mode === "imported" ? s.audioSource.timings : undefined
+  );
+  if (rows.length === 0 || !s.surah) return null;
   const reciter = reciters.find((r) => r.id === s.reciterId);
 
   const exportOptions = {
     verses: selectedVerses,
+    rows,
     reciterFolder: reciter?.folder ?? "Alafasy_128kbps",
     surahNumber: s.surah.id,
     videoFormat: s.videoFormat,
