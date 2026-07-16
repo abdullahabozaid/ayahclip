@@ -6,12 +6,11 @@ import {
   decodeAudioFile,
   findSilenceCenters,
   autoSegment,
-  resampleTo16kMono,
   verseSegments,
   type VerseTiming,
 } from "@/lib/audio-import";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
-import { forceAlignVerses } from "@/lib/forced-align";
+import { alignImportedAudio } from "@/lib/deep-align";
 import { importedPlayer } from "@/lib/imported-player";
 import { pinchZoom, timelinePointerTime } from "@/lib/timeline-gestures";
 import {
@@ -1050,40 +1049,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     setDeepErr(null);
     setDeepMsg("Preparing…");
     try {
-      await loadCorpus();
-      const audio = await resampleTo16kMono(buf);
-      const { computeEmissions } = await import("@/lib/asr");
-      const emissions = await computeEmissions(audio, (loaded, total) => {
-        // First run downloads the ~131 MB recognition model once (then cached);
-        // say so explicitly so a slow first load doesn't look frozen.
-        setDeepMsg(
+      const result = await alignImportedAudio({
+        buffer: buf,
+        surah: surahId,
+        verseNumbers,
+        onModelProgress: (loaded, total) => setDeepMsg(
           total
             ? `Downloading model (one-time, ~131 MB)… ${Math.round((loaded / total) * 100)}%`
             : "Listening…"
-        );
+        ),
       });
       setDeepMsg("Aligning…");
-      const lo = verseNumbers[0];
-      const hi = verseNumbers[verseNumbers.length - 1];
-
-      // True CTC forced alignment: align the known verse text directly onto the
-      // model's per-frame emissions for real per-verse boundaries (works even with
-      // no pause between verses). Falls back to pause-based segmentation if unusable.
-      const silences = findSilenceCenters(buf);
-      const aligned = forceAlignVerses({
-        emissions,
-        surah: surahId,
-        verseNumbers,
-        audioDuration: buf.duration,
-        silences,
-      });
-      if (aligned) {
-        commit(aligned);
-      } else {
-        // ASR ran but the transcript didn't line up with the known verses —
-        // keep a usable result by rebuilding from pauses, and tell the user.
-        const weights = getVerseWeights(surahId, lo, hi);
-        commit(autoSegment(buf, verseNumbers, weights));
+      commit(result.timings);
+      if (result.method === "pause") {
         setDeepErr("Couldn't align to the verses — used pause detection instead. Fine-tune by ear.");
       }
     } catch {

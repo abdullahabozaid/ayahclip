@@ -1,8 +1,8 @@
-// Forced alignment for imported recitation. We already KNOW the exact verse text,
-// so we align that text directly onto the model's per-frame acoustic emissions
-// (true CTC forced alignment) rather than fuzzy-matching a free decode. This
-// places a real acoustic onset on every verse — including verses recited with NO
-// pause between them, which silence detection alone cannot resolve.
+// Hybrid forced alignment for imported recitation. We already KNOW the exact
+// verse text, so we independently align (1) the timestamped greedy transcript
+// and (2) the model's full per-frame acoustic emissions. A strong transcript is
+// preferred because it is less prone to Viterbi jumps between similar phrases;
+// emission-level CTC remains the fallback for noisy greedy decodes.
 //
 // Pipeline: emissions (asr.computeEmissions) → marginalize onto the skeleton
 // alphabet (ctc-vocab) → tokenize the reference verses → CTC Viterbi alignment
@@ -28,8 +28,52 @@ export interface ForceAlignInput {
   surah: number;
   verseNumbers: number[]; // contiguous lo..hi
   audioDuration: number;
+  /** First non-silent sample in the clip, so alignment never trims the opening. */
+  audioStart?: number;
   /** Detected pauses (center time + length, seconds) to snap clean cuts to. */
   silences?: { time: number; len: number }[];
+}
+
+export interface AlignmentDiagnostics {
+  timings: VerseTiming[];
+  method: "transcript" | "ctc";
+  transcriptSimilarity: number | null;
+  /** Mean absolute difference between the two independent boundary methods. */
+  methodAgreementSeconds: number | null;
+}
+
+export function refineTranscriptCuts(params: {
+  timings: VerseTiming[];
+  silences?: { time: number; len: number }[];
+  audioStart?: number;
+}): VerseTiming[] {
+  const timings = params.timings.map((timing) => ({ ...timing }));
+  if (timings.length === 0) return timings;
+  if (params.audioStart !== undefined) {
+    timings[0].start = Math.max(0, Math.min(params.audioStart, timings[0].end - MIN_DUR));
+  }
+  const silences = params.silences ?? [];
+  // Transcript timestamps mark acoustic onsets. For an editable cut we want the
+  // nearest pause immediately BEFORE that onset, preserving the reciter's first
+  // consonant and any natural breath without jumping to a later internal pause.
+  for (let index = 1; index < timings.length; index++) {
+    const onset = timings[index].start;
+    let best = -1;
+    let bestDistance = 1.6;
+    for (const silence of silences) {
+      if (silence.time >= onset || silence.time <= timings[index - 1].start + MIN_DUR) continue;
+      const distance = onset - silence.time;
+      if (distance < bestDistance) {
+        best = silence.time;
+        bestDistance = distance;
+      }
+    }
+    if (best >= 0) {
+      timings[index - 1].end = best;
+      timings[index].start = best;
+    }
+  }
+  return timings;
 }
 
 /**
@@ -94,7 +138,7 @@ export function assembleTimings(params: {
  * Returns one VerseTiming per verse, or null if alignment isn't usable (caller
  * should fall back to pause-based segmentation).
  */
-export function forceAlignVerses(input: ForceAlignInput): VerseTiming[] | null {
+export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagnostics | null {
   const { emissions, surah, verseNumbers, audioDuration } = input;
   if (verseNumbers.length === 0) return null;
   const lo = verseNumbers[0];
@@ -161,7 +205,42 @@ export function forceAlignVerses(input: ForceAlignInput): VerseTiming[] | null {
       verseNumbers,
       audioDuration,
     });
-    if (alternative && alternative.similarity >= 0.65) return alternative.timings;
+    if (alternative) {
+      const comparable = Math.min(ctcTimings.length, alternative.timings.length);
+      const disagreement = comparable > 1
+        ? ctcTimings.slice(1, comparable).reduce(
+          (sum, timing, index) => sum + Math.abs(timing.start - alternative.timings[index + 1].start),
+          0
+        ) / (comparable - 1)
+        : 0;
+      if (alternative.similarity >= 0.65) {
+        return {
+          timings: refineTranscriptCuts({
+            timings: alternative.timings,
+            silences: input.silences,
+            audioStart: input.audioStart,
+          }),
+          method: "transcript",
+          transcriptSimilarity: alternative.similarity,
+          methodAgreementSeconds: disagreement,
+        };
+      }
+      return {
+        timings: ctcTimings,
+        method: "ctc",
+        transcriptSimilarity: alternative.similarity,
+        methodAgreementSeconds: disagreement,
+      };
+    }
   }
-  return ctcTimings;
+  return {
+    timings: ctcTimings,
+    method: "ctc",
+    transcriptSimilarity: null,
+    methodAgreementSeconds: null,
+  };
+}
+
+export function forceAlignVerses(input: ForceAlignInput): VerseTiming[] | null {
+  return forceAlignVersesDetailed(input)?.timings ?? null;
 }

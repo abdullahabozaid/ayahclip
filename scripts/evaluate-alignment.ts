@@ -233,6 +233,7 @@ async function main() {
     surah,
     verseNumbers,
     audioDuration: duration,
+    audioStart: findSpeechSpan(audioBuffer).start,
     silences: findSilenceCenters(audioBuffer),
   });
   if (!aligned) throw new Error("Alignment returned null");

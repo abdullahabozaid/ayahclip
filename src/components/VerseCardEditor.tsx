@@ -5,13 +5,11 @@ import { useAppStore } from "@/lib/store";
 import {
   decodeAudioFile,
   autoSegment,
-  resampleTo16kMono,
   snapToSentenceBoundary,
-  findSilenceCenters,
   type VerseTiming,
 } from "@/lib/audio-import";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
-import { forceAlignVerses } from "@/lib/forced-align";
+import { alignImportedAudio } from "@/lib/deep-align";
 import { importedPlayer } from "@/lib/imported-player";
 import { sanitizeArabic } from "@/lib/canvas-utils";
 import { QcfVerse } from "./QcfVerse";
@@ -360,32 +358,19 @@ export function VerseCardEditor() {
     setDeepErr(null);
     setDeepMsg("Preparing…");
     try {
-      await loadCorpus();
-      const audio = await resampleTo16kMono(buf);
-      const { computeEmissions } = await import("@/lib/asr");
-      const emissions = await computeEmissions(audio, (loaded, total) => {
-        setDeepMsg(
+      const result = await alignImportedAudio({
+        buffer: buf,
+        surah: surahId,
+        verseNumbers,
+        onModelProgress: (loaded, total) => setDeepMsg(
           total
             ? `Downloading model (one-time, ~131 MB)… ${Math.round((loaded / total) * 100)}%`
             : "Listening…"
-        );
+        ),
       });
       setDeepMsg("Aligning…");
-      const lo = verseNumbers[0];
-      const hi = verseNumbers[verseNumbers.length - 1];
-      const silences = findSilenceCenters(buf);
-      const aligned = forceAlignVerses({
-        emissions,
-        surah: surahId,
-        verseNumbers,
-        audioDuration: buf.duration,
-        silences,
-      });
-      if (aligned) {
-        commit(aligned);
-      } else {
-        const weights = getVerseWeights(surahId, lo, hi);
-        commit(autoSegment(buf, verseNumbers, weights));
+      commit(result.timings);
+      if (result.method === "pause") {
         setDeepErr(
           "Couldn't align to the verses — used pause detection instead. Fine-tune by ear."
         );

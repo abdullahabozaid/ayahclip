@@ -9,8 +9,12 @@ import {
   decodeAudioFile,
   resampleTo16kMono,
   autoSegment,
+  findSilenceCenters,
+  findSpeechSpan,
+  type VerseTiming,
 } from "@/lib/audio-import";
 import { loadCorpus, matchVerses, getVerseWeights } from "@/lib/verse-match";
+import { forceAlignVersesDetailed } from "@/lib/forced-align";
 import { Surah } from "@/types";
 import { importSizeError, RECOMMENDED_IMPORT_BYTES } from "@/lib/import-limits";
 
@@ -45,7 +49,15 @@ export default function ImportPage() {
 
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState<string | null>(null);
-  const [detected, setDetected] = useState<{ transcript: string; ref: string } | null>(null);
+  const [detected, setDetected] = useState<{
+    transcript: string;
+    ref: string;
+    surah: number;
+    ayahStart: number;
+    ayahEnd: number;
+    timings: VerseTiming[];
+    method: "transcript" | "ctc" | "pause";
+  } | null>(null);
 
   const autoDetect = async () => {
     if (!buffer) return;
@@ -58,12 +70,12 @@ export default function ImportPage() {
       setDetectMsg("Preparing audio…");
       const audio = await resampleTo16kMono(buffer);
       setDetectMsg("Loading recognition model (first time ~131 MB)…");
-      const { transcribe } = await import("@/lib/asr");
-      const result = await transcribe(audio, (loaded, total) => {
+      const { computeEmissions } = await import("@/lib/asr");
+      const emissions = await computeEmissions(audio, (loaded, total) => {
         if (total) setDetectMsg(`Downloading model… ${Math.round((loaded / total) * 100)}%`);
         else setDetectMsg("Recognising…");
       });
-      const transcript = result.text;
+      const transcript = emissions.transcription.text;
       setDetectMsg("Matching to the Quran…");
       const m = matchVerses(transcript);
       if (m) {
@@ -71,9 +83,32 @@ export default function ImportPage() {
         setSurahId(m.surah);
         setFrom(String(m.ayahStart));
         setTo(String(m.ayahEnd));
+        const verseNumbers = Array.from(
+          { length: m.ayahEnd - m.ayahStart + 1 },
+          (_, index) => m.ayahStart + index
+        );
+        setDetectMsg("Aligning verse boundaries…");
+        const alignment = forceAlignVersesDetailed({
+          emissions,
+          surah: m.surah,
+          verseNumbers,
+          audioDuration: buffer.duration,
+          audioStart: findSpeechSpan(buffer).start,
+          silences: findSilenceCenters(buffer),
+        });
+        const timings = alignment?.timings ?? autoSegment(
+          buffer,
+          verseNumbers,
+          getVerseWeights(m.surah, m.ayahStart, m.ayahEnd)
+        );
         setDetected({
           transcript,
           ref: `${s?.name_simple ?? `Surah ${m.surah}`} · ${m.ayahStart}${m.ayahEnd !== m.ayahStart ? `–${m.ayahEnd}` : ""}`,
+          surah: m.surah,
+          ayahStart: m.ayahStart,
+          ayahEnd: m.ayahEnd,
+          timings,
+          method: alignment?.method ?? "pause",
         });
       } else {
         setError("Couldn't confidently match this clip. Pick the verses manually below.");
@@ -164,8 +199,12 @@ export default function ImportPage() {
     // length only decides which pause belongs to which verse). The studio's
     // "Deep align" can later refine this with ASR word onsets for run-on clips.
     await loadCorpus();
-    const weights = getVerseWeights(surah.id, lo, hi);
-    const timings = autoSegment(buffer, verseNumbers, weights);
+    const timings = detected &&
+      detected.surah === surah.id &&
+      detected.ayahStart === lo &&
+      detected.ayahEnd === hi
+      ? detected.timings.map((timing) => ({ ...timing }))
+      : autoSegment(buffer, verseNumbers, getVerseWeights(surah.id, lo, hi));
     // Revoke the previous import's blob URL before minting a new one — it's about
     // to be replaced wholesale by beginNewProject, so nothing references it. Saved
     // projects persist the blob to IndexedDB (not the URL), so they're unaffected.

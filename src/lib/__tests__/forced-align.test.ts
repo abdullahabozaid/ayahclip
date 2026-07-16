@@ -4,7 +4,7 @@
 // produces clean onset-to-onset boundaries. The acoustic alignment itself is
 // covered by ctc-align / ctc-vocab.
 import { describe, it, expect } from "vitest";
-import { assembleTimings } from "@/lib/forced-align";
+import { assembleTimings, refineTranscriptCuts } from "@/lib/forced-align";
 
 describe("assembleTimings", () => {
   it("makes contiguous verses from the onsets when there's nothing to snap to", () => {
@@ -65,5 +65,33 @@ describe("assembleTimings", () => {
       expect(t[i].end).toBeGreaterThanOrEqual(t[i].start + 0.12 - 1e-9);
       if (i > 0) expect(t[i].start).toBeGreaterThanOrEqual(t[i - 1].start);
     }
+  });
+});
+
+describe("refineTranscriptCuts", () => {
+  it("keeps the clip opening and moves acoustic onsets back to preceding pauses", () => {
+    const timings = refineTranscriptCuts({
+      timings: [
+        { verseNumber: 1, start: 0.35, end: 5.9 },
+        { verseNumber: 2, start: 5.9, end: 10 },
+      ],
+      audioStart: 0.04,
+      silences: [{ time: 5.2, len: 0.5 }, { time: 6.1, len: 0.2 }],
+    });
+
+    expect(timings[0]).toMatchObject({ start: 0.04, end: 5.2 });
+    expect(timings[1].start).toBe(5.2);
+  });
+
+  it("does not snap to a pause after the acoustic onset", () => {
+    const timings = refineTranscriptCuts({
+      timings: [
+        { verseNumber: 1, start: 0, end: 5.9 },
+        { verseNumber: 2, start: 5.9, end: 10 },
+      ],
+      silences: [{ time: 6.1, len: 0.4 }],
+    });
+
+    expect(timings[1].start).toBe(5.9);
   });
 });
