@@ -263,7 +263,7 @@ export default function ImportPage() {
                 disabled={detecting || !buffer}
                 className="btn-gold rounded-full px-4 py-2 text-xs disabled:opacity-50"
               >
-                {detecting ? "Detecting…" : "✨ Auto-detect verses"}
+                {detecting ? "Detecting…" : "Auto-detect verses"}
               </button>
             </div>
             {detectMsg && <p className="mt-2 text-xs text-[var(--muted)]">{detectMsg}</p>}

@@ -1036,7 +1036,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
             title="Re-run speech recognition to align each verse's words to the audio (best for run-on recitation)"
           >
-            {deepMsg ? deepMsg : "✨ Deep align"}
+            {deepMsg ? deepMsg : "Deep align"}
           </button>
           <span className="mx-1 h-4 w-px bg-[var(--hairline)]" />
           <button
