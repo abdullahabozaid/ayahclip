@@ -4,14 +4,17 @@ import { useEffect, useRef } from "react";
 import { fetchVerses } from "@/lib/api";
 import { ensureFontsReady } from "@/lib/canvas-utils";
 import { drawScene, FORMAT_SIZES, type SceneStyleSource } from "@/lib/render-core";
+import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 import type { StyleSettings } from "@/lib/style";
 import type { TemplateExtras } from "@/lib/template-model";
+import type { QcfWord } from "@/types";
 
 export interface SampleVerse {
   label: string;
   arabicText: string;
   translation?: string;
   verseNumber: number;
+  qcfWords?: QcfWord[];
 }
 
 export const FALLBACK_SAMPLE: SampleVerse = {
@@ -40,6 +43,7 @@ export function loadTemplateSamples(): Promise<SampleVerse[]> {
           arabicText: verse.text_uthmani,
           translation: verse.translation,
           verseNumber: verse.verse_number,
+          qcfWords: verse.qcfWords,
         };
       })
     ).catch((error) => {
@@ -99,6 +103,7 @@ export function TemplatePreview({
         translation: style.translationEnabled ? sample.translation : undefined,
         isLastPart: true,
         introProgress,
+        qcfWords: sample.qcfWords,
       });
     };
     const start = () => {
@@ -116,7 +121,12 @@ export function TemplatePreview({
       };
       animationFrame = requestAnimationFrame(tick);
     };
-    ensureFontsReady(style.arabicFont, style.translationFont).then(() => {
+    Promise.all([
+      ensureFontsReady(style.arabicFont, style.translationFont),
+      style.arabicFont === "qcf" && sample.qcfWords?.length
+        ? ensureQcfFontsReady(sample.qcfWords)
+        : Promise.resolve(),
+    ]).then(() => {
       if (!cancelled) start();
     });
     // Keep a useful preview visible while fonts load. Once they are ready the

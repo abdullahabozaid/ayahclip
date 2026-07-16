@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { applyTemplate } from "@/lib/apply-template";
-import { TRANSLATION_FONTS } from "@/lib/canvas-utils";
+import {
+  DEFAULT_MEDIA_TRANSFORM,
+  DEFAULT_SPLIT_MASK,
+  TRANSLATION_FONTS,
+  normalizeSplitMask,
+} from "@/lib/canvas-utils";
 import {
   getSavedTemplates,
   saveTemplate,
@@ -19,6 +24,7 @@ import type {
   TemplateSequencePreset,
 } from "@/lib/template-model";
 import type { StyleSettings } from "@/lib/style";
+import type { Background } from "@/types";
 import {
   TEMPLATE_BACKGROUND_PRESETS,
   reconcileSequenceMediaSlots,
@@ -27,6 +33,7 @@ import {
   toggleBackgroundMediaSlot,
 } from "@/lib/template-canvas";
 import { TemplateIcon, type TemplateIconName } from "./TemplateIcon";
+import { BackgroundEditor } from "@/components/BackgroundEditor";
 import {
   FALLBACK_SAMPLE,
   loadTemplateSamples,
@@ -51,6 +58,27 @@ const FONT_LABELS: Record<string, string> = {
   lora: "Lora",
   "playfair-display": "Playfair Display",
 };
+
+const ARABIC_FONT_OPTIONS = [
+  {
+    value: "qcf",
+    label: "Mushaf QCF",
+    note: "Page-faithful Quran.com glyphs, including the authentic ayah mark.",
+    family: '"UthmanicHafs", serif',
+  },
+  {
+    value: "uthmanic-hafs",
+    label: "Uthmanic Hafs",
+    note: "Compact Uthmani text with full recitation marks.",
+    family: '"UthmanicHafs", serif',
+  },
+  {
+    value: "amiri-quran",
+    label: "Amiri Quran",
+    note: "A more open, literary Quran face for cinematic captions.",
+    family: 'var(--font-amiri-quran), "UthmanicHafs", serif',
+  },
+] as const;
 
 function cloneTemplate(template: TemplateDefinition): TemplateDefinition {
   return {
@@ -113,8 +141,17 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
+  const [canvasTool, setCanvasTool] = useState<"text" | "media">("text");
   const [movingText, setMovingText] = useState(false);
+  const [movingMedia, setMovingMedia] = useState(false);
   const movingTextRef = useRef(false);
+  const mediaDragRef = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const phoneCanvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -235,6 +272,16 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
     }));
   };
 
+  const setCustomBackground = (background: Background) => {
+    change((current) => ({
+      ...current,
+      swatch: background.value,
+      mediaPolicy: "use-template-media",
+      mediaSlots: current.mediaSlots.filter((slot) => slot.id !== "background"),
+      settings: { ...current.settings, background },
+    }));
+  };
+
   const toggleMediaPlaceholder = () => {
     change((current) => {
       if (current.extras.backgroundSequence?.enabled) return current;
@@ -288,6 +335,43 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
     }
     movingTextRef.current = false;
     setMovingText(false);
+  };
+
+  const startMediaMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const transform = draft?.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM;
+    mediaDragRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      x: transform.x,
+      y: transform.y,
+    };
+    setMovingMedia(true);
+  };
+
+  const continueMediaMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = mediaDragRef.current;
+    const frame = phoneCanvasRef.current;
+    if (!start || !frame || start.pointerId !== event.pointerId) return;
+    const rect = frame.getBoundingClientRect();
+    const x = Math.max(-1, Math.min(1, start.x + ((event.clientX - start.clientX) / rect.width) * 2));
+    const y = Math.max(-1, Math.min(1, start.y + ((event.clientY - start.clientY) / rect.height) * 2));
+    setStyle("mediaTransform", {
+      ...(draft?.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM),
+      x,
+      y,
+    });
+  };
+
+  const stopMediaMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    mediaDragRef.current = null;
+    setMovingMedia(false);
   };
 
   const save = () => {
@@ -391,6 +475,25 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             ))}
           </div>
 
+          <div className="mb-3 grid grid-cols-2 gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/90 p-1 backdrop-blur">
+            {(["text", "media"] as const).map((tool) => (
+              <button
+                key={tool}
+                type="button"
+                onClick={() => setCanvasTool(tool)}
+                aria-pressed={canvasTool === tool}
+                className={`flex min-h-9 items-center justify-center gap-2 rounded-full px-4 text-[11px] font-semibold capitalize transition-colors ${
+                  canvasTool === tool
+                    ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                    : "text-[var(--muted)] hover:text-parchment"
+                }`}
+              >
+                <TemplateIcon name={tool === "text" ? "type" : "image"} className="h-3.5 w-3.5" />
+                {tool}
+              </button>
+            ))}
+          </div>
+
           <div className="mb-4 flex items-center gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/85 p-1 backdrop-blur">
             {samples.map((item, index) => (
               <button
@@ -420,16 +523,31 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             <div
               role="slider"
               tabIndex={0}
-              aria-label="Text vertical position"
-              aria-valuemin={10}
-              aria-valuemax={90}
-              aria-valuenow={draft.settings.textPosition}
-              aria-valuetext={`${draft.settings.textPosition}% from the top`}
-              onPointerDown={startTextMove}
-              onPointerMove={continueTextMove}
-              onPointerUp={stopTextMove}
-              onPointerCancel={stopTextMove}
+              aria-label={canvasTool === "text" ? "Text vertical position" : "Media position"}
+              aria-valuemin={canvasTool === "text" ? 10 : -100}
+              aria-valuemax={canvasTool === "text" ? 90 : 100}
+              aria-valuenow={canvasTool === "text" ? draft.settings.textPosition : Math.round((draft.settings.mediaTransform?.x ?? 0) * 100)}
+              aria-valuetext={canvasTool === "text"
+                ? `${draft.settings.textPosition}% from the top`
+                : `${Math.round((draft.settings.mediaTransform?.x ?? 0) * 100)}% horizontal, ${Math.round((draft.settings.mediaTransform?.y ?? 0) * 100)}% vertical`}
+              onPointerDown={canvasTool === "text" ? startTextMove : startMediaMove}
+              onPointerMove={canvasTool === "text" ? continueTextMove : continueMediaMove}
+              onPointerUp={canvasTool === "text" ? stopTextMove : stopMediaMove}
+              onPointerCancel={canvasTool === "text" ? stopTextMove : stopMediaMove}
               onKeyDown={(event) => {
+                if (canvasTool === "media") {
+                  const transform = draft.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM;
+                  const step = event.shiftKey ? 0.1 : 0.03;
+                  const next = { ...transform };
+                  if (event.key === "ArrowLeft") next.x = Math.max(-1, transform.x - step);
+                  else if (event.key === "ArrowRight") next.x = Math.min(1, transform.x + step);
+                  else if (event.key === "ArrowUp") next.y = Math.max(-1, transform.y - step);
+                  else if (event.key === "ArrowDown") next.y = Math.min(1, transform.y + step);
+                  else return;
+                  event.preventDefault();
+                  setStyle("mediaTransform", next);
+                  return;
+                }
                 const next = templateTextPositionFromKey(
                   draft.settings.textPosition,
                   event.key,
@@ -439,18 +557,29 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                 event.preventDefault();
                 setStyle("textPosition", next);
               }}
-              className={`group/canvas absolute inset-0 z-20 touch-none outline-none ${movingText ? "cursor-grabbing" : "cursor-grab"}`}
+              className={`group/canvas absolute inset-0 z-20 touch-none outline-none ${(movingText || movingMedia) ? "cursor-grabbing" : "cursor-grab"}`}
             >
-              <span
-                aria-hidden="true"
-                className={`pointer-events-none absolute left-3 flex -translate-y-1/2 items-center gap-2 transition-opacity duration-200 ${movingText ? "opacity-100" : "opacity-0 group-hover/canvas:opacity-100 group-focus-visible/canvas:opacity-100"}`}
-                style={{ top: `${draft.settings.textPosition}%` }}
-              >
-                <span className="h-8 w-1 rounded-full bg-gold shadow-[0_0_10px_rgba(201,162,75,0.35)]" />
-                <span className="rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-gold-soft backdrop-blur">
-                  {draft.settings.textPosition}%
+              {canvasTool === "text" ? (
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute left-3 flex -translate-y-1/2 items-center gap-2 transition-opacity duration-200 ${movingText ? "opacity-100" : "opacity-0 group-hover/canvas:opacity-100 group-focus-visible/canvas:opacity-100"}`}
+                  style={{ top: `${draft.settings.textPosition}%` }}
+                >
+                  <span className="h-8 w-1 rounded-full bg-gold shadow-[0_0_10px_rgba(201,162,75,0.35)]" />
+                  <span className="rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.14em] text-gold-soft backdrop-blur">
+                    {draft.settings.textPosition}%
+                  </span>
                 </span>
-              </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute left-1/2 top-1/2 flex h-20 w-20 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-gold/55 bg-gold/5 transition-opacity ${movingMedia ? "opacity-100" : "opacity-60 group-hover/canvas:opacity-100"}`}
+                >
+                  <span className="absolute h-8 w-px bg-gold/70" />
+                  <span className="absolute h-px w-8 bg-gold/70" />
+                  <span className="h-2 w-2 rounded-full bg-gold shadow-[0_0_12px_rgba(201,162,75,0.55)]" />
+                </span>
+              )}
             </div>
           </div>
 
@@ -459,7 +588,9 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
               <TemplateIcon name="refresh" className="h-4 w-4" /> Replay
             </button>
             <span className="hidden h-4 w-px bg-white/10 sm:block" aria-hidden="true" />
-            <span className="hidden text-[10px] uppercase tracking-[0.14em] text-[var(--muted-deep)] sm:block">Drag canvas or use ↑↓</span>
+            <span className="hidden text-[10px] uppercase tracking-[0.14em] text-[var(--muted-deep)] sm:block">
+              {canvasTool === "text" ? "Drag vertically or use ↑↓" : "Drag media or use arrow keys"}
+            </span>
             <button type="button" onClick={() => setFullscreen(true)} className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] hover:text-parchment" aria-label="Full-screen preview" title="Full-screen preview">
               <TemplateIcon name="expand" className="h-4 w-4" />
             </button>
@@ -489,6 +620,26 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                 options={[{ value: "center", label: "Centered" }, { value: "left-panel", label: "Split fade" }]}
                 onChange={(value) => setStyle("textLayout", value as StyleSettings["textLayout"])}
               />
+              {(draft.settings.textLayout ?? "center") === "left-panel" && (() => {
+                const mask = normalizeSplitMask(draft.settings.splitMask ?? DEFAULT_SPLIT_MASK);
+                return (
+                  <div className="space-y-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/55 p-4">
+                    <div>
+                      <p className="text-xs font-medium text-parchment">Reading panel</p>
+                      <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Set the solid text field and exactly where it fades into the media.</p>
+                    </div>
+                    <Segmented
+                      value={mask.side}
+                      options={[{ value: "left", label: "Text left" }, { value: "right", label: "Text right" }]}
+                      onChange={(side) => setStyle("splitMask", { ...mask, side: side as "left" | "right" })}
+                    />
+                    <RangeField label="Solid width" value={mask.solidWidth} min={0} max={75} suffix="%" onChange={(solidWidth) => setStyle("splitMask", normalizeSplitMask({ ...mask, solidWidth }))} />
+                    <RangeField label="Fade width" value={mask.fadeWidth} min={0} max={75} suffix="%" onChange={(fadeWidth) => setStyle("splitMask", normalizeSplitMask({ ...mask, fadeWidth }))} />
+                    <ColorField label="Panel color" value={mask.color} onChange={(color) => setStyle("splitMask", { ...mask, color })} />
+                    <RangeField label="Panel opacity" value={Math.round(mask.opacity * 100)} min={0} max={100} suffix="%" onChange={(opacity) => setStyle("splitMask", { ...mask, opacity: opacity / 100 })} />
+                  </div>
+                );
+              })()}
               <RangeField label="Vertical position" value={draft.settings.textPosition} min={10} max={90} suffix="%" onChange={(value) => setStyle("textPosition", value)} />
               <label className="block space-y-2">
                 <span className="text-xs text-[var(--muted)]">When applied</span>
@@ -500,11 +651,34 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             </InspectorSection>
 
             <InspectorSection title="Arabic" icon="type">
-              <div className="rounded-xl border border-[var(--hairline-soft)] bg-white/[0.025] p-3">
-                <p className="text-xs font-medium text-parchment">Uthmanic Hafs</p>
-                <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">Kept at its authentic normal face weight so harakat and verse marks remain clear.</p>
+              <div className="space-y-2">
+                {ARABIC_FONT_OPTIONS.map((font) => {
+                  const selected = draft.settings.arabicFont === font.value;
+                  return (
+                    <button
+                      key={font.value}
+                      type="button"
+                      onClick={() => {
+                        setStyle("arabicFont", font.value);
+                        setStyle("arabicFontWeight", 400);
+                      }}
+                      aria-pressed={selected}
+                      className={`w-full rounded-xl border p-3 text-left transition-colors ${selected ? "border-gold bg-gold/5" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${selected ? "text-gold-soft" : "text-[var(--muted)]"}`}>{font.label}</span>
+                        {selected && <TemplateIcon name="check" className="h-3.5 w-3.5 text-gold" />}
+                      </span>
+                      <span dir="rtl" lang="ar" className="mt-2 block text-right text-[22px] leading-[1.9] text-parchment" style={{ fontFamily: font.family }}>
+                        بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                      </span>
+                      <span className="mt-1 block text-[10px] leading-4 text-[var(--muted)]">{font.note}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <RangeField label="Size" value={draft.settings.arabicFontSize} min={18} max={58} suffix="px" onChange={(value) => setStyle("arabicFontSize", value)} />
+              <p className="text-[10px] leading-4 text-[var(--muted)]">Arabic stays at its verified native weight. Use size, crisp edge, glow, or a line treatment for emphasis without distorting harakat.</p>
+              <RangeField label="Size" value={draft.settings.arabicFontSize} min={18} max={72} suffix="px" onChange={(value) => setStyle("arabicFontSize", value)} />
               <RangeField label="Line height" value={draft.settings.lineHeight} min={0.75} max={1.7} step={0.05} suffix="×" onChange={(value) => setStyle("lineHeight", value)} />
               <SwitchField label="Arabic verse number" checked={Boolean(draft.settings.arabicVerseNumber)} onChange={(checked) => setStyle("arabicVerseNumber", checked)} />
             </InspectorSection>
@@ -539,6 +713,18 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                 ))}
               </div>
               <ColorField label="Text color" value={draft.settings.textColor} onChange={(value) => setStyle("textColor", value)} />
+              <SwitchField
+                label="Text edge / glow"
+                checked={draft.settings.textShadow.enabled}
+                onChange={(enabled) => setStyle("textShadow", { ...draft.settings.textShadow, enabled })}
+              />
+              {draft.settings.textShadow.enabled && (
+                <>
+                  <ColorField label="Edge / glow color" value={draft.settings.textShadow.color} onChange={(color) => setStyle("textShadow", { ...draft.settings.textShadow, color })} />
+                  <RangeField label="Edge / glow reach" value={draft.settings.textShadow.blur} min={0} max={18} suffix="px" onChange={(blur) => setStyle("textShadow", { ...draft.settings.textShadow, blur })} />
+                  <RangeField label="Vertical offset" value={draft.settings.textShadow.offsetY} min={-8} max={8} suffix="px" onChange={(offsetY) => setStyle("textShadow", { ...draft.settings.textShadow, offsetY })} />
+                </>
+              )}
               <RangeField label="Overlay darkness" value={draft.settings.overlayOpacity} min={0} max={90} suffix="%" onChange={(value) => setStyle("overlayOpacity", value)} />
               {draft.settings.highlightEnabled && (
                 <>
@@ -571,6 +757,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   );
                 })}
               </div>
+              <BackgroundEditor value={draft.settings.background} onChange={setCustomBackground} />
               <button
                 type="button"
                 onClick={toggleMediaPlaceholder}
@@ -590,6 +777,35 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             </InspectorSection>
 
             <InspectorSection title="Media" icon="image">
+              <Segmented
+                value={draft.settings.backgroundFit ?? "cover"}
+                options={[{ value: "cover", label: "Fill frame" }, { value: "contain", label: "Show whole" }]}
+                onChange={(backgroundFit) => setStyle("backgroundFit", backgroundFit as StyleSettings["backgroundFit"])}
+              />
+              {(draft.settings.backgroundFit ?? "cover") === "contain" && (
+                <Segmented
+                  value={draft.settings.fitBackdrop ?? "black"}
+                  options={[{ value: "black", label: "Black field" }, { value: "blur", label: "Blur field" }]}
+                  onChange={(fitBackdrop) => setStyle("fitBackdrop", fitBackdrop as StyleSettings["fitBackdrop"])}
+                />
+              )}
+              {(draft.settings.backgroundFit ?? "cover") === "cover" && (() => {
+                const transform = draft.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM;
+                return (
+                  <div className="space-y-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/55 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-parchment">Media position</p>
+                        <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Select Media above the canvas to drag directly.</p>
+                      </div>
+                      <button type="button" onClick={() => setStyle("mediaTransform", { ...DEFAULT_MEDIA_TRANSFORM })} className="min-h-9 rounded-lg border border-[var(--hairline-soft)] px-2.5 text-[10px] text-[var(--muted)] hover:text-parchment">Reset</button>
+                    </div>
+                    <RangeField label="Zoom" value={transform.scale} min={1} max={3} step={0.05} suffix="×" onChange={(scale) => setStyle("mediaTransform", { ...transform, scale })} />
+                    <RangeField label="Horizontal position" value={Math.round(transform.x * 100)} min={-100} max={100} suffix="%" onChange={(x) => setStyle("mediaTransform", { ...transform, x: x / 100 })} />
+                    <RangeField label="Vertical position" value={Math.round(transform.y * 100)} min={-100} max={100} suffix="%" onChange={(y) => setStyle("mediaTransform", { ...transform, y: y / 100 })} />
+                  </div>
+                );
+              })()}
               <SwitchField label="B-roll rotation" checked={Boolean(sequence?.enabled)} onChange={(checked) => updateSequence({ enabled: checked })} />
               {sequence?.enabled && (
                 <>

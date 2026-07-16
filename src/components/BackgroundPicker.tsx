@@ -6,6 +6,7 @@ import { backgroundPresets } from "@/lib/backgrounds";
 import { VIDEO_PRESETS, VIDEO_CATEGORIES } from "@/lib/video-presets";
 import { AESTHETIC_VIDEOS } from "@/lib/aesthetic-videos";
 import { StockLibrary } from "./StockLibrary";
+import { BackgroundEditor } from "./BackgroundEditor";
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -166,6 +167,7 @@ function PresetsGrid({
           ))}
         </div>
       </div>
+      <BackgroundEditor value={value} onChange={onChange} />
       <div>
         <p className="mb-2 text-xs text-[var(--muted)]">Images</p>
         <div className="flex flex-wrap gap-2">

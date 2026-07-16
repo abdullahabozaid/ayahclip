@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import {
+  Amiri_Quran,
   Cinzel,
   Cormorant_Garamond,
   Lora,
@@ -17,6 +18,12 @@ const cormorant = Cormorant_Garamond({ subsets: ["latin"], variable: "--font-cor
 const cinzel = Cinzel({ subsets: ["latin"], variable: "--font-cinzel", display: "swap" });
 const lora = Lora({ subsets: ["latin"], variable: "--font-lora", display: "swap" });
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", display: "swap" });
+const amiriQuran = Amiri_Quran({
+  weight: "400",
+  subsets: ["arabic", "latin"],
+  variable: "--font-amiri-quran",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ayahclip.vercel.app"),
@@ -62,7 +69,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable}`}
+      className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable}`}
     >
       <body className="grain min-h-dvh text-parchment antialiased">
         <SiteNav />

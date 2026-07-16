@@ -587,7 +587,9 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     ensureFontsReady(store.arabicFont, store.translationFont).then(() => {
       if (!cancelled) drawRef.current();
     });
-    const allQcf = store.verses.flatMap((v) => v.qcfWords ?? []);
+    const allQcf = store.arabicFont === "qcf"
+      ? store.verses.flatMap((v) => v.qcfWords ?? [])
+      : [];
     if (allQcf.length > 0) {
       ensureQcfFontsReady(allQcf).then(() => {
         if (!cancelled) drawRef.current();

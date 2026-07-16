@@ -95,7 +95,9 @@ export function safeInsetFor(
 }
 
 export const ARABIC_FONTS: Record<string, string> = {
+  qcf: '"UthmanicHafs", serif',
   "uthmanic-hafs": '"UthmanicHafs", serif',
+  "amiri-quran": '"Amiri Quran", "UthmanicHafs", serif',
 };
 
 export const TRANSLATION_FONTS: Record<string, string> = {
@@ -116,7 +118,17 @@ const TRANSLATION_FONT_VARIABLES: Record<string, string> = {
 };
 
 export function getArabicFontFamily(font: string): string {
+  if (font === "amiri-quran" && typeof document !== "undefined") {
+    const resolved = getComputedStyle(document.documentElement)
+      .getPropertyValue("--font-amiri-quran")
+      .trim();
+    if (resolved) return `${resolved}, "UthmanicHafs", serif`;
+  }
   return ARABIC_FONTS[font] ?? '"UthmanicHafs", serif';
+}
+
+export function shouldUseQcf(font: string, words: readonly QcfWord[] | undefined): boolean {
+  return font === "qcf" && Boolean(words?.length);
 }
 
 export function getTranslationFontFamily(font: string): string {
@@ -136,7 +148,9 @@ export function getTranslationFontFamily(font: string): string {
 // mis-places Quranic marks (e.g. a stray small-meem) — unacceptable for Quran
 // text. See ensureFontsReady.
 const ARABIC_PRIMARY: Record<string, string> = {
+  qcf: '"UthmanicHafs"',
   "uthmanic-hafs": '"UthmanicHafs"',
+  "amiri-quran": '"Amiri Quran"',
 };
 const TRANSLATION_PRIMARY: Record<string, string> = {
   serif: "Georgia",
@@ -159,7 +173,9 @@ export async function ensureFontsReady(
   translationFont: string
 ): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
-  const ar = ARABIC_PRIMARY[arabicFont] ?? '"UthmanicHafs"';
+  const ar = arabicFont === "amiri-quran"
+    ? getArabicFontFamily(arabicFont).split(",")[0]
+    : ARABIC_PRIMARY[arabicFont] ?? '"UthmanicHafs"';
   const tr = getTranslationFontFamily(translationFont) || TRANSLATION_PRIMARY[translationFont] || "Georgia";
   const sample = "بِسْمِ ٱللَّهِ ﴿١﴾";
   try {
@@ -678,7 +694,7 @@ export function drawVerseText(
   const arabicWeight = options.arabicFontWeight ?? 400;
   const transWeight = options.translationFontWeight ?? 400;
 
-  const useQcf = options.qcfWords && options.qcfWords.length > 0;
+  const useQcf = shouldUseQcf(options.arabicFont, options.qcfWords);
   const qcfWords = options.qcfWords ?? [];
   const qcfRenderWords = useQcf
     ? (options.arabicVerseNumber

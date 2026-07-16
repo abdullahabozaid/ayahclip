@@ -13,6 +13,7 @@ import { getProject, saveProject } from "@/lib/projects";
 import { BackgroundThumb } from "./BackgroundThumb";
 import { sequenceDuration } from "@/lib/background-sequence";
 import type { Background } from "@/types";
+import { DEFAULT_SPLIT_MASK, normalizeSplitMask } from "@/lib/canvas-utils";
 
 /** Capture the current preview frame as the clip's dashboard cover thumbnail. */
 function SetCoverButton() {
@@ -87,6 +88,12 @@ const TRANSLATION_FONT_OPTIONS = [
   { value: "times-new-roman", label: "Times New Roman" },
   { value: "lora", label: "Lora" },
   { value: "playfair-display", label: "Playfair Display" },
+];
+
+const ARABIC_FONT_OPTIONS = [
+  { value: "qcf", label: "Mushaf QCF (page-faithful)" },
+  { value: "uthmanic-hafs", label: "Uthmanic Hafs" },
+  { value: "amiri-quran", label: "Amiri Quran" },
 ];
 
 function Section({
@@ -490,10 +497,70 @@ export function StudioSettings() {
               ))}
             </div>
             {store.textLayout === "left-panel" && (
-              <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted)]">
-                Keeps the reciter visible on the right and lays the verse over a black-to-video fade.
-              </p>
+              <div className="mt-3 space-y-3 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/55 p-3">
+                <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                  Control exactly how much of the frame stays solid and where it fades into the reciter.
+                </p>
+                <Field
+                  label="Text side"
+                  value={store.splitMask.side}
+                  onChange={(side) => store.setSplitMask({ ...store.splitMask, side: side as "left" | "right" })}
+                  options={[{ value: "left", label: "Left" }, { value: "right", label: "Right" }]}
+                />
+                <Slider
+                  label="Solid panel"
+                  value={store.splitMask.solidWidth}
+                  min={0}
+                  max={75}
+                  suffix="%"
+                  onChange={(solidWidth) => store.setSplitMask(normalizeSplitMask({ ...store.splitMask, solidWidth }))}
+                />
+                <Slider
+                  label="Fade width"
+                  value={store.splitMask.fadeWidth}
+                  min={0}
+                  max={75}
+                  suffix="%"
+                  onChange={(fadeWidth) => store.setSplitMask(normalizeSplitMask({ ...store.splitMask, fadeWidth }))}
+                />
+                <ColorRow label="Panel color" value={store.splitMask.color} onChange={(color) => store.setSplitMask({ ...store.splitMask, color })} />
+                <Slider
+                  label="Panel opacity"
+                  value={Math.round(store.splitMask.opacity * 100)}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                  onChange={(opacity) => store.setSplitMask({ ...store.splitMask, opacity: opacity / 100 })}
+                />
+                <button
+                  type="button"
+                  onClick={() => store.setSplitMask({ ...DEFAULT_SPLIT_MASK })}
+                  className="min-h-10 w-full rounded-lg border border-[var(--hairline-soft)] text-[11px] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment"
+                >
+                  Reset split panel
+                </button>
+              </div>
             )}
+          </div>
+          <Field
+            label="Arabic Rendering"
+            value={store.arabicFont}
+            onChange={(font) => {
+              store.setArabicFont(font);
+              store.setArabicFontWeight(400);
+            }}
+            options={ARABIC_FONT_OPTIONS}
+          />
+          <div className="rounded-xl border border-[var(--hairline-soft)] bg-white/[0.025] p-3">
+            <p
+              dir="rtl"
+              lang="ar"
+              className="text-right text-2xl leading-[1.9] text-parchment"
+              style={{ fontFamily: store.arabicFont === "amiri-quran" ? 'var(--font-amiri-quran), "UthmanicHafs", serif' : '"UthmanicHafs", serif' }}
+            >
+              بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+            </p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Native weight is locked to protect harakat. Use size and the edge/glow controls below for stronger captions.</p>
           </div>
           <Slider
             label="Arabic Size"
@@ -501,11 +568,6 @@ export function StudioSettings() {
             min={8}
             max={120}
             onChange={store.setArabicFontSize}
-          />
-          <WeightControl
-            label="Arabic Weight"
-            value={store.arabicFontWeight}
-            onChange={store.setArabicFontWeight}
           />
           <Toggle
             label="Verse Number (Arabic)"

@@ -9,8 +9,8 @@ const noLetterbox = {
 };
 
 const base: StyleSettings = {
-  arabicFont: "uthmanic-hafs",
-  arabicFontSize: 34,
+  arabicFont: "qcf",
+  arabicFontSize: 44,
   arabicFontWeight: 400,
   arabicEnabled: true,
   arabicVerseNumber: false,
@@ -23,7 +23,7 @@ const base: StyleSettings = {
   splitMask: { ...DEFAULT_SPLIT_MASK },
   translationEnabled: true,
   translationFont: "lora",
-  translationFontSize: 15,
+  translationFontSize: 18,
   translationFontWeight: 500,
   textColor: "#f5f2e9",
   overlayOpacity: 42,
@@ -76,10 +76,10 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFontSize: 35,
+      arabicFontSize: 46,
       textPosition: 53,
       translationFont: "lora",
-      translationFontSize: 13,
+      translationFontSize: 17,
       translationFontWeight: 500,
       overlayOpacity: 52,
       highlightEnabled: true,
@@ -111,7 +111,7 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFontSize: 29,
+      arabicFontSize: 42,
       lineHeight: 1.08,
       textPosition: 49,
       textLayout: "left-panel",
@@ -123,7 +123,7 @@ export const TEMPLATES: TemplateDefinition[] = [
         fadeWidth: 36,
       },
       translationFont: "outfit",
-      translationFontSize: 13,
+      translationFontSize: 18,
       translationFontWeight: 600,
       textColor: "#f4f1e8",
       overlayOpacity: 10,
@@ -154,10 +154,10 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFontSize: 36,
+      arabicFontSize: 46,
       textPosition: 49,
       translationFont: "lora",
-      translationFontSize: 15,
+      translationFontSize: 18,
       translationFontWeight: 500,
       overlayOpacity: 48,
       overlayColor: "#030806",
@@ -188,9 +188,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "use-template-media",
     settings: {
       ...base,
-      arabicFontSize: 34,
+      arabicFontSize: 44,
       translationFont: "outfit",
-      translationFontSize: 14,
+      translationFontSize: 18,
       translationFontWeight: 500,
       overlayOpacity: 0,
       textShadow: { enabled: true, color: "#000000", blur: 2, offsetX: 0, offsetY: 1 },
@@ -222,7 +222,7 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "use-template-media",
     settings: {
       ...base,
-      arabicFontSize: 24,
+      arabicFontSize: 32,
       lineHeight: 1,
       arabicTranslationGap: 0.95,
       translationFont: "outfit",
@@ -261,9 +261,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFontSize: 34,
+      arabicFontSize: 44,
       translationFont: "lora",
-      translationFontSize: 14,
+      translationFontSize: 18,
       overlayOpacity: 54,
       textShadow: { enabled: true, color: "#000000", blur: 9, offsetX: 0, offsetY: 2 },
       background: {
