@@ -200,7 +200,7 @@ async function main() {
     }
     throw new Error(`Unexpected fetch: ${url}`);
   }) as typeof fetch;
-  const { getVerseWeights, getVersesText, loadCorpus, matchVerses, normalizeArabic } =
+  const { assessVerseMatch, getVerseWeights, getVersesText, loadCorpus, normalizeArabic } =
     await import("../src/lib/verse-match");
   const { forceAlignVerses } = await import("../src/lib/forced-align");
   const { autoSegment, findSilenceCenters, findSpeechSpan } = await import("../src/lib/audio-import");
@@ -248,7 +248,8 @@ async function main() {
   const reference = normalizeArabic(
     getVersesText(surah, verseNumbers[0], verseNumbers[verseNumbers.length - 1]).text
   );
-  const detection = matchVerses(transcript);
+  const assessment = assessVerseMatch(transcript);
+  const detection = assessment.match;
   const { alignTranscriptVerses } = await import("../src/lib/transcript-align");
   const transcriptResult = alignTranscriptVerses({
     text: transcript,
@@ -285,6 +286,8 @@ async function main() {
         ? `${detection.surah}:${detection.ayahStart}-${detection.ayahEnd}`
         : null,
       detectionScore: detection ? Number(detection.score.toFixed(3)) : null,
+      detectionMargin: Number(assessment.margin.toFixed(3)),
+      detectionConfidence: assessment.confidence,
     },
     boundaries: aligned.map((timing, index) => ({
       verse: timing.verseNumber,

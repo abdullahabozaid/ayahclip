@@ -241,84 +241,109 @@ export function getVerseWordCounts(surah: number, ayahStart: number, ayahEnd: nu
 
 const MIN_SCORE = 0.5;
 
+interface AlignedSurahCandidate {
+  su: SurahIndex;
+  start: number;
+  end: number;
+  score: number;
+}
+
+export interface VerseMatchAssessment {
+  match: VerseMatch | null;
+  alternatives: VerseMatch[];
+  margin: number;
+  confidence: "high" | "medium" | "low";
+}
+
+function mapAlignmentToVerses(candidate: AlignedSurahCandidate): VerseMatch {
+  const { su, start, end, score } = candidate;
+  const overlapOf = (range: VerseRange) =>
+    Math.max(0, Math.min(range.end, end) - Math.max(range.start, start));
+  let included = su.ranges.filter((range) => {
+    const overlap = overlapOf(range);
+    return overlap > 0 && (overlap >= (range.end - range.start) * 0.4 || overlap >= 10);
+  });
+  if (included.length === 0) included = su.ranges.filter((range) => overlapOf(range) > 0);
+  if (included.length === 0) {
+    const midpoint = (start + end) / 2;
+    let nearest = su.ranges[0];
+    let nearestDistance = Infinity;
+    for (const range of su.ranges) {
+      const distance = midpoint < range.start
+        ? range.start - midpoint
+        : midpoint > range.end
+          ? midpoint - range.end
+          : 0;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = range;
+      }
+    }
+    included = [nearest];
+  }
+
+  const firstIncludedIndex = su.ranges.indexOf(included[0]);
+  if (firstIncludedIndex === 1 && su.surah !== 1 && su.surah !== 9) {
+    const firstRange = su.ranges[0];
+    const firstVerse = bySurah!.get(su.surah)?.[0]?.clean ?? "";
+    const hasBasmala = firstVerse.startsWith(basmala + " ");
+    const contentStart = hasBasmala ? firstRange.start + basmala.length + 1 : firstRange.start;
+    const contentLength = firstRange.end - contentStart;
+    const contentOverlap = Math.max(
+      0,
+      Math.min(firstRange.end, end) - Math.max(contentStart, start)
+    );
+    if (contentLength > 0 && (contentLength <= 5 || contentOverlap >= contentLength * 0.4)) {
+      included = [firstRange, ...included];
+    }
+  }
+
+  return {
+    surah: su.surah,
+    ayahStart: included[0].ayah,
+    ayahEnd: included[included.length - 1].ayah,
+    score,
+  };
+}
+
+export function assessVerseMatch(transcript: string): VerseMatchAssessment {
+  if (!surahIndex) throw new Error("call loadCorpus() first");
+  const q = normalizeArabic(transcript);
+  if (q.length < 3) {
+    return { match: null, alternatives: [], margin: 0, confidence: "low" };
+  }
+  const qTris = trigrams(q.replace(/ /g, ""));
+  if (qTris.size === 0) {
+    return { match: null, alternatives: [], margin: 0, confidence: "low" };
+  }
+
+  const aligned = surahIndex
+    .map((su) => ({ su, overlap: intersectionSize(qTris, su.trigrams) }))
+    .filter((candidate) => candidate.overlap > 0)
+    .sort((a, b) => b.overlap - a.overlap)
+    .slice(0, 10)
+    .map(({ su }) => ({ su, ...alignToRef(q, su.text) }))
+    .sort((a, b) => b.score - a.score);
+  if (aligned.length === 0 || aligned[0].score < MIN_SCORE) {
+    return { match: null, alternatives: [], margin: 0, confidence: "low" };
+  }
+
+  const mapped = aligned.map(mapAlignmentToVerses);
+  const match = mapped[0];
+  const alternatives = mapped.slice(1, 3);
+  const margin = match.score - (alternatives[0]?.score ?? 0);
+  const confidence = match.score >= 0.9 && margin >= 0.12
+    ? "high"
+    : match.score >= 0.72 && margin >= 0.06
+      ? "medium"
+      : "low";
+  return { match, alternatives, margin, confidence };
+}
+
 /**
  * Identify the surah + ayah range a transcript covers. Returns null if no
  * candidate clears a minimum confidence.
  */
 export function matchVerses(transcript: string): VerseMatch | null {
-  if (!surahIndex) throw new Error("call loadCorpus() first");
-  const q = normalizeArabic(transcript);
-  if (q.length < 3) return null;
-  const qTris = trigrams(q.replace(/ /g, ""));
-  if (qTris.size === 0) return null;
-
-  // 1. Retrieve candidate surahs by trigram overlap.
-  const candidates = surahIndex
-    .map((su) => ({ su, overlap: intersectionSize(qTris, su.trigrams) }))
-    .filter((c) => c.overlap > 0)
-    .sort((a, b) => b.overlap - a.overlap)
-    .slice(0, 10)
-    .map((c) => c.su);
-  if (candidates.length === 0) return null;
-
-  // 2. Align the transcript against each candidate surah's full text; keep the best.
-  let best: { su: SurahIndex; start: number; end: number; score: number } | null = null;
-  for (const su of candidates) {
-    const al = alignToRef(q, su.text);
-    if (!best || al.score > best.score) best = { su, ...al };
-  }
-  if (!best || best.score < MIN_SCORE) return null;
-
-  // 3. Map the matched [start,end] region back to verses. Include a verse if a
-  //    meaningful part of it falls in the region (≥40% of it, or ≥10 chars) — so
-  //    a clip starting/ending mid-verse begins/ends at the nearest substantial verse.
-  const overlapOf = (r: VerseRange) =>
-    Math.max(0, Math.min(r.end, best!.end) - Math.max(r.start, best!.start));
-  let incl = best.su.ranges.filter((r) => {
-    const ov = overlapOf(r);
-    return ov > 0 && (ov >= (r.end - r.start) * 0.4 || ov >= 10);
-  });
-  if (incl.length === 0) {
-    // fallback: any overlap, else the verse nearest the region midpoint
-    incl = best.su.ranges.filter((r) => overlapOf(r) > 0);
-  }
-  if (incl.length === 0) {
-    const mid = (best.start + best.end) / 2;
-    let nearest = best.su.ranges[0];
-    let bestD = Infinity;
-    for (const r of best.su.ranges) {
-      const d = mid < r.start ? r.start - mid : mid > r.end ? mid - r.end : 0;
-      if (d < bestD) {
-        bestD = d;
-        nearest = r;
-      }
-    }
-    incl = [nearest];
-  }
-
-  // Verse-1 leniency for the muqatta'āt ("الم", "كهيعص", …): verse 1 in the corpus
-  // is "basmala + content", so when the reciter omits the basmala only the tiny
-  // content (e.g. "الم", 3 chars) can match — far under the 40% rule against the
-  // full 26-char verse — and verse 1 gets dropped. If the clip clearly opens this
-  // surah (verse 2 is the first matched verse) and verse 1's own content is short
-  // or substantially covered, pull verse 1 back in. A genuine mid-surah start
-  // (e.g. Al-Fajr 6) has verse 2 nowhere near the matched region, so it's untouched.
-  const firstInclIdx = best.su.ranges.indexOf(incl[0]);
-  if (firstInclIdx === 1 && best.su.surah !== 1 && best.su.surah !== 9) {
-    const r1 = best.su.ranges[0];
-    const hasBasmala = (bySurah!.get(best.su.surah)?.[0]?.clean ?? "").startsWith(basmala + " ");
-    const contentStart = hasBasmala ? r1.start + basmala.length + 1 : r1.start;
-    const contentLen = r1.end - contentStart;
-    const contentOverlap = Math.max(0, Math.min(r1.end, best.end) - Math.max(contentStart, best.start));
-    if (contentLen > 0 && (contentLen <= 5 || contentOverlap >= contentLen * 0.4)) {
-      incl = [r1, ...incl];
-    }
-  }
-
-  return {
-    surah: best.su.surah,
-    ayahStart: incl[0].ayah,
-    ayahEnd: incl[incl.length - 1].ayah,
-    score: best.score,
-  };
+  return assessVerseMatch(transcript).match;
 }

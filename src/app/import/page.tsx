@@ -13,7 +13,7 @@ import {
   findSpeechSpan,
   type VerseTiming,
 } from "@/lib/audio-import";
-import { loadCorpus, matchVerses, getVerseWeights } from "@/lib/verse-match";
+import { assessVerseMatch, loadCorpus, getVerseWeights } from "@/lib/verse-match";
 import { forceAlignVersesDetailed } from "@/lib/forced-align";
 import { Surah } from "@/types";
 import { importSizeError, RECOMMENDED_IMPORT_BYTES } from "@/lib/import-limits";
@@ -57,6 +57,7 @@ export default function ImportPage() {
     ayahEnd: number;
     timings: VerseTiming[];
     method: "transcript" | "ctc" | "pause";
+    confidence: "high" | "medium";
   } | null>(null);
 
   const autoDetect = async () => {
@@ -77,8 +78,9 @@ export default function ImportPage() {
       });
       const transcript = emissions.transcription.text;
       setDetectMsg("Matching to the Quran…");
-      const m = matchVerses(transcript);
-      if (m) {
+      const assessment = assessVerseMatch(transcript);
+      const m = assessment.match;
+      if (m && assessment.confidence !== "low") {
         const s = surahs.find((x) => x.id === m.surah);
         setSurahId(m.surah);
         setFrom(String(m.ayahStart));
@@ -109,7 +111,12 @@ export default function ImportPage() {
           ayahEnd: m.ayahEnd,
           timings,
           method: alignment?.method ?? "pause",
+          confidence: assessment.confidence,
         });
+      } else if (m) {
+        setError(
+          "This recitation matches several similar Quran passages. Confirm the surah and verses manually below."
+        );
       } else {
         setError("Couldn't confidently match this clip. Pick the verses manually below.");
       }
