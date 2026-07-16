@@ -80,8 +80,11 @@ export interface Project {
     arabicFont: string;
     arabicFontWeight?: number;
     arabicVerseNumber?: boolean;
+    translationVerseNumber?: boolean;
     translationEnabled: boolean;
     arabicEnabled?: boolean;
+    wordHighlight?: boolean;
+    backgroundVideoSync?: boolean;
     translationFontSize: number;
     translationFont: string;
     translationFontWeight?: number;
