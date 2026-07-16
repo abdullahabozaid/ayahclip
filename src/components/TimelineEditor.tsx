@@ -24,6 +24,51 @@ function fmt(s: number): string {
 const MIN_DUR = 0.12;
 const MAX_CANVAS_W = 16000;
 
+/** Precompute one peak amplitude per bucket so the waveform redraws (on every
+ *  zoom/scroll) never re-scan the raw samples. Mono (channel 0). */
+function buildPeaks(buf: AudioBuffer, buckets: number): Float32Array {
+  const ch = buf.getChannelData(0);
+  const len = ch.length;
+  const per = len / buckets;
+  const peaks = new Float32Array(buckets);
+  for (let b = 0; b < buckets; b++) {
+    const s0 = Math.floor(b * per);
+    const s1 = Math.min(len, Math.floor((b + 1) * per));
+    let peak = 0;
+    for (let i = s0; i < s1; i++) {
+      const v = Math.abs(ch[i]);
+      if (v > peak) peak = v;
+    }
+    peaks[b] = peak;
+  }
+  return peaks;
+}
+
+// Inline SVG icon set for the timeline toolbar — replaces the emoji that read
+// as utilitarian next to the hand-drawn SVGs used elsewhere. One stroke style,
+// matching the app's existing 24-box / strokeWidth-2 language.
+const TL_ICON = {
+  loop: ["M17 2l4 4-4 4", "M3 11V9a4 4 0 0 1 4-4h14", "M7 22l-4-4 4-4", "M21 13v2a4 4 0 0 1-4 4H3"],
+  scissors: ["M6 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M20 4 8.5 15.5", "M14.5 14.5 20 20", "M8.5 8.5 12 12"],
+  copy: ["M9 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z", "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"],
+  refresh: ["M21 2v6h-6", "M3 12a9 9 0 0 1 15-6.7L21 8", "M3 22v-6h6", "M21 12a9 9 0 0 1-15 6.7L3 16"],
+  trimStart: ["M8 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h3", "M14 8l-4 4 4 4"],
+  trimEnd: ["M16 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3", "M10 8l4 4-4 4"],
+  type: ["M4 7V5h16v2", "M12 5v14", "M9 19h6"],
+  x: ["M6 6l12 12", "M18 6 6 18"],
+  trash: ["M3 6h18", "M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2", "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6", "M10 11v6", "M14 11v6"],
+} as const;
+
+function TlIcon({ d, className = "h-3.5 w-3.5" }: { d: readonly string[]; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {d.map((p, i) => (
+        <path key={i} d={p} />
+      ))}
+    </svg>
+  );
+}
+
 type DragKind = "start" | "end" | "body" | "split";
 interface Drag {
   index: number;
@@ -56,9 +101,13 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const scrollRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
+  const progressCanvasRef = useRef<HTMLCanvasElement>(null);
   const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const bufferRef = useRef<AudioBuffer | null>(null);
+  // Cached min/max peaks (one amplitude per bucket), computed once at decode so
+  // zoom/scroll redraws never re-scan the raw samples (millions of them).
+  const peaksRef = useRef<Float32Array | null>(null);
   const pausesRef = useRef<number[]>([]);
   const dragRef = useRef<Drag | null>(null);
   const durationRef = useRef(0);
@@ -151,6 +200,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         const buffer = await decodeAudioFile(blob);
         if (cancelled) return;
         bufferRef.current = buffer;
+        peaksRef.current = buildPeaks(buffer, 3000);
         pausesRef.current = findSilenceCenters(buffer).map((p) => p.time);
         setDuration(buffer.duration);
         setDecoded(true);
@@ -165,40 +215,76 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     };
   }, [url]);
 
-  // ---- Crisp waveform: redraw at the track's real pixel size (per zoom) ----
+  // Move the playhead line AND reveal the gold "played" waveform up to it — both
+  // are pure style updates (no canvas redraw), cheap enough to run every frame.
+  const setPlayheadVisual = useCallback((pct: number) => {
+    if (playheadRef.current) playheadRef.current.style.left = `${pct}%`;
+    if (progressCanvasRef.current) {
+      progressCanvasRef.current.style.clipPath = `inset(0 ${Math.max(0, 100 - pct)}% 0 0)`;
+    }
+  }, []);
+
+  // Draw the cached peaks into a canvas as centered mirror bars in one colour.
+  const drawBars = (ctx: CanvasRenderingContext2D, W: number, H: number, color: string) => {
+    const peaks = peaksRef.current;
+    if (!peaks) return;
+    ctx.fillStyle = color;
+    const mid = H / 2;
+    const n = peaks.length;
+    for (let x = 0; x < W; x++) {
+      const b0 = Math.floor((x / W) * n);
+      const b1 = Math.min(n - 1, Math.floor(((x + 1) / W) * n));
+      let peak = 0;
+      for (let b = b0; b <= b1; b++) if (peaks[b] > peak) peak = peaks[b];
+      const barH = Math.max(1, peak * H * 0.9);
+      ctx.fillRect(x, mid - barH / 2, 1, barH);
+    }
+  };
+
+  // ---- Two-colour waveform from cached peaks (redraws only on zoom/resize) ----
+  // Base = dim parchment (unplayed); a stacked gold canvas (the "played" copy) is
+  // revealed left-to-right by a clip-path that tracks the playhead — so playback
+  // progress is shown without redrawing the canvas every frame. Detected pauses
+  // (the silence gaps that define verse boundaries) are drawn as faint gold bands
+  // so the user can see what they're segmenting on.
   const drawWaveform = useCallback(() => {
-    const canvas = waveCanvasRef.current;
+    const base = waveCanvasRef.current;
+    const prog = progressCanvasRef.current;
     const track = trackRef.current;
-    const buf = bufferRef.current;
-    if (!canvas || !track || !buf) return;
+    if (!base || !track || !peaksRef.current) return;
     const cssW = track.clientWidth;
     const cssH = track.clientHeight;
     if (cssW === 0 || cssH === 0) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const W = Math.min(MAX_CANVAS_W, Math.floor(cssW * dpr));
     const H = Math.floor(cssH * dpr);
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, W, H);
-    // Neutral parchment so the audio reads as "the recitation" and stays distinct
-    // from the gold verse cards layered on top.
-    ctx.fillStyle = "rgba(228,221,201,0.5)";
-    const ch = buf.getChannelData(0);
-    const len = ch.length;
-    const mid = H / 2;
-    const samplesPerCol = len / W;
-    for (let x = 0; x < W; x++) {
-      const s0 = Math.floor(x * samplesPerCol);
-      const s1 = Math.min(len, Math.floor((x + 1) * samplesPerCol));
-      let peak = 0;
-      for (let i = s0; i < s1; i++) {
-        const v = Math.abs(ch[i]);
-        if (v > peak) peak = v;
+
+    base.width = W;
+    base.height = H;
+    const bctx = base.getContext("2d");
+    if (!bctx) return;
+    bctx.clearRect(0, 0, W, H);
+    // Faint gold bands at the detected silence centres — the pauses the auto-split
+    // and snapping use, now visible instead of invisible drag targets.
+    const dur = durationRef.current;
+    if (dur > 0 && pausesRef.current.length) {
+      bctx.fillStyle = "rgba(224,192,116,0.20)";
+      const bandW = Math.max(1, Math.round(2 * dpr));
+      for (const p of pausesRef.current) {
+        const x = (p / dur) * W;
+        bctx.fillRect(x - bandW / 2, 0, bandW, H);
       }
-      const barH = Math.max(1, peak * H * 0.92);
-      ctx.fillRect(x, mid - barH / 2, 1, barH);
+    }
+    drawBars(bctx, W, H, "rgba(236,231,218,0.36)"); // parchment, unplayed
+
+    if (prog) {
+      prog.width = W;
+      prog.height = H;
+      const pctx = prog.getContext("2d");
+      if (pctx) {
+        pctx.clearRect(0, 0, W, H);
+        drawBars(pctx, W, H, "rgba(201,162,75,0.9)"); // gold, played
+      }
     }
   }, []);
 
@@ -212,32 +298,35 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   }, [drawWaveform]);
 
   useEffect(() => {
-    if (decoded) requestAnimationFrame(() => drawWaveform());
-  }, [decoded, drawWaveform]);
+    if (!decoded) return;
+    requestAnimationFrame(() => {
+      drawWaveform();
+      // Reveal the played portion for the current playhead (non-zero after a
+      // remount, e.g. toggling fullscreen mid-clip).
+      const dur = durationRef.current;
+      if (dur > 0) setPlayheadVisual((headTimeRef.current / dur) * 100);
+    });
+  }, [decoded, drawWaveform, setPlayheadVisual]);
 
   // ---- Minimap: a coarse overview of the whole clip with a viewport box ----
+  // Reuses the cached peaks (no second raw-sample scan).
   useEffect(() => {
     const canvas = minimapCanvasRef.current;
-    const buf = bufferRef.current;
-    if (!canvas || !buf) return;
+    const peaks = peaksRef.current;
+    if (!canvas || !peaks) return;
     const W = (canvas.width = 1000);
     const H = (canvas.height = 48);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(228,221,201,0.4)";
-    const ch = buf.getChannelData(0);
-    const len = ch.length;
+    ctx.fillStyle = "rgba(236,231,218,0.4)";
     const mid = H / 2;
-    const per = len / W;
+    const n = peaks.length;
     for (let x = 0; x < W; x++) {
+      const b0 = Math.floor((x / W) * n);
+      const b1 = Math.min(n - 1, Math.floor(((x + 1) / W) * n));
       let peak = 0;
-      const s0 = Math.floor(x * per);
-      const s1 = Math.min(len, Math.floor((x + 1) * per));
-      for (let i = s0; i < s1; i += 8) {
-        const v = Math.abs(ch[i]);
-        if (v > peak) peak = v;
-      }
+      for (let b = b0; b <= b1; b++) if (peaks[b] > peak) peak = peaks[b];
       ctx.fillRect(x, mid - (peak * H * 0.9) / 2, 1, Math.max(1, peak * H * 0.9));
     }
   }, [decoded]);
@@ -278,8 +367,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       setPlaying(isPlaying);
       setHeadTime(time);
       const dur = durationRef.current;
-      if (playheadRef.current && dur > 0) {
-        playheadRef.current.style.left = `${(time / dur) * 100}%`;
+      if (dur > 0) {
+        setPlayheadVisual((time / dur) * 100);
       }
       if (isPlaying) {
         const cont = scrollRef.current;
@@ -291,7 +380,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         }
       }
     });
-  }, []);
+  }, [setPlayheadVisual]);
 
   const pxToTime = useCallback((clientX: number): number => {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -304,9 +393,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const setHead = useCallback((t: number) => {
     setHeadTime(t);
     const dur = durationRef.current;
-    if (playheadRef.current && dur > 0) {
-      playheadRef.current.style.left = `${(t / dur) * 100}%`;
-    }
+    if (dur > 0) setPlayheadVisual((t / dur) * 100);
     const segs = useAppStore.getState().audioSource;
     if (segs.mode === "imported") {
       const idx = segs.timings.findIndex((tm) => t >= tm.start && t < tm.end);
@@ -314,7 +401,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         useAppStore.getState().setCurrentVerseIndex(idx);
       }
     }
-  }, []);
+  }, [setPlayheadVisual]);
 
   const seek = useCallback(
     (t: number) => {
@@ -764,6 +851,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     useAppStore.getState().setCurrentVerseIndex(verseIdx + 1);
   };
 
+  // Remove a mis-detected verse from the timeline. deleteImportedVerse also
+  // touches selectedVerseNumbers, so we clear the timings-only undo history — a
+  // later ⌘Z restoring an old snapshot would reintroduce the verse and desync it
+  // from the selection (same guard as VerseCardEditor).
+  const deleteVerse = (verseIdx: number) => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported" || cur.timings.length <= 1) return;
+    historyRef.current = [];
+    futureRef.current = [];
+    useAppStore.getState().deleteImportedVerse(verseIdx);
+    bumpHistory();
+  };
+
   // Snap the selected verse's start/end to the current playhead — play, pause at the
   // exact spot, then click: precise matching without fiddly dragging.
   const setBoundaryToHead = (kind: "start" | "end") => {
@@ -894,7 +994,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         setDeepErr("Couldn't align to the verses — used pause detection instead. Fine-tune by ear.");
       }
     } catch {
-      setDeepErr("Deep align failed (model couldn't load). Check your connection and retry, or use ↻ Redetect.");
+      setDeepErr("Deep align failed (model couldn't load). Check your connection and retry, or use Redetect.");
     } finally {
       setDeepMsg(null);
     }
@@ -933,12 +1033,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         <button
           onClick={toggleLoop}
           disabled={loading || duration === 0}
-          className={`flex h-9 items-center rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 ${
+          className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 ${
             looping ? "bg-[var(--gold)] text-[var(--ink-deep)]" : "btn-ghost"
           }`}
           title="Loop the selected verse to fine-tune its start/end by ear"
         >
-          🔁 Loop verse
+          <TlIcon d={TL_ICON.loop} /> Loop verse
         </button>
 
         {/* Undo / Redo — paired buttons next to the transport so the user
@@ -1025,10 +1125,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           <button
             onClick={redetect}
             disabled={busy || loading}
-            className="btn-gold rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            className="btn-gold flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
             title="Rebuild every verse boundary from the recitation's pauses"
           >
-            {redetecting ? "Redetecting…" : "↻ Redetect"}
+            {redetecting ? "Redetecting…" : <><TlIcon d={TL_ICON.refresh} /> Redetect</>}
           </button>
           <button
             onClick={deepAlign}
@@ -1042,18 +1142,18 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           <button
             onClick={() => trimTo("start")}
             disabled={loading || duration === 0}
-            className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            className="btn-ghost flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
             title="Delete everything before the playhead"
           >
-            ⇤ Trim start
+            <TlIcon d={TL_ICON.trimStart} /> Trim start
           </button>
           <button
             onClick={() => trimTo("end")}
             disabled={loading || duration === 0}
-            className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            className="btn-ghost flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
             title="Delete everything after the playhead"
           >
-            Trim end ⇥
+            Trim end <TlIcon d={TL_ICON.trimEnd} />
           </button>
           <span className="ml-auto hidden text-[10px] text-[var(--muted-deep)] sm:inline">
             Rebuild or refine the detection · crop the edges
@@ -1064,15 +1164,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       {deepErr && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200/90"
+          className="flex items-start gap-2 rounded-lg border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-3 py-2 text-[11px] text-gold-soft"
         >
           <span className="leading-relaxed">{deepErr}</span>
           <button
             onClick={() => setDeepErr(null)}
             aria-label="Dismiss"
-            className="ml-auto shrink-0 text-amber-200/60 hover:text-amber-100"
+            className="ml-auto shrink-0 text-gold-soft/60 transition-colors hover:text-gold-soft"
           >
-            ✕
+            <TlIcon d={TL_ICON.x} className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
@@ -1124,7 +1224,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px]"
               title="Split this verse's text at the playhead (for long verses)"
             >
-              ✂ Split
+              <TlIcon d={TL_ICON.scissors} /> Split
             </button>
 
             {splitCount > 0 && (
@@ -1146,7 +1246,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               }`}
               title="Keep only a contiguous range of this verse's words"
             >
-              ✂ Words {isTrimmed && `· ${range.to - range.from + 1}/${totalWords}`}
+              <TlIcon d={TL_ICON.type} /> Words {isTrimmed && `· ${range.to - range.from + 1}/${totalWords}`}
             </button>
 
             <button
@@ -1154,7 +1254,16 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px]"
               title="Duplicate this verse so the same ayah appears twice on the timeline"
             >
-              ⧉ Duplicate
+              <TlIcon d={TL_ICON.copy} /> Duplicate
+            </button>
+
+            <button
+              onClick={() => deleteVerse(activeIdx)}
+              disabled={timings.length <= 1}
+              className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] transition-colors hover:border-[var(--gold)] hover:text-gold-soft disabled:opacity-30"
+              title="Remove this verse from the clip"
+            >
+              <TlIcon d={TL_ICON.trash} /> Delete
             </button>
 
             {wordTrimOpen && totalWords >= 2 && (
@@ -1292,6 +1401,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               data-wave="1"
               className="pointer-events-none absolute inset-0 h-full w-full"
             />
+            {/* Gold "played" copy, revealed left-to-right by a clip-path that
+                tracks the playhead (updated in setPlayheadVisual). */}
+            <canvas
+              ref={progressCanvasRef}
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              style={{ clipPath: "inset(0 100% 0 0)" }}
+            />
 
             {/* Verse segment blocks — each split part is its own block.
                 Shared edges between parts of the same verse are split handles;
@@ -1346,9 +1463,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     </span>
                     <div
                       onPointerDown={startDrag(seg.tIdx, leftDrag, leftSplitIdx)}
-                      className={`absolute left-0 top-0 bottom-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/15 ${isFirst ? "rounded-l-md" : ""}`}
+                      className={`group/h absolute left-0 top-0 bottom-0 z-10 flex w-5 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isFirst ? "rounded-l-md" : ""}`}
                       title={isFirst ? "Drag the verse start" : "Drag to adjust split boundary"}
-                    />
+                    >
+                      <span className="h-1/2 w-0.5 rounded-full bg-gold/50 transition-all group-hover/h:h-2/3 group-hover/h:bg-gold group-active/h:h-3/4" />
+                    </div>
                     <div
                       onPointerDown={startDrag(seg.tIdx, "body")}
                       onPointerUp={onBodyPointerUp(seg.tIdx)}
@@ -1361,19 +1480,22 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     />
                     <div
                       onPointerDown={startDrag(seg.tIdx, rightDrag, rightSplitIdx)}
-                      className={`absolute right-0 top-0 bottom-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/15 ${isLast ? "rounded-r-md" : ""}`}
+                      className={`group/h absolute right-0 top-0 bottom-0 z-10 flex w-5 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isLast ? "rounded-r-md" : ""}`}
                       title={isLast ? "Drag the verse end" : "Drag to adjust split boundary"}
-                    />
+                    >
+                      <span className="h-1/2 w-0.5 rounded-full bg-gold/50 transition-all group-hover/h:h-2/3 group-hover/h:bg-gold group-active/h:h-3/4" />
+                    </div>
                     {active && !isLast && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           removeSplit(seg.tIdx, seg.pIdx);
                         }}
-                        className="absolute -right-2 top-1/2 z-[16] flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-[10px] leading-none text-emerald-soft ring-1 ring-[var(--hairline)] hover:text-red-400"
+                        className="absolute -right-3 top-1/2 z-[16] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-emerald-soft ring-1 ring-[var(--hairline)] transition-colors hover:text-gold-soft"
                         title="Merge with next part"
+                        aria-label="Merge with next part"
                       >
-                        ×
+                        <TlIcon d={TL_ICON.x} className="h-3 w-3" />
                       </button>
                     )}
                   </div>
@@ -1500,9 +1622,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               <button
                 onClick={() => setShortcutsOpen(false)}
                 aria-label="Close"
-                className="text-[var(--muted-deep)] hover:text-parchment"
+                className="text-[var(--muted-deep)] transition-colors hover:text-parchment"
               >
-                ✕
+                <TlIcon d={TL_ICON.x} className="h-4 w-4" />
               </button>
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
