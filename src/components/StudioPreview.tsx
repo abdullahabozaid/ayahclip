@@ -760,7 +760,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
               if (src.mode === "imported" && src.timings[i]) importedPlayer.seek(src.url, src.timings[i].start);
             }}
             disabled={store.currentVerseIndex === 0}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25 sm:h-9 sm:w-9"
             aria-label="Previous verse"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -804,7 +804,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
               if (src.mode === "imported" && src.timings[i]) importedPlayer.seek(src.url, src.timings[i].start);
             }}
             disabled={store.currentVerseIndex === rows.length - 1}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25 sm:h-9 sm:w-9"
             aria-label="Next verse"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">

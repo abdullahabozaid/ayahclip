@@ -39,6 +39,23 @@ import {
   RECOMMENDED_IMPORT_BYTES,
 } from "@/lib/import-limits";
 
+const RECOGNITION_STAGES = [
+  { id: "prepare", label: "Prepare" },
+  { id: "listen", label: "Listen" },
+  { id: "match", label: "Match" },
+  { id: "align", label: "Align" },
+] as const;
+
+type RecognitionStage = (typeof RECOGNITION_STAGES)[number]["id"];
+
+interface RecognitionProgress {
+  stage: RecognitionStage;
+  detail: string;
+  percent?: number;
+  loadedBytes?: number;
+  totalBytes?: number;
+}
+
 export default function ImportPage() {
   const router = useRouter();
   const store = useAppStore();
@@ -52,6 +69,7 @@ export default function ImportPage() {
   const [decoding, setDecoding] = useState(false);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detectError, setDetectError] = useState<string | null>(null);
 
   const [surahId, setSurahId] = useState(1);
   const [from, setFrom] = useState("1");
@@ -70,7 +88,8 @@ export default function ImportPage() {
   };
 
   const [detecting, setDetecting] = useState(false);
-  const [detectMsg, setDetectMsg] = useState<string | null>(null);
+  const [detectProgress, setDetectProgress] = useState<RecognitionProgress | null>(null);
+  const [rangeConfirmed, setRangeConfirmed] = useState(false);
   const [detected, setDetected] = useState<{
     transcript: string;
     ref: string;
@@ -87,7 +106,7 @@ export default function ImportPage() {
     if (!buffer) return;
     const durationError = recognitionDurationError(buffer.duration, browserDeviceMemoryGb());
     if (durationError) {
-      setError(durationError);
+      setDetectError(durationError);
       return;
     }
     detectAbortRef.current?.abort();
@@ -95,17 +114,27 @@ export default function ImportPage() {
     detectAbortRef.current = controller;
     setDetecting(true);
     setDetected(null);
-    setError(null);
+    setDetectError(null);
+    setRangeConfirmed(false);
     try {
-      setDetectMsg("Loading verse index…");
+      setDetectProgress({ stage: "prepare", detail: "Loading the Quran verse index" });
       await loadCorpus();
-      setDetectMsg("Preparing audio…");
+      setDetectProgress({ stage: "prepare", detail: "Preparing audio for local recognition" });
       const audio = await resampleTo16kMono(buffer);
-      setDetectMsg("Loading recognition model (first time ~131 MB)…");
+      setDetectProgress({ stage: "listen", detail: "Loading the local recognition model" });
       const { computeEmissions } = await import("@/lib/asr");
       let emissions = await computeEmissions(audio, (loaded, total) => {
-        if (total) setDetectMsg(`Downloading model… ${Math.round((loaded / total) * 100)}%`);
-        else setDetectMsg("Recognising…");
+        if (total) {
+          setDetectProgress({
+            stage: "listen",
+            detail: "Downloading the local recognition model",
+            percent: Math.round((loaded / total) * 100),
+            loadedBytes: loaded,
+            totalBytes: total,
+          });
+        } else {
+          setDetectProgress({ stage: "listen", detail: "Listening to the recitation locally" });
+        }
       }, controller.signal);
       if (controller.signal.aborted) {
         const abortError = new Error("Recognition cancelled");
@@ -113,13 +142,16 @@ export default function ImportPage() {
         throw abortError;
       }
       let transcript = emissions.transcription.text;
-      setDetectMsg("Matching to the Quran…");
+      setDetectProgress({ stage: "match", detail: "Matching the transcript to the Quran" });
       let assessment = assessVerseMatch(transcript);
       const retryOffset = assessment.confidence === "low"
         ? leadingRecognitionRetryOffset(emissions.transcription, audio.length / 16_000)
         : null;
       if (retryOffset !== null) {
-        setDetectMsg("Retrying after the unrecognised intro…");
+        setDetectProgress({
+          stage: "listen",
+          detail: "Retrying after a non-recitation introduction",
+        });
         const retrySamples = Math.round(retryOffset * 16_000);
         const retryEmissions = offsetEmissions(
           await computeEmissions(audio.subarray(retrySamples), undefined, controller.signal),
@@ -158,7 +190,7 @@ export default function ImportPage() {
           { length: m.ayahEnd - m.ayahStart + 1 },
           (_, index) => m.ayahStart + index
         );
-        setDetectMsg("Aligning verse boundaries…");
+        setDetectProgress({ stage: "align", detail: "Aligning each ayah boundary" });
         const alignment = forceAlignVersesDetailed({
           emissions,
           surah: m.surah,
@@ -197,25 +229,25 @@ export default function ImportPage() {
           review: buildAlignmentReview(method, boundaryDiagnostics),
         });
       } else if (m) {
-        setError(
+        setDetectError(
           "This recitation matches several similar Quran passages. Confirm the surah and verses manually below."
         );
       } else {
-        setError("Couldn't confidently match this clip. Pick the verses manually below.");
+        setDetectError("Couldn't confidently match this clip. Pick the verses manually below.");
       }
     } catch (error) {
-      setError(`${alignmentFailureMessage(error)} You can still pick the verses manually below.`);
+      setDetectError(`${alignmentFailureMessage(error)} You can still pick the verses manually below.`);
     } finally {
       if (detectAbortRef.current === controller) {
         detectAbortRef.current = null;
         setDetecting(false);
-        setDetectMsg(null);
+        setDetectProgress(null);
       }
     }
   };
 
   const cancelDetection = () => {
-    setDetectMsg("Cancelling…");
+    setDetectProgress({ stage: detectProgress?.stage ?? "listen", detail: "Cancelling recognition" });
     detectAbortRef.current?.abort();
   };
 
@@ -240,7 +272,9 @@ export default function ImportPage() {
     setBuffer(null);
     setSourceAudio(null);
     setError(null);
+    setDetectError(null);
     setDetected(null);
+    setRangeConfirmed(false);
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const isVideo = f.type.startsWith("video/");
     setVideoUrl(isVideo ? URL.createObjectURL(f) : null);
@@ -287,7 +321,7 @@ export default function ImportPage() {
   };
 
   const create = async () => {
-    if (!buffer || !sourceAudio || !surah) return;
+    if (!buffer || !sourceAudio || !surah || !rangeConfirmed) return;
     const lo = Math.max(1, Math.min(surah.verses_count, parseInt(from) || 1));
     const hi = Math.max(lo, Math.min(surah.verses_count, parseInt(to) || lo));
     const verseNumbers = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
@@ -298,7 +332,7 @@ export default function ImportPage() {
 
     // Cut the clip into per-verse blocks on the recitation's real pauses (text
     // length only decides which pause belongs to which verse). The studio's
-    // "Deep align" can later refine this with ASR word onsets for run-on clips.
+    // Studio's "Align by recitation" can later refine this with word onsets for run-on clips.
     await loadCorpus();
     const timings = detected &&
       detected.surah === surah.id &&
@@ -458,36 +492,50 @@ export default function ImportPage() {
             2 · Which verses are recited?
           </p>
 
-          <div className="mb-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-3">
-            <div className="flex items-center justify-between gap-3">
+          <div className="mb-5 overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]">
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-medium text-parchment">Detect from the recitation</p>
-                <p className="mt-0.5 text-[11px] text-[var(--muted)]">Best first step, you can correct the result.</p>
+                <p className="text-sm font-medium text-parchment">Recognise and align locally</p>
+                <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">
+                  Finds the Quran range, then places editable ayah boundaries. Audio never leaves this browser.
+                </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={autoDetect}
                   disabled={detecting || !buffer || !!recognitionBlock}
-                  className="btn-gold rounded-full px-4 py-2 text-xs disabled:opacity-50"
+                  className="btn-gold min-h-11 rounded-full px-4 text-xs disabled:opacity-50"
                 >
-                  {detecting ? "Detecting…" : "Auto-detect verses"}
+                  {detecting ? "Analysing…" : detected ? "Run again" : "Recognise verses"}
                 </button>
                 {detecting && (
                   <button
                     type="button"
                     onClick={cancelDetection}
-                    className="min-h-9 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-[var(--muted)] hover:border-gold hover:text-parchment"
+                    className="min-h-11 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-[var(--muted)] hover:border-gold hover:text-parchment"
                   >
                     Cancel
                   </button>
                 )}
               </div>
             </div>
-            {detectMsg && <p className="mt-2 text-xs text-[var(--muted)]">{detectMsg}</p>}
+
+            {detectProgress && <RecognitionProgressPanel progress={detectProgress} />}
+
+            {detectError && (
+              <div role="alert" className="border-t border-amber-400/20 bg-amber-400/[0.08] px-4 py-3 text-[11px] leading-relaxed text-amber-100/90">
+                <span className="font-medium text-amber-100">Recognition needs your help.</span>{" "}
+                {detectError}
+              </div>
+            )}
+
             {detected && (
-              <div className="mt-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm text-gold-soft">Detected: {detected.ref}</p>
+              <div className="border-t border-[var(--hairline-soft)] bg-[rgba(201,162,75,0.035)] px-4 py-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                  Suggested Quran range
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <p className="font-display text-xl text-parchment">{detected.ref}</p>
                   <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
                     {detected.confidence} match
                   </span>
@@ -495,16 +543,36 @@ export default function ImportPage() {
                     {detected.review.methodLabel}
                   </span>
                 </div>
-                <p className="mt-1 font-arabic text-right text-base text-[var(--muted)]" dir="rtl">
-                  {detected.transcript || "(no speech recognised)"}
-                </p>
-                <p className={`mt-2 rounded-lg border px-2.5 py-2 text-[11px] leading-relaxed ${
+                <p className={`mt-3 rounded-lg border px-3 py-2.5 text-[11px] leading-relaxed ${
                   detected.review.reviewVerseNumbers.length
                     ? "border-amber-400/25 bg-amber-400/10 text-amber-100/85"
                     : "border-emerald-soft/20 bg-emerald-soft/10 text-emerald-soft"
                 }`}>
                   {detected.review.message} Confirm the Quran range below before continuing.
                 </p>
+                {detected.review.reviewVerseNumbers.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-amber-100/70">
+                      Listen to these transitions in Studio
+                    </p>
+                    <ul className="mt-2 flex flex-wrap gap-1.5">
+                      {detected.review.reviewVerseNumbers.map((verseNumber) => (
+                        <li key={verseNumber} className="rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-1 text-[10px] text-amber-100/85">
+                          Before ayah {verseNumber}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <details className="mt-3 text-[11px] text-[var(--muted)]">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center text-gold-soft/80 marker:hidden">
+                    What recognition heard
+                    <span className="ml-1 text-[var(--muted-deep)]">+</span>
+                  </summary>
+                  <p className="font-arabic pb-1 text-right text-base leading-[1.9] text-[var(--muted)]" dir="rtl">
+                    {detected.transcript || "(no speech recognised)"}
+                  </p>
+                </details>
               </div>
             )}
           </div>
@@ -518,6 +586,7 @@ export default function ImportPage() {
                   setSurahId(Number(e.target.value));
                   setFrom("1");
                   setTo("1");
+                  setRangeConfirmed(false);
                 }}
                 className="field w-full px-3 py-2.5 text-sm"
               >
@@ -535,7 +604,10 @@ export default function ImportPage() {
                 min={1}
                 max={surah?.verses_count ?? 1}
                 value={from}
-                onChange={(e) => setFrom(e.target.value)}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  setRangeConfirmed(false);
+                }}
                 className="field w-20 px-2 py-2.5 text-center text-sm"
               />
             </label>
@@ -546,20 +618,38 @@ export default function ImportPage() {
                 min={1}
                 max={surah?.verses_count ?? 1}
                 value={to}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  setRangeConfirmed(false);
+                }}
                 className="field w-20 px-2 py-2.5 text-center text-sm"
               />
             </label>
           </div>
-          <p className="mt-2 text-[11px] text-[var(--muted-deep)]">
-            We&apos;ll split the audio into one segment per verse by detecting the pauses. You
-            can fine-tune the boundaries in the studio.
-          </p>
+          <label className={`mt-4 flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${
+            rangeConfirmed
+              ? "border-gold/45 bg-gold/[0.07]"
+              : "border-[var(--hairline-soft)] bg-[var(--ink-deep)] hover:border-[var(--hairline)]"
+          }`}>
+            <input
+              type="checkbox"
+              checked={rangeConfirmed}
+              onChange={(event) => setRangeConfirmed(event.target.checked)}
+              disabled={!buffer}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--gold)]"
+            />
+            <span>
+              <span className="block text-xs font-medium text-parchment">I confirm this Quran range</span>
+              <span className="mt-0.5 block text-[11px] leading-4 text-[var(--muted)]">
+                Boundaries remain editable in Studio, and uncertain transitions stay marked for review.
+              </span>
+            </span>
+          </label>
         </div>
 
         <button
           onClick={create}
-          disabled={!buffer || building}
+          disabled={!buffer || building || !rangeConfirmed}
           className="btn-gold mt-6 w-full rounded-xl py-3.5 text-sm disabled:opacity-40"
         >
           {building
@@ -571,6 +661,83 @@ export default function ImportPage() {
       </div>
     </main>
   );
+}
+
+function RecognitionProgressPanel({ progress }: { progress: RecognitionProgress }) {
+  const activeIndex = RECOGNITION_STAGES.findIndex((stage) => stage.id === progress.stage);
+  const hasDownloadProgress = progress.percent !== undefined;
+  const modelProgress = progress.loadedBytes !== undefined && progress.totalBytes !== undefined
+    ? `${formatModelBytes(progress.loadedBytes)} of ${formatModelBytes(progress.totalBytes)}`
+    : null;
+
+  return (
+    <div className="border-t border-[var(--hairline-soft)] px-4 py-4" aria-live="polite">
+      <ol className="grid grid-cols-4 gap-2" aria-label="Recognition stages">
+        {RECOGNITION_STAGES.map((stage, index) => {
+          const complete = index < activeIndex;
+          const active = index === activeIndex;
+          return (
+            <li key={stage.id} aria-current={active ? "step" : undefined}>
+              <span className={`block truncate text-[9px] font-semibold uppercase tracking-[0.12em] sm:text-[10px] ${
+                complete
+                  ? "text-emerald-soft"
+                  : active
+                    ? "text-gold-soft"
+                    : "text-[var(--muted-deep)]"
+              }`}>
+                {index + 1}. {stage.label}
+              </span>
+              <span className={`mt-2 block h-1 rounded-full ${
+                complete
+                  ? "bg-emerald-soft"
+                  : active
+                    ? "bg-gold"
+                    : "bg-white/[0.08]"
+              }`} />
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="mt-4 rounded-lg border border-[var(--hairline-soft)] bg-[var(--surface)] px-3 py-3">
+        <div className="flex items-start gap-3">
+          <span className="mt-1 h-2 w-2 shrink-0 animate-pulse rounded-full bg-gold motion-reduce:animate-none" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <p className="text-xs font-medium text-parchment">{progress.detail}</p>
+              {hasDownloadProgress && (
+                <span className="text-[11px] tabular-nums text-gold-soft">{progress.percent}%</span>
+              )}
+            </div>
+            {hasDownloadProgress && (
+              <div
+                role="progressbar"
+                aria-label="Recognition model download"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progress.percent}
+                className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"
+              >
+                <div
+                  className="h-full rounded-full bg-gold transition-[width] duration-200 ease-out motion-reduce:transition-none"
+                  style={{ width: `${Math.max(0, Math.min(100, progress.percent ?? 0))}%` }}
+                />
+              </div>
+            )}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--muted-deep)]">
+              <span>Private, on-device processing</span>
+              {modelProgress && <span className="tabular-nums">{modelProgress}</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatModelBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
+  return `${Math.max(0.1, bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function VideoChoice({

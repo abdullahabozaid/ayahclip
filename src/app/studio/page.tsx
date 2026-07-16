@@ -324,7 +324,7 @@ export default function StudioPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push(`/surah/${surah.id}`)}
-            className="flex items-center gap-1.5 text-sm text-[var(--muted)] transition-colors hover:text-parchment"
+            className="flex min-h-11 items-center gap-1.5 rounded-full px-1 text-sm text-[var(--muted)] transition-colors hover:text-parchment sm:min-h-9"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m6 6-6-6 6-6" />
@@ -333,7 +333,7 @@ export default function StudioPage() {
           </button>
           <button
             onClick={() => router.push("/")}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment sm:h-9 sm:w-9"
             aria-label="Exit editor"
             title={store.projectId ? "Exit; saved-project edits are kept" : "Exit without saving this draft"}
           >
@@ -407,7 +407,7 @@ export default function StudioPage() {
             <>
               <button
                 onClick={() => setShowSafeZones((v) => !v)}
-                className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs transition-colors ${
+                className={`flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs transition-colors sm:min-h-9 ${
                   showSafeZones
                     ? "bg-red-500/20 text-red-300 ring-1 ring-red-400/50"
                     : "btn-ghost"
@@ -423,7 +423,7 @@ export default function StudioPage() {
                     store.safeAreaTarget === frameMode ? "none" : frameMode
                   )
                 }
-                className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs transition-colors ${
+                className={`flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs transition-colors sm:min-h-9 ${
                   store.safeAreaTarget === frameMode
                     ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                     : "btn-ghost"
@@ -442,7 +442,7 @@ export default function StudioPage() {
           <button
             onClick={handleSaveClick}
             disabled={saveState === "saving"}
-            className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-sm transition-colors disabled:opacity-60 ${
+            className={`flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm transition-colors disabled:opacity-60 sm:min-h-9 ${
               saveState === "saved"
                 ? "bg-emerald-accent/20 text-emerald-soft ring-1 ring-emerald-soft/40"
                 : "btn-ghost"
@@ -466,7 +466,7 @@ export default function StudioPage() {
           <button
             onClick={openMp4Preview}
             disabled={mp4Rendering}
-            className="btn-ghost flex h-9 items-center gap-1.5 rounded-full px-3 disabled:opacity-70"
+            className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 disabled:opacity-70 sm:min-h-9"
             aria-label="Preview the final MP4"
             title="Render and watch the exact MP4 that export produces"
           >
@@ -492,7 +492,7 @@ export default function StudioPage() {
 
           <button
             onClick={() => openSettings(!settingsOpen)}
-            className={`flex h-9 items-center gap-2 rounded-full px-3 text-sm transition-colors ${
+            className={`flex min-h-11 items-center gap-2 rounded-full px-3 text-sm transition-colors sm:min-h-9 ${
               settingsOpen
                 ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                 : "btn-ghost"
@@ -523,7 +523,7 @@ export default function StudioPage() {
                 <button
                   key={m.id}
                   onClick={() => setFrameMode(m.id)}
-                  className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                  className={`min-h-11 rounded-full px-3 text-xs transition-colors ${
                     frameMode === m.id
                       ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                       : "text-[var(--muted)] hover:text-parchment"
@@ -568,7 +568,7 @@ export default function StudioPage() {
             {/* Collapse / expand the dock */}
             <button
               onClick={() => openTimeline(!timelineOpen)}
-              className="flex items-center gap-2 text-left"
+              className="flex min-h-11 items-center gap-2 rounded-full pr-2 text-left sm:min-h-8"
               aria-expanded={timelineOpen}
               title={timelineOpen ? "Minimize editor" : "Show editor"}
             >
@@ -591,7 +591,7 @@ export default function StudioPage() {
               <div className="ml-1 flex items-center gap-0.5 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-0.5">
                 <button
                   onClick={() => setEditorView("words")}
-                  className={`rounded-full px-2.5 py-1 text-[11px] transition-colors ${
+                  className={`min-h-11 rounded-full px-2.5 text-[11px] transition-colors sm:min-h-8 ${
                     editorView === "words"
                       ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                       : "text-[var(--muted)] hover:text-parchment"
@@ -601,7 +601,7 @@ export default function StudioPage() {
                 </button>
                 <button
                   onClick={() => setEditorView("timeline")}
-                  className={`rounded-full px-2.5 py-1 text-[11px] transition-colors ${
+                  className={`min-h-11 rounded-full px-2.5 text-[11px] transition-colors sm:min-h-8 ${
                     editorView === "timeline"
                       ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                       : "text-[var(--muted)] hover:text-parchment"
@@ -616,7 +616,7 @@ export default function StudioPage() {
               {timelineOpen && (
                 <button
                   onClick={() => setTimelineFullscreen(true)}
-                  className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold"
+                  className="flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold sm:min-h-8"
                   title="Edit in a full-screen editor with more room"
                 >
                   <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
@@ -627,7 +627,7 @@ export default function StudioPage() {
               )}
               <button
                 onClick={() => openTimeline(!timelineOpen)}
-                className="flex h-8 items-center gap-1.5 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment"
+                className="flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment sm:min-h-8"
               >
                 {timelineOpen ? "Minimize" : "Show"}
               </button>

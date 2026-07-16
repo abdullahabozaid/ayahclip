@@ -23,6 +23,10 @@ import { importedPlayer } from "@/lib/imported-player";
 import { browserDeviceMemoryGb } from "@/lib/import-limits";
 import { sanitizeArabic } from "@/lib/canvas-utils";
 import { QcfVerse } from "./QcfVerse";
+import {
+  AlignmentProgress,
+  type LocalAlignmentProgress,
+} from "./AlignmentProgress";
 import type { QcfWord } from "@/types";
 
 const MIN_DUR = 0.12;
@@ -330,9 +334,9 @@ export function VerseCardEditor() {
     importedPlayer.seek(cur.url, t);
   }, []);
 
-  // ---- Redetect / Deep align ------------------------------------------------
+  // ---- Pause rebuild / local recitation alignment ---------------------------
   const [redetecting, setRedetecting] = useState(false);
-  const [deepMsg, setDeepMsg] = useState<string | null>(null);
+  const [deepProgress, setDeepProgress] = useState<LocalAlignmentProgress | null>(null);
   const deepAbortRef = useRef<AbortController | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [alignmentReview, setAlignmentReview] = useState<AlignmentReview | null>(null);
@@ -383,7 +387,7 @@ export function VerseCardEditor() {
     const controller = new AbortController();
     deepAbortRef.current = controller;
     setDeepErr(null);
-    setDeepMsg("Preparing…");
+    setDeepProgress({ stage: "prepare", detail: "Preparing the imported audio" });
     try {
       const result = await alignImportedAudio({
         buffer: buf,
@@ -391,13 +395,17 @@ export function VerseCardEditor() {
         verseNumbers,
         signal: controller.signal,
         deviceMemoryGb: browserDeviceMemoryGb(),
-        onModelProgress: (loaded, total) => setDeepMsg(
+        onModelProgress: (loaded, total) => setDeepProgress(
           total
-            ? `Downloading model (one-time, ~131 MB)… ${Math.round((loaded / total) * 100)}%`
-            : "Listening…"
+            ? {
+              stage: "listen",
+              detail: "Downloading the local recognition model",
+              percent: Math.round((loaded / total) * 100),
+            }
+            : { stage: "listen", detail: "Listening for ayah transitions locally" }
         ),
       });
-      setDeepMsg("Aligning…");
+      setDeepProgress({ stage: "align", detail: "Placing and checking ayah boundaries" });
       commit(applyAlignedTimingsToRows(cur.timings, result.timings));
       setAlignmentReview(buildAlignmentReview(result.method, result.boundaryDiagnostics));
       setDeepErr(null);
@@ -406,13 +414,17 @@ export function VerseCardEditor() {
     } finally {
       if (deepAbortRef.current === controller) {
         deepAbortRef.current = null;
-        setDeepMsg(null);
+        setDeepProgress(null);
       }
     }
   }, [commit]);
 
   const cancelDeepAlign = useCallback(() => {
-    setDeepMsg("Cancelling…");
+    setDeepProgress((current) => ({
+      stage: current?.stage ?? "listen",
+      detail: "Cancelling alignment",
+      percent: current?.percent,
+    }));
     deepAbortRef.current?.abort();
   }, []);
 
@@ -431,7 +443,7 @@ export function VerseCardEditor() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => importedPlayer.toggle(url!)}
-            className="btn-gold flex h-10 w-10 items-center justify-center rounded-full"
+            className="btn-gold flex h-11 w-11 items-center justify-center rounded-full sm:h-10 sm:w-10"
             aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? (
@@ -458,7 +470,7 @@ export function VerseCardEditor() {
           <button
             onClick={undo}
             disabled={!canUndo}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[14px] text-parchment transition-colors hover:border-gold disabled:opacity-30 disabled:hover:border-[var(--hairline-soft)]"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[14px] text-parchment transition-colors hover:border-gold disabled:opacity-30 disabled:hover:border-[var(--hairline-soft)] sm:h-8 sm:w-8"
             title="Undo (⌘Z)"
             aria-label="Undo"
           >
@@ -467,7 +479,7 @@ export function VerseCardEditor() {
           <button
             onClick={redo}
             disabled={!canRedo}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[14px] text-parchment transition-colors hover:border-gold disabled:opacity-30 disabled:hover:border-[var(--hairline-soft)]"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[14px] text-parchment transition-colors hover:border-gold disabled:opacity-30 disabled:hover:border-[var(--hairline-soft)] sm:h-8 sm:w-8"
             title="Redo (⌘⇧Z)"
             aria-label="Redo"
           >
@@ -476,31 +488,26 @@ export function VerseCardEditor() {
           <span className="h-4 w-px bg-[var(--hairline-soft)]" />
           <button
             onClick={redetect}
-            disabled={redetecting || deepMsg != null}
-            className="rounded-full border border-[var(--hairline-soft)] px-3 py-1.5 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-40"
+            disabled={redetecting || deepProgress != null}
+            className="min-h-11 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-40 sm:min-h-9"
             title="Rebuild every verse boundary from the recitation's pauses"
           >
-            {redetecting ? "Redetecting…" : "↻ Redetect"}
+            {redetecting ? "Rebuilding…" : "↻ Rebuild from pauses"}
           </button>
           <button
             onClick={deepAlign}
-            disabled={redetecting || deepMsg != null}
-            className="rounded-full border border-[var(--hairline-soft)] px-3 py-1.5 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-40"
+            disabled={redetecting || deepProgress != null}
+            className="min-h-11 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-40 sm:min-h-9"
             title="Re-run speech recognition to align each verse to its audio"
           >
-            {deepMsg ?? "Deep align"}
+            Align by recitation
           </button>
-          {deepMsg && (
-            <button
-              type="button"
-              onClick={cancelDeepAlign}
-              className="rounded-full border border-[var(--hairline-soft)] px-3 py-1.5 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment"
-            >
-              Cancel
-            </button>
-          )}
         </div>
       </div>
+
+      {deepProgress && (
+        <AlignmentProgress progress={deepProgress} onCancel={cancelDeepAlign} />
+      )}
 
       {deepErr && (
         <div
@@ -511,7 +518,7 @@ export function VerseCardEditor() {
           <button
             onClick={() => setDeepErr(null)}
             aria-label="Dismiss"
-            className="ml-auto shrink-0 text-amber-200/60 hover:text-amber-100"
+            className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-amber-200/60 hover:bg-white/[0.04] hover:text-amber-100 sm:h-9 sm:w-9"
           >
             ✕
           </button>
@@ -531,7 +538,7 @@ export function VerseCardEditor() {
           <button
             onClick={() => setAlignmentReview(null)}
             aria-label="Dismiss alignment report"
-            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
+            className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full opacity-60 hover:bg-white/[0.04] hover:opacity-100 sm:h-9 sm:w-9"
           >
             ✕
           </button>
@@ -566,7 +573,7 @@ export function VerseCardEditor() {
       <p className="px-1 text-[11px] leading-relaxed text-[var(--muted-deep)]">
         Splitting a verse keeps every word — it just shows the verse in parts
         (part 1, part 2…), one after another. To remove a wrongly detected or
-        duplicate segment, use the 🗑 button on its card.
+        duplicate segment, use Delete on its card.
       </p>
     </div>
   );
@@ -690,7 +697,7 @@ function VerseCard({
                 e.stopPropagation();
                 onSetStart();
               }}
-              className="rounded text-parchment underline-offset-4 transition-colors hover:text-gold hover:underline"
+              className="inline-flex min-h-11 items-center rounded px-1 text-parchment underline-offset-4 transition-colors hover:text-gold hover:underline sm:min-h-7"
               title="Set this verse's start at the playhead"
             >
               {fmt(timing.start)}
@@ -701,7 +708,7 @@ function VerseCard({
                 e.stopPropagation();
                 onSetEnd();
               }}
-              className="rounded text-parchment underline-offset-4 transition-colors hover:text-gold hover:underline"
+              className="inline-flex min-h-11 items-center rounded px-1 text-parchment underline-offset-4 transition-colors hover:text-gold hover:underline sm:min-h-7"
               title="Set this verse's end at the playhead"
             >
               {fmt(timing.end)}
@@ -721,10 +728,10 @@ function VerseCard({
               e.stopPropagation();
               onDuplicate();
             }}
-            className="rounded-full border border-[var(--hairline)] px-3 py-1.5 text-[11px] text-parchment transition-colors hover:border-gold hover:text-gold"
+            className="min-h-11 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold hover:text-gold sm:min-h-8"
             title="Duplicate this verse"
           >
-            ⧉ Duplicate
+            Duplicate
           </button>
           {canDelete &&
             (confirmingDelete ? (
@@ -735,7 +742,7 @@ function VerseCard({
                     e.stopPropagation();
                     setConfirmingDelete(false);
                   }}
-                  className="rounded-full border border-[var(--hairline)] px-2.5 py-1 text-[11px] text-parchment transition-colors hover:border-gold"
+                  className="min-h-11 rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold sm:min-h-8"
                 >
                   Cancel
                 </button>
@@ -745,7 +752,7 @@ function VerseCard({
                     setConfirmingDelete(false);
                     onDelete();
                   }}
-                  className="rounded-full bg-red-500/15 px-2.5 py-1 text-[11px] text-red-300 ring-1 ring-inset ring-red-400/30 transition-colors hover:bg-red-500/25"
+                  className="min-h-11 rounded-full bg-red-500/15 px-2.5 text-[11px] text-red-300 ring-1 ring-inset ring-red-400/30 transition-colors hover:bg-red-500/25 sm:min-h-8"
                 >
                   Delete
                 </button>
@@ -756,7 +763,7 @@ function VerseCard({
                   e.stopPropagation();
                   setConfirmingDelete(true);
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-[var(--muted)] transition-colors hover:border-red-400/40 hover:text-red-300"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] text-[var(--muted)] transition-colors hover:border-red-400/40 hover:text-red-300 sm:h-7 sm:w-7"
                 title="Delete this whole verse from the clip"
                 aria-label="Delete verse"
               >
@@ -786,22 +793,24 @@ function VerseCard({
           const rel = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
           onSeek(timing.start + rel * dur);
         }}
-        className="relative mb-4 h-2.5 cursor-pointer overflow-hidden rounded-full bg-[var(--ink)] ring-1 ring-[var(--hairline-soft)]"
+        className="relative mb-4 h-11 cursor-pointer touch-none"
         title="Click to seek inside this verse"
       >
-        {splits.map((sp, si) => (
-          <span
-            key={si}
-            className="absolute top-0 bottom-0 w-px bg-emerald-soft"
-            style={{ left: `${((sp - timing.start) / dur) * 100}%` }}
-          />
-        ))}
-        {playheadInside && (
-          <span
-            className="absolute top-0 bottom-0 w-px bg-gold shadow-[0_0_4px_rgba(201,162,75,0.7)]"
-            style={{ left: `${((headTime - timing.start) / dur) * 100}%` }}
-          />
-        )}
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-2.5 -translate-y-1/2 overflow-hidden rounded-full bg-[var(--ink)] ring-1 ring-[var(--hairline-soft)]">
+          {splits.map((sp, si) => (
+            <span
+              key={si}
+              className="absolute top-0 bottom-0 w-px bg-emerald-soft"
+              style={{ left: `${((sp - timing.start) / dur) * 100}%` }}
+            />
+          ))}
+          {playheadInside && (
+            <span
+              className="absolute top-0 bottom-0 w-px bg-gold shadow-[0_0_4px_rgba(201,162,75,0.7)]"
+              style={{ left: `${((headTime - timing.start) / dur) * 100}%` }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Parts — each its own labeled block, stacked in order. */}
@@ -903,7 +912,7 @@ export function PartBlock({
               e.stopPropagation();
               onPlay();
             }}
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold sm:h-7 sm:w-7"
             aria-label={isPlaying ? "Pause" : "Play this part"}
             title="Play just this part"
           >
@@ -927,14 +936,14 @@ export function PartBlock({
                   return !o;
                 });
               }}
-              className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              className={`min-h-11 rounded-full border px-2.5 text-[11px] transition-colors sm:min-h-7 ${
                 splitOpen
                   ? "border-emerald-soft/60 text-emerald-soft"
                   : "border-[var(--hairline)] text-parchment hover:border-emerald-soft hover:text-emerald-soft"
               }`}
               title="Split this part into two parts at a word"
             >
-              ✂ Split
+              Split
             </button>
           )}
           {canRemove && (
@@ -943,7 +952,7 @@ export function PartBlock({
                 e.stopPropagation();
                 onRemove();
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:border-red-400/40 hover:text-red-300"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:border-red-400/40 hover:text-red-300 sm:h-7 sm:w-7"
               title="Merge this part back into the previous one"
             >
               ✕
@@ -1013,7 +1022,7 @@ export function PartBlock({
               <div className="flex gap-2">
                 <button
                   onClick={() => { setSelectedIdx(null); setHoverIdx(null); }}
-                  className="rounded-full border border-[var(--hairline)] px-3 py-1.5 text-[11px] text-parchment transition-colors hover:border-gold"
+                  className="min-h-11 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold sm:min-h-8"
                 >
                   Cancel
                 </button>
@@ -1024,7 +1033,7 @@ export function PartBlock({
                     setSelectedIdx(null);
                     setHoverIdx(null);
                   }}
-                  className="rounded-full bg-emerald-soft/15 px-3 py-1.5 text-[11px] text-emerald-soft ring-1 ring-inset ring-emerald-soft/30 transition-colors hover:bg-emerald-soft/25"
+                  className="min-h-11 rounded-full bg-emerald-soft/15 px-3 text-[11px] text-emerald-soft ring-1 ring-inset ring-emerald-soft/30 transition-colors hover:bg-emerald-soft/25 sm:min-h-8"
                 >
                   Split here
                 </button>

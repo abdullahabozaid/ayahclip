@@ -79,6 +79,15 @@ Editor mode contains:
 - Tablet: canvas and inspector, family rail becomes chips.
 - Mobile: canvas first; inspector sections stack; sticky bottom actions for Save and Use template.
 
+## Recognition and alignment rules
+
+- Import recognition exposes four real stages: **Prepare**, **Listen**, **Match**, and **Align**. Studio alignment exposes **Prepare**, **Listen**, and **Place cuts**.
+- Show model-download percentage when available, the current local action, cancel, and a short on-device privacy note. Do not use generic AI icons, magic language, fake confidence percentages, or indefinite “analysing” copy.
+- Treat Quran-range confidence and boundary confidence separately. The result names the suggested surah and ayah range, alignment method, and only the ayah transitions that require listening.
+- Manual range controls remain available in every outcome. Require explicit Quran-range confirmation before the creator can continue.
+- Alignment is transactional and reversible. Existing timing edits remain untouched until a full result succeeds; cancellation and errors explain the recovery path.
+- Use “Align by recitation” and “Rebuild from pauses” instead of implementation jargon.
+
 ## Implementation constraints
 
 - Continue using the real export renderer for every preview.

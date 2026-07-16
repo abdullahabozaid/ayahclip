@@ -60,11 +60,14 @@ test("a real local audio file survives import, template choice, save, and reopen
     buffer: toneWav(),
   });
   await expect(page.getByRole("button", { name: /market-readiness\.wav/ })).toContainText("Loaded");
-  await expect(page.getByRole("button", { name: "Auto-detect verses" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Recognise verses" })).toBeEnabled();
 
   await page.getByRole("combobox", { name: "Surah" }).selectOption("51");
   await page.getByRole("spinbutton", { name: "From" }).fill("1");
   await page.getByRole("spinbutton", { name: "To" }).fill("2");
+  await expect(page.getByRole("button", { name: "Choose a template" })).toBeDisabled();
+  await page.getByRole("checkbox", { name: /I confirm this Quran range/ }).check();
+  await expect(page.getByRole("button", { name: "Choose a template" })).toBeEnabled();
   await page.getByRole("button", { name: "Choose a template" }).click();
 
   await expect(page).toHaveURL(/\/styles\?from=import/);
