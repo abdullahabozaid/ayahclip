@@ -24,6 +24,26 @@ function fmt(s: number): string {
 const MIN_DUR = 0.12;
 const MAX_CANVAS_W = 16000;
 
+/** Precompute one peak amplitude per bucket so the waveform redraws (on every
+ *  zoom/scroll) never re-scan the raw samples. Mono (channel 0). */
+function buildPeaks(buf: AudioBuffer, buckets: number): Float32Array {
+  const ch = buf.getChannelData(0);
+  const len = ch.length;
+  const per = len / buckets;
+  const peaks = new Float32Array(buckets);
+  for (let b = 0; b < buckets; b++) {
+    const s0 = Math.floor(b * per);
+    const s1 = Math.min(len, Math.floor((b + 1) * per));
+    let peak = 0;
+    for (let i = s0; i < s1; i++) {
+      const v = Math.abs(ch[i]);
+      if (v > peak) peak = v;
+    }
+    peaks[b] = peak;
+  }
+  return peaks;
+}
+
 type DragKind = "start" | "end" | "body" | "split";
 interface Drag {
   index: number;
@@ -56,9 +76,13 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const scrollRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
+  const progressCanvasRef = useRef<HTMLCanvasElement>(null);
   const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const bufferRef = useRef<AudioBuffer | null>(null);
+  // Cached min/max peaks (one amplitude per bucket), computed once at decode so
+  // zoom/scroll redraws never re-scan the raw samples (millions of them).
+  const peaksRef = useRef<Float32Array | null>(null);
   const pausesRef = useRef<number[]>([]);
   const dragRef = useRef<Drag | null>(null);
   const durationRef = useRef(0);
@@ -151,6 +175,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         const buffer = await decodeAudioFile(blob);
         if (cancelled) return;
         bufferRef.current = buffer;
+        peaksRef.current = buildPeaks(buffer, 3000);
         pausesRef.current = findSilenceCenters(buffer).map((p) => p.time);
         setDuration(buffer.duration);
         setDecoded(true);
@@ -165,40 +190,76 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     };
   }, [url]);
 
-  // ---- Crisp waveform: redraw at the track's real pixel size (per zoom) ----
+  // Move the playhead line AND reveal the gold "played" waveform up to it — both
+  // are pure style updates (no canvas redraw), cheap enough to run every frame.
+  const setPlayheadVisual = useCallback((pct: number) => {
+    if (playheadRef.current) playheadRef.current.style.left = `${pct}%`;
+    if (progressCanvasRef.current) {
+      progressCanvasRef.current.style.clipPath = `inset(0 ${Math.max(0, 100 - pct)}% 0 0)`;
+    }
+  }, []);
+
+  // Draw the cached peaks into a canvas as centered mirror bars in one colour.
+  const drawBars = (ctx: CanvasRenderingContext2D, W: number, H: number, color: string) => {
+    const peaks = peaksRef.current;
+    if (!peaks) return;
+    ctx.fillStyle = color;
+    const mid = H / 2;
+    const n = peaks.length;
+    for (let x = 0; x < W; x++) {
+      const b0 = Math.floor((x / W) * n);
+      const b1 = Math.min(n - 1, Math.floor(((x + 1) / W) * n));
+      let peak = 0;
+      for (let b = b0; b <= b1; b++) if (peaks[b] > peak) peak = peaks[b];
+      const barH = Math.max(1, peak * H * 0.9);
+      ctx.fillRect(x, mid - barH / 2, 1, barH);
+    }
+  };
+
+  // ---- Two-colour waveform from cached peaks (redraws only on zoom/resize) ----
+  // Base = dim parchment (unplayed); a stacked gold canvas (the "played" copy) is
+  // revealed left-to-right by a clip-path that tracks the playhead — so playback
+  // progress is shown without redrawing the canvas every frame. Detected pauses
+  // (the silence gaps that define verse boundaries) are drawn as faint gold bands
+  // so the user can see what they're segmenting on.
   const drawWaveform = useCallback(() => {
-    const canvas = waveCanvasRef.current;
+    const base = waveCanvasRef.current;
+    const prog = progressCanvasRef.current;
     const track = trackRef.current;
-    const buf = bufferRef.current;
-    if (!canvas || !track || !buf) return;
+    if (!base || !track || !peaksRef.current) return;
     const cssW = track.clientWidth;
     const cssH = track.clientHeight;
     if (cssW === 0 || cssH === 0) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const W = Math.min(MAX_CANVAS_W, Math.floor(cssW * dpr));
     const H = Math.floor(cssH * dpr);
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, W, H);
-    // Neutral parchment so the audio reads as "the recitation" and stays distinct
-    // from the gold verse cards layered on top.
-    ctx.fillStyle = "rgba(228,221,201,0.5)";
-    const ch = buf.getChannelData(0);
-    const len = ch.length;
-    const mid = H / 2;
-    const samplesPerCol = len / W;
-    for (let x = 0; x < W; x++) {
-      const s0 = Math.floor(x * samplesPerCol);
-      const s1 = Math.min(len, Math.floor((x + 1) * samplesPerCol));
-      let peak = 0;
-      for (let i = s0; i < s1; i++) {
-        const v = Math.abs(ch[i]);
-        if (v > peak) peak = v;
+
+    base.width = W;
+    base.height = H;
+    const bctx = base.getContext("2d");
+    if (!bctx) return;
+    bctx.clearRect(0, 0, W, H);
+    // Faint gold bands at the detected silence centres — the pauses the auto-split
+    // and snapping use, now visible instead of invisible drag targets.
+    const dur = durationRef.current;
+    if (dur > 0 && pausesRef.current.length) {
+      bctx.fillStyle = "rgba(224,192,116,0.20)";
+      const bandW = Math.max(1, Math.round(2 * dpr));
+      for (const p of pausesRef.current) {
+        const x = (p / dur) * W;
+        bctx.fillRect(x - bandW / 2, 0, bandW, H);
       }
-      const barH = Math.max(1, peak * H * 0.92);
-      ctx.fillRect(x, mid - barH / 2, 1, barH);
+    }
+    drawBars(bctx, W, H, "rgba(236,231,218,0.36)"); // parchment, unplayed
+
+    if (prog) {
+      prog.width = W;
+      prog.height = H;
+      const pctx = prog.getContext("2d");
+      if (pctx) {
+        pctx.clearRect(0, 0, W, H);
+        drawBars(pctx, W, H, "rgba(201,162,75,0.9)"); // gold, played
+      }
     }
   }, []);
 
@@ -212,32 +273,35 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   }, [drawWaveform]);
 
   useEffect(() => {
-    if (decoded) requestAnimationFrame(() => drawWaveform());
-  }, [decoded, drawWaveform]);
+    if (!decoded) return;
+    requestAnimationFrame(() => {
+      drawWaveform();
+      // Reveal the played portion for the current playhead (non-zero after a
+      // remount, e.g. toggling fullscreen mid-clip).
+      const dur = durationRef.current;
+      if (dur > 0) setPlayheadVisual((headTimeRef.current / dur) * 100);
+    });
+  }, [decoded, drawWaveform, setPlayheadVisual]);
 
   // ---- Minimap: a coarse overview of the whole clip with a viewport box ----
+  // Reuses the cached peaks (no second raw-sample scan).
   useEffect(() => {
     const canvas = minimapCanvasRef.current;
-    const buf = bufferRef.current;
-    if (!canvas || !buf) return;
+    const peaks = peaksRef.current;
+    if (!canvas || !peaks) return;
     const W = (canvas.width = 1000);
     const H = (canvas.height = 48);
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(228,221,201,0.4)";
-    const ch = buf.getChannelData(0);
-    const len = ch.length;
+    ctx.fillStyle = "rgba(236,231,218,0.4)";
     const mid = H / 2;
-    const per = len / W;
+    const n = peaks.length;
     for (let x = 0; x < W; x++) {
+      const b0 = Math.floor((x / W) * n);
+      const b1 = Math.min(n - 1, Math.floor(((x + 1) / W) * n));
       let peak = 0;
-      const s0 = Math.floor(x * per);
-      const s1 = Math.min(len, Math.floor((x + 1) * per));
-      for (let i = s0; i < s1; i += 8) {
-        const v = Math.abs(ch[i]);
-        if (v > peak) peak = v;
-      }
+      for (let b = b0; b <= b1; b++) if (peaks[b] > peak) peak = peaks[b];
       ctx.fillRect(x, mid - (peak * H * 0.9) / 2, 1, Math.max(1, peak * H * 0.9));
     }
   }, [decoded]);
@@ -278,8 +342,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       setPlaying(isPlaying);
       setHeadTime(time);
       const dur = durationRef.current;
-      if (playheadRef.current && dur > 0) {
-        playheadRef.current.style.left = `${(time / dur) * 100}%`;
+      if (dur > 0) {
+        setPlayheadVisual((time / dur) * 100);
       }
       if (isPlaying) {
         const cont = scrollRef.current;
@@ -291,7 +355,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         }
       }
     });
-  }, []);
+  }, [setPlayheadVisual]);
 
   const pxToTime = useCallback((clientX: number): number => {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -304,9 +368,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const setHead = useCallback((t: number) => {
     setHeadTime(t);
     const dur = durationRef.current;
-    if (playheadRef.current && dur > 0) {
-      playheadRef.current.style.left = `${(t / dur) * 100}%`;
-    }
+    if (dur > 0) setPlayheadVisual((t / dur) * 100);
     const segs = useAppStore.getState().audioSource;
     if (segs.mode === "imported") {
       const idx = segs.timings.findIndex((tm) => t >= tm.start && t < tm.end);
@@ -314,7 +376,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         useAppStore.getState().setCurrentVerseIndex(idx);
       }
     }
-  }, []);
+  }, [setPlayheadVisual]);
 
   const seek = useCallback(
     (t: number) => {
@@ -1291,6 +1353,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               ref={waveCanvasRef}
               data-wave="1"
               className="pointer-events-none absolute inset-0 h-full w-full"
+            />
+            {/* Gold "played" copy, revealed left-to-right by a clip-path that
+                tracks the playhead (updated in setPlayheadVisual). */}
+            <canvas
+              ref={progressCanvasRef}
+              aria-hidden
+              className="pointer-events-none absolute inset-0 h-full w-full"
+              style={{ clipPath: "inset(0 100% 0 0)" }}
             />
 
             {/* Verse segment blocks — each split part is its own block.
