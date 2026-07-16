@@ -44,6 +44,30 @@ function buildPeaks(buf: AudioBuffer, buckets: number): Float32Array {
   return peaks;
 }
 
+// Inline SVG icon set for the timeline toolbar — replaces the emoji that read
+// as utilitarian next to the hand-drawn SVGs used elsewhere. One stroke style,
+// matching the app's existing 24-box / strokeWidth-2 language.
+const TL_ICON = {
+  loop: ["M17 2l4 4-4 4", "M3 11V9a4 4 0 0 1 4-4h14", "M7 22l-4-4 4-4", "M21 13v2a4 4 0 0 1-4 4H3"],
+  scissors: ["M6 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M20 4 8.5 15.5", "M14.5 14.5 20 20", "M8.5 8.5 12 12"],
+  copy: ["M9 9h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z", "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"],
+  refresh: ["M21 2v6h-6", "M3 12a9 9 0 0 1 15-6.7L21 8", "M3 22v-6h6", "M21 12a9 9 0 0 1-15 6.7L3 16"],
+  trimStart: ["M8 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h3", "M14 8l-4 4 4 4"],
+  trimEnd: ["M16 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3", "M10 8l4 4-4 4"],
+  type: ["M4 7V5h16v2", "M12 5v14", "M9 19h6"],
+  x: ["M6 6l12 12", "M18 6 6 18"],
+} as const;
+
+function TlIcon({ d, className = "h-3.5 w-3.5" }: { d: readonly string[]; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {d.map((p, i) => (
+        <path key={i} d={p} />
+      ))}
+    </svg>
+  );
+}
+
 type DragKind = "start" | "end" | "body" | "split";
 interface Drag {
   index: number;
@@ -956,7 +980,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         setDeepErr("Couldn't align to the verses — used pause detection instead. Fine-tune by ear.");
       }
     } catch {
-      setDeepErr("Deep align failed (model couldn't load). Check your connection and retry, or use ↻ Redetect.");
+      setDeepErr("Deep align failed (model couldn't load). Check your connection and retry, or use Redetect.");
     } finally {
       setDeepMsg(null);
     }
@@ -995,12 +1019,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         <button
           onClick={toggleLoop}
           disabled={loading || duration === 0}
-          className={`flex h-9 items-center rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 ${
+          className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 ${
             looping ? "bg-[var(--gold)] text-[var(--ink-deep)]" : "btn-ghost"
           }`}
           title="Loop the selected verse to fine-tune its start/end by ear"
         >
-          🔁 Loop verse
+          <TlIcon d={TL_ICON.loop} /> Loop verse
         </button>
 
         {/* Undo / Redo — paired buttons next to the transport so the user
@@ -1087,10 +1111,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           <button
             onClick={redetect}
             disabled={busy || loading}
-            className="btn-gold rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            className="btn-gold flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
             title="Rebuild every verse boundary from the recitation's pauses"
           >
-            {redetecting ? "Redetecting…" : "↻ Redetect"}
+            {redetecting ? "Redetecting…" : <><TlIcon d={TL_ICON.refresh} /> Redetect</>}
           </button>
           <button
             onClick={deepAlign}
@@ -1104,18 +1128,18 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           <button
             onClick={() => trimTo("start")}
             disabled={loading || duration === 0}
-            className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            className="btn-ghost flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
             title="Delete everything before the playhead"
           >
-            ⇤ Trim start
+            <TlIcon d={TL_ICON.trimStart} /> Trim start
           </button>
           <button
             onClick={() => trimTo("end")}
             disabled={loading || duration === 0}
-            className="btn-ghost rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
+            className="btn-ghost flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] disabled:opacity-40"
             title="Delete everything after the playhead"
           >
-            Trim end ⇥
+            Trim end <TlIcon d={TL_ICON.trimEnd} />
           </button>
           <span className="ml-auto hidden text-[10px] text-[var(--muted-deep)] sm:inline">
             Rebuild or refine the detection · crop the edges
@@ -1126,15 +1150,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       {deepErr && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200/90"
+          className="flex items-start gap-2 rounded-lg border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-3 py-2 text-[11px] text-gold-soft"
         >
           <span className="leading-relaxed">{deepErr}</span>
           <button
             onClick={() => setDeepErr(null)}
             aria-label="Dismiss"
-            className="ml-auto shrink-0 text-amber-200/60 hover:text-amber-100"
+            className="ml-auto shrink-0 text-gold-soft/60 transition-colors hover:text-gold-soft"
           >
-            ✕
+            <TlIcon d={TL_ICON.x} className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
@@ -1186,7 +1210,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px]"
               title="Split this verse's text at the playhead (for long verses)"
             >
-              ✂ Split
+              <TlIcon d={TL_ICON.scissors} /> Split
             </button>
 
             {splitCount > 0 && (
@@ -1208,7 +1232,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               }`}
               title="Keep only a contiguous range of this verse's words"
             >
-              ✂ Words {isTrimmed && `· ${range.to - range.from + 1}/${totalWords}`}
+              <TlIcon d={TL_ICON.type} /> Words {isTrimmed && `· ${range.to - range.from + 1}/${totalWords}`}
             </button>
 
             <button
@@ -1216,7 +1240,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px]"
               title="Duplicate this verse so the same ayah appears twice on the timeline"
             >
-              ⧉ Duplicate
+              <TlIcon d={TL_ICON.copy} /> Duplicate
             </button>
 
             {wordTrimOpen && totalWords >= 2 && (
@@ -1416,9 +1440,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     </span>
                     <div
                       onPointerDown={startDrag(seg.tIdx, leftDrag, leftSplitIdx)}
-                      className={`absolute left-0 top-0 bottom-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/15 ${isFirst ? "rounded-l-md" : ""}`}
+                      className={`group/h absolute left-0 top-0 bottom-0 z-10 flex w-5 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isFirst ? "rounded-l-md" : ""}`}
                       title={isFirst ? "Drag the verse start" : "Drag to adjust split boundary"}
-                    />
+                    >
+                      <span className="h-1/2 w-0.5 rounded-full bg-gold/50 transition-all group-hover/h:h-2/3 group-hover/h:bg-gold group-active/h:h-3/4" />
+                    </div>
                     <div
                       onPointerDown={startDrag(seg.tIdx, "body")}
                       onPointerUp={onBodyPointerUp(seg.tIdx)}
@@ -1431,19 +1457,22 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     />
                     <div
                       onPointerDown={startDrag(seg.tIdx, rightDrag, rightSplitIdx)}
-                      className={`absolute right-0 top-0 bottom-0 z-10 w-2.5 cursor-ew-resize hover:bg-gold/15 ${isLast ? "rounded-r-md" : ""}`}
+                      className={`group/h absolute right-0 top-0 bottom-0 z-10 flex w-5 cursor-ew-resize items-center justify-center hover:bg-gold/10 active:bg-gold/20 ${isLast ? "rounded-r-md" : ""}`}
                       title={isLast ? "Drag the verse end" : "Drag to adjust split boundary"}
-                    />
+                    >
+                      <span className="h-1/2 w-0.5 rounded-full bg-gold/50 transition-all group-hover/h:h-2/3 group-hover/h:bg-gold group-active/h:h-3/4" />
+                    </div>
                     {active && !isLast && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           removeSplit(seg.tIdx, seg.pIdx);
                         }}
-                        className="absolute -right-2 top-1/2 z-[16] flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-[10px] leading-none text-emerald-soft ring-1 ring-[var(--hairline)] hover:text-red-400"
+                        className="absolute -right-3 top-1/2 z-[16] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-[var(--ink-deep)] text-emerald-soft ring-1 ring-[var(--hairline)] transition-colors hover:text-gold-soft"
                         title="Merge with next part"
+                        aria-label="Merge with next part"
                       >
-                        ×
+                        <TlIcon d={TL_ICON.x} className="h-3 w-3" />
                       </button>
                     )}
                   </div>
@@ -1570,9 +1599,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               <button
                 onClick={() => setShortcutsOpen(false)}
                 aria-label="Close"
-                className="text-[var(--muted-deep)] hover:text-parchment"
+                className="text-[var(--muted-deep)] transition-colors hover:text-parchment"
               >
-                ✕
+                <TlIcon d={TL_ICON.x} className="h-4 w-4" />
               </button>
             </div>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px]">
