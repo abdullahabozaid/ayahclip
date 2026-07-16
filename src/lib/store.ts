@@ -3,6 +3,7 @@ import { Surah, Verse, VideoFormat, Background, TextShadow, LetterboxConfig, Pro
 import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, MediaTransform } from "./canvas-utils";
 import { StyleSettings } from "./style";
 import { VerseTiming } from "./audio-import";
+import { normalizeTimings } from "./timing-ops";
 import { sanitizeArabic } from "./canvas-utils";
 import { backgroundPresets } from "./backgrounds";
 import {
@@ -494,10 +495,14 @@ export const useAppStore = create<AppState>((set) => ({
   setAudioFadeIn: (on) => set({ audioFadeIn: on }),
   setImportedAudio: (url, name, timings) =>
     set({ audioSource: { mode: "imported", url, name, timings } }),
+  // The single chokepoint for timeline edits. normalizeTimings clamps any split
+  // that escaped its verse's bounds (which made verseTextAt overrun and show the
+  // wrong words) without ever reordering/dropping rows or splits — so duplicated
+  // verses and splitWords parallelism are preserved.
   setVerseTimings: (timings) =>
     set((state) =>
       state.audioSource.mode === "imported"
-        ? { audioSource: { ...state.audioSource, timings } }
+        ? { audioSource: { ...state.audioSource, timings: normalizeTimings(timings) } }
         : {}
     ),
   // Remove a whole verse (one editor card) from an imported clip. Drops the
