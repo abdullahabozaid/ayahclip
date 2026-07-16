@@ -372,6 +372,8 @@ export interface Emissions {
   V: number;
   /** Seconds per frame (audioDuration / T). */
   frameDur: number;
+  /** Original-file offset when this pass was run on a cropped retry window. */
+  timeOffset?: number;
   blankId: number;
   /** The raw model vocab (id → token), for skeleton reduction. */
   vocab: Record<string, string>;

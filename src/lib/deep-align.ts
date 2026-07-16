@@ -11,6 +11,7 @@ import {
 } from "./forced-align";
 import { getVerseWeights, loadCorpus } from "./verse-match";
 import { recognitionDurationError } from "./import-limits";
+import { leadingRecognitionRetryOffset, offsetEmissions } from "./recognition-retry";
 
 export interface DeepAlignmentResult {
   timings: VerseTiming[];
@@ -38,6 +39,15 @@ export function attachAlignmentDiagnostics(
       alignmentAgreementSeconds: diagnostic?.agreementSeconds ?? null,
     };
   });
+}
+
+function alignmentQuality(result: ReturnType<typeof forceAlignVersesDetailed>): number {
+  if (!result) return -Infinity;
+  const confidence = result.boundaryDiagnostics.reduce(
+    (total, diagnostic) => total + (diagnostic.confidence === "high" ? 3 : diagnostic.confidence === "medium" ? 1 : -2),
+    0,
+  );
+  return confidence + (result.transcriptSimilarity ?? 0) * 6 - (result.methodAgreementSeconds ?? 1);
 }
 
 /** One shared deep-alignment pipeline for both timeline editor surfaces. */
@@ -68,8 +78,8 @@ export async function alignImportedAudio(params: {
   }
   const audio = await resampleTo16kMono(buffer);
   const { computeEmissions } = await import("./asr");
-  const emissions = await computeEmissions(audio, onModelProgress, signal);
-  const detailed = forceAlignVersesDetailed({
+  let emissions = await computeEmissions(audio, onModelProgress, signal);
+  const alignmentInput = () => ({
     emissions,
     surah,
     verseNumbers,
@@ -77,6 +87,27 @@ export async function alignImportedAudio(params: {
     audioStart: findSpeechSpan(buffer).start,
     silences: findSilenceCenters(buffer),
   });
+  let detailed = forceAlignVersesDetailed(alignmentInput());
+  const retryOffset = leadingRecognitionRetryOffset(
+    emissions.transcription,
+    audio.length / 16_000,
+  );
+  const needsRetry = retryOffset !== null && (
+    !detailed ||
+    (detailed.transcriptSimilarity ?? 0) < 0.7 ||
+    detailed.boundaryDiagnostics.some((diagnostic) => diagnostic.confidence === "low")
+  );
+  if (needsRetry && retryOffset !== null) {
+    const retrySamples = Math.round(retryOffset * 16_000);
+    const retryEmissions = offsetEmissions(
+      await computeEmissions(audio.subarray(retrySamples), undefined, signal),
+      retryOffset,
+    );
+    const initial = detailed;
+    emissions = retryEmissions;
+    const retried = forceAlignVersesDetailed(alignmentInput());
+    if (alignmentQuality(retried) > alignmentQuality(initial)) detailed = retried;
+  }
   if (detailed) {
     return {
       ...detailed,

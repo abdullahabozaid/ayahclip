@@ -28,6 +28,10 @@ import {
 } from "@/lib/alignment-feedback";
 import { Surah } from "@/types";
 import {
+  leadingRecognitionRetryOffset,
+  offsetEmissions,
+} from "@/lib/recognition-retry";
+import {
   browserDeviceMemoryGb,
   importSizeError,
   recognitionDurationError,
@@ -99,7 +103,7 @@ export default function ImportPage() {
       const audio = await resampleTo16kMono(buffer);
       setDetectMsg("Loading recognition model (first time ~131 MB)…");
       const { computeEmissions } = await import("@/lib/asr");
-      const emissions = await computeEmissions(audio, (loaded, total) => {
+      let emissions = await computeEmissions(audio, (loaded, total) => {
         if (total) setDetectMsg(`Downloading model… ${Math.round((loaded / total) * 100)}%`);
         else setDetectMsg("Recognising…");
       }, controller.signal);
@@ -108,9 +112,32 @@ export default function ImportPage() {
         abortError.name = "AbortError";
         throw abortError;
       }
-      const transcript = emissions.transcription.text;
+      let transcript = emissions.transcription.text;
       setDetectMsg("Matching to the Quran…");
-      const assessment = assessVerseMatch(transcript);
+      let assessment = assessVerseMatch(transcript);
+      const retryOffset = assessment.confidence === "low"
+        ? leadingRecognitionRetryOffset(emissions.transcription, audio.length / 16_000)
+        : null;
+      if (retryOffset !== null) {
+        setDetectMsg("Retrying after the unrecognised intro…");
+        const retrySamples = Math.round(retryOffset * 16_000);
+        const retryEmissions = offsetEmissions(
+          await computeEmissions(audio.subarray(retrySamples), undefined, controller.signal),
+          retryOffset,
+        );
+        const retryAssessment = assessVerseMatch(retryEmissions.transcription.text);
+        const currentScore = assessment.match?.score ?? 0;
+        const retryScore = retryAssessment.match?.score ?? 0;
+        const confidenceRank = { low: 0, medium: 1, high: 2 } as const;
+        if (
+          confidenceRank[retryAssessment.confidence] > confidenceRank[assessment.confidence] ||
+          (retryAssessment.confidence === assessment.confidence && retryScore > currentScore)
+        ) {
+          emissions = retryEmissions;
+          transcript = retryEmissions.transcription.text;
+          assessment = retryAssessment;
+        }
+      }
       const initialMatch = assessment.match;
       const speechSpan = findSpeechSpan(buffer);
       const recovery = initialMatch

@@ -13,6 +13,10 @@ const cases = [
   { dir: "sudais", source: "Abdurrahmaan_As-Sudais_192kbps", surah: 1, verses: [1, 2, 3, 4, 5, 6, 7] },
   { dir: "husary", source: "Husary_128kbps", surah: 1, verses: [1, 2, 3, 4, 5, 6, 7] },
   { dir: "basit-murattal", source: "Abdul_Basit_Murattal_192kbps", surah: 1, verses: [1, 2, 3, 4, 5, 6, 7] },
+  // Hold-out voices: deliberately absent from the original tuning matrix.
+  { dir: "holdout-ghamadi", source: "Ghamadi_40kbps", surah: 1, verses: [1, 2, 3, 4, 5, 6, 7] },
+  { dir: "holdout-hudhaify", source: "Hudhaify_128kbps", surah: 1, verses: [1, 2, 3, 4, 5, 6, 7] },
+  { dir: "holdout-ayyoub", source: "Muhammad_Ayyoub_128kbps", surah: 1, verses: [1, 2, 3, 4, 5, 6, 7] },
   { dir: "alafasy-baqarah-opening", source: "Alafasy_128kbps", surah: 2, verses: [1, 2, 3, 4, 5] },
   { dir: "alafasy-long-ayah", source: "Alafasy_128kbps", surah: 2, verses: [254, 255, 256] },
   { dir: "alafasy-mid-ayah", source: "Alafasy_128kbps", surah: 2, verses: [255, 256] },

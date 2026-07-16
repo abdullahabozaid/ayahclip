@@ -3,13 +3,18 @@
 // here — it's a render concern (the display leads the audio), so alignment just
 // produces clean onset-to-onset boundaries. The acoustic alignment itself is
 // covered by ctc-align / ctc-vocab.
-import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, it, expect, vi } from "vitest";
 import {
   assembleTimings,
   classifyBoundaryConfidence,
+  forceAlignVersesDetailed,
   fuseAlignmentTimings,
   refineTranscriptCuts,
 } from "@/lib/forced-align";
+import type { Emissions } from "@/lib/asr";
+import { loadCorpus } from "@/lib/verse-match";
 
 describe("assembleTimings", () => {
   it("makes contiguous verses from the onsets when there's nothing to snap to", () => {
@@ -178,5 +183,50 @@ describe("fuseAlignmentTimings", () => {
     });
     expect(weak.usedCtcBoundaries).toEqual([]);
     expect(equallyClose.usedCtcBoundaries).toEqual([]);
+  });
+});
+
+describe("cropped recognition timing", () => {
+  it("maps CTC token timing back onto the original file", async () => {
+    const corpus = JSON.parse(
+      readFileSync(resolve("public/quran-corpus.json"), "utf8"),
+    );
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => corpus })));
+    await loadCorpus();
+    const reference = "بسـم الله الرحمن الرحيم".replace("ـ", "");
+    const letters = [...new Set(reference.replace(/\s/g, ""))];
+    const vocab = Object.fromEntries([
+      ["0", "<blank>"],
+      ...letters.map((letter, index) => [String(index + 1), letter]),
+    ]);
+    const ids = [...reference.replace(/\s/g, "")].map(
+      (letter) => letters.indexOf(letter) + 1,
+    );
+    const path = [0, ...ids.flatMap((id) => [id, 0])];
+    const V = letters.length + 1;
+    const logProbs = new Float32Array(path.length * V).fill(-20);
+    path.forEach((id, frame) => {
+      logProbs[frame * V + id] = 0;
+    });
+    const emissions = {
+      logProbs,
+      T: path.length,
+      V,
+      frameDur: 0.05,
+      timeOffset: 2.25,
+      blankId: 0,
+      vocab,
+      transcription: { text: "", charTimes: [], wordStarts: [] },
+    } satisfies Emissions;
+
+    const result = forceAlignVersesDetailed({
+      emissions,
+      surah: 1,
+      verseNumbers: [1],
+      audioDuration: 8,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.timings[0].start).toBeCloseTo(2.3);
   });
 });

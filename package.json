@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:detection": "tsx scripts/test-detection.ts",
+    "test:alignment": "node scripts/test-alignment-matrix.mjs",
     "benchmark:fixtures": "node scripts/fetch-alignment-fixtures.mjs"
   },
   "dependencies": {

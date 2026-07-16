@@ -25,6 +25,9 @@ Run one case with:
 npm run benchmark:fixtures
 npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/alafasy
 npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/alafasy --trim-silence
+npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/holdout-hudhaify --phone --music-snr 12
+npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/holdout-ayyoub --intro-seconds 2
+npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/holdout-ayyoub --intro-seconds 2 --recognition-offset 2.289
 ```
 
 ## Results (2026-07-16)
@@ -75,12 +78,40 @@ error improved from **0.335s to 0.150s** and maximum error from **0.774s to
 The original five-reciter matrix was rerun after fusion and remained unchanged,
 confirming the edge-case fix did not regress the established baseline.
 
+### Hold-out voices and capture stressors
+
+Three voices absent from the original tuning matrix were added as a slow release
+gate. The deterministic stress modes preserve sample-exact boundaries while
+approximating a narrow-band phone capture and a low-level tonal background.
+
+| Hold-out case | Natural mean / max | Run-on mean / max | Detection |
+|---|---:|---:|---|
+| Saad Al-Ghamadi | 0.103s / 0.300s | 0.231s / 0.630s | 1:1–7, high |
+| Ali Al-Hudhaify | 0.153s / 0.247s | 0.218s / 0.605s | 1:1–7, high |
+| Muhammad Ayyoub | 0.165s / 0.346s | 0.191s / 0.637s | 1:1–7, high |
+| Hudhaify · phone band + 12 dB background | 0.378s / 0.764s | 0.171s / 0.605s | 1:1–7, high |
+
+A two-second non-speech tonal intro exposed a genuine normalization failure:
+detection fell to low confidence and internal cuts reached **1.184s mean / 2.477s
+max**. The production pipeline now retries only when the first model pass itself
+reports a substantial unrecognised opening span. It keeps 350ms of pre-roll and
+maps the cropped pass back to original-file time. The same fixture then returns
+1:1–7 at high confidence with **0.167s mean / 0.336s max** cut error.
+
+Run the complete slow gate with:
+
+```sh
+npm run benchmark:fixtures
+npm run test:alignment
+```
+
 ## Remaining gates
 
-- Add real clips containing mixed non-recitation speech or music. Text-level
-  adversarial Arabic speech/greeting/shahada/takbir cases are rejected, but the
-  acoustic model still needs mixed-audio evaluation.
-- Add phone recordings and unseen reciters using a leakage-free licensed set.
+- The reproducible harness now includes three hold-out voices plus deterministic
+  phone-band and synthetic background-audio stress modes. These are regression
+  stressors, not a substitute for the remaining real handset/mixed-speech corpus.
+- Add real clips containing mixed non-recitation Arabic speech and real handset
+  recordings using a leakage-free licensed set.
 - Calibrate the persisted per-boundary confidence thresholds against the future
   unseen-reciter and mixed-audio sets; low-agreement cuts are already saved and
   surfaced as amber review markers in the timeline.

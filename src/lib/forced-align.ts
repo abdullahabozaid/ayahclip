@@ -236,6 +236,7 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
   if (!aligned) return null;
 
   const fd = emissions.frameDur;
+  const timeOffset = emissions.timeOffset ?? 0;
   const tokens = aligned.tokens;
   // Per-verse recitation onset = first token's start; end = last token's end.
   const onsets: number[] = [];
@@ -245,8 +246,8 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
     const lastTok = (v < verseNumbers.length - 1 ? verseStart[v + 1] : ids.length) - 1;
     const startFrame = tokens[first]?.startFrame ?? 0;
     const endFrame = tokens[Math.max(first, lastTok)]?.endFrame ?? startFrame;
-    onsets.push(startFrame * fd);
-    recEnds.push((endFrame + 1) * fd);
+    onsets.push(timeOffset + startFrame * fd);
+    recEnds.push(timeOffset + (endFrame + 1) * fd);
   }
   // Onsets must be non-decreasing for the assembler.
   for (let v = 1; v < onsets.length; v++) {
