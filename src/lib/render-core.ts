@@ -176,6 +176,7 @@ export function drawScene(
     arabicTranslationGap: style.arabicTranslationGap,
     verticalPosition: style.textPosition,
     textLayout: style.textLayout,
+    splitMask: style.splitMask,
     safeInset: safeInsetFor(style.safeAreaTarget, style.safePadding / 100),
     arabicFontWeight: style.arabicFontWeight,
     arabicVerseNumber: style.arabicVerseNumber && content.isLastPart,

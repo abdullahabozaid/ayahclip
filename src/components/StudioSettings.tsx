@@ -15,6 +15,7 @@ import { sequenceDuration } from "@/lib/background-sequence";
 import type { Background } from "@/types";
 import { DEFAULT_SPLIT_MASK, normalizeSplitMask } from "@/lib/canvas-utils";
 import { formatClipDuration, importedClipDurationSeconds } from "@/lib/clip-duration";
+import { ArabicFontSpecimen } from "./ArabicFontSpecimen";
 
 /** Capture the current preview frame as the clip's dashboard cover thumbnail. */
 function SetCoverButton() {
@@ -239,6 +240,7 @@ function Field({
 export function StudioSettings() {
   const store = useAppStore();
   const selectedCount = store.selectedVerseNumbers.length;
+  const currentVerse = store.verses[store.currentVerseIndex] ?? store.verses[0];
   const importedDuration = store.audioSource.mode === "imported"
     ? importedClipDurationSeconds(store.audioSource.timings, store.verses)
     : null;
@@ -615,24 +617,14 @@ export function StudioSettings() {
             options={ARABIC_FONT_OPTIONS}
           />
           <div className="rounded-xl border border-[var(--hairline-soft)] bg-white/[0.025] p-3">
-            <p
-              dir="rtl"
-              lang="ar"
+            <ArabicFontSpecimen
+              font={store.arabicFont}
+              weight={store.arabicFontWeight}
+              qcfWords={currentVerse?.qcfWords}
+              fallback={currentVerse?.text_uthmani ?? "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"}
               className="text-right text-2xl leading-[1.9] text-parchment"
-              style={{
-                fontFamily: store.arabicFont === "amiri-quran"
-                  ? 'var(--font-amiri-quran), "UthmanicHafs", serif'
-                  : store.arabicFont === "scheherazade-new"
-                    ? 'var(--font-scheherazade), "UthmanicHafs", serif'
-                    : store.arabicFont === "noto-naskh-arabic"
-                      ? 'var(--font-noto-naskh), "UthmanicHafs", serif'
-                    : '"UthmanicHafs", serif',
-                fontWeight: store.arabicFontWeight,
-              }}
-            >
-              وَقِيلَ يَـٰأَرْضُ ٱبْلَعِى مَآءَكِ وَيَـٰسَمَآءُ أَقْلِعِىۖ ﴿٤٤﴾
-            </p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">This sample includes full marks, a pause mark, and an ayah end. Scheherazade and Noto Naskh provide genuine heavier weights without synthetic thickening.</p>
+            />
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">The specimen uses the current ayah. Mushaf QCF displays its actual page glyphs; weighted caption modes use real font faces without synthetic thickening.</p>
           </div>
           {(store.arabicFont === "scheherazade-new" || store.arabicFont === "noto-naskh-arabic") && (
             <WeightControl

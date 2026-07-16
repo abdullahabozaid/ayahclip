@@ -20,8 +20,8 @@ export const DEFAULT_SPLIT_MASK: SplitMaskConfig = {
   side: "left",
   color: "#050507",
   opacity: 1,
-  solidWidth: 36,
-  fadeWidth: 36,
+  solidWidth: 50,
+  fadeWidth: 20,
 };
 
 export function normalizeSplitMask(
@@ -530,6 +530,8 @@ export interface DrawVerseOptions {
   verticalPosition?: number;
   /** Centered default or a compact block in the dark left side of the frame. */
   textLayout?: "center" | "left-panel";
+  /** Reading-panel geometry. Text stays inside the creator's solid region. */
+  splitMask?: Partial<SplitMaskConfig>;
   /** When set, text is laid out within this inset box (fractions of w/h) to dodge platform UI. */
   safeInset?: SafeInset;
   /** CSS font-weight for the Arabic text (default 400). */
@@ -565,6 +567,86 @@ export interface DrawVerseOptions {
    *  is anchored to the BOTTOM of the line, so a low value reads as a marker
    *  stroke across the lower part of the words. */
   highlightHeight?: number;
+}
+
+export interface SplitTextRegion {
+  centerX: number;
+  maxWidth: number;
+}
+
+/** Keep split-layout text attached to the panel the creator actually drew. */
+export function splitTextRegion(
+  frameWidth: number,
+  config?: Partial<SplitMaskConfig>,
+): SplitTextRegion {
+  const mask = normalizeSplitMask(config);
+  const solidWidth = frameWidth * (mask.solidWidth / 100);
+  const horizontalPadding = Math.min(frameWidth * 0.045, solidWidth * 0.14);
+  const maxWidth = Math.max(frameWidth * 0.16, solidWidth - horizontalPadding * 2);
+  return {
+    centerX: mask.side === "left"
+      ? solidWidth / 2
+      : frameWidth - solidWidth / 2,
+    maxWidth,
+  };
+}
+
+export interface ArabicTextFitResult {
+  lineCount: number;
+  targetLines: number;
+  recommendedFontSize: number;
+  cramped: boolean;
+}
+
+/** Measure the same wrap path as export and recommend a reversible split fit. */
+export function analyzeArabicTextFit(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  options: {
+    arabicFont: string;
+    arabicFontWeight: number;
+    arabicFontSize: number;
+    qcfWords?: QcfWord[];
+    arabicVerseNumber?: boolean;
+    splitMask?: Partial<SplitMaskConfig>;
+    frameWidth?: number;
+    minimumFontSize?: number;
+  },
+): ArabicTextFitResult {
+  const frameWidth = options.frameWidth ?? 1080;
+  const scale = frameWidth / 480;
+  const region = splitTextRegion(frameWidth, options.splitMask);
+  const useQcf = shouldUseQcf(options.arabicFont, options.qcfWords);
+  const qcfWords = useQcf
+    ? (options.arabicVerseNumber
+        ? options.qcfWords!
+        : options.qcfWords!.filter((word) => word.char_type_name !== "end"))
+    : [];
+  const wordCount = Math.max(1, splitWords(text).length);
+  const targetLines = wordCount <= 6 ? 2 : wordCount <= 15 ? 3 : wordCount <= 28 ? 4 : 5;
+  const minimumFontSize = Math.max(18, options.minimumFontSize ?? 18);
+  const weight = supportedArabicFontWeight(options.arabicFont, options.arabicFontWeight);
+  const family = getArabicFontFamily(options.arabicFont);
+
+  const countAt = (styleSize: number) => {
+    const fontSize = styleSize * scale;
+    ctx.font = `${weight} ${fontSize}px ${family}`;
+    return useQcf
+      ? measureQcfLines(ctx, qcfWords, fontSize, region.maxWidth)
+      : measureLines(ctx, sanitizeArabic(text), region.maxWidth).length;
+  };
+
+  const lineCount = countAt(options.arabicFontSize);
+  let recommendedFontSize = options.arabicFontSize;
+  while (recommendedFontSize > minimumFontSize && countAt(recommendedFontSize) > targetLines) {
+    recommendedFontSize -= 1;
+  }
+  return {
+    lineCount,
+    targetLines,
+    recommendedFontSize,
+    cramped: lineCount > targetLines,
+  };
 }
 
 export type VerseIntro = "none" | "fade" | "blur" | "slide" | "scale";
@@ -747,9 +829,10 @@ export function drawVerseText(
   const boxTop = h * (inset?.top ?? 0);
   const boxH = h - boxTop - h * (inset?.bottom ?? 0);
   const leftPanel = options.textLayout === "left-panel";
-  const centerX = leftPanel ? w * 0.265 : w / 2;
+  const splitRegion = splitTextRegion(w, options.splitMask);
+  const centerX = leftPanel ? splitRegion.centerX : w / 2;
   const maxWidth = leftPanel
-    ? w * 0.43
+    ? splitRegion.maxWidth
     : inset
       ? w * (1 - 2 * Math.max(inset.left, inset.right))
       : w * 0.85;

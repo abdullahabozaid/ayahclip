@@ -133,6 +133,7 @@ test("templates render and open the focused editor", async ({ page }) => {
   const arabicInspector = page.getByTestId("inspector-arabic");
   await expect(arabicInspector).not.toHaveAttribute("open", "");
   await arabicInspector.locator("summary").click();
+  await arabicInspector.getByRole("button", { name: "Compare all five fonts" }).click();
   await arabicInspector.getByRole("button", { name: /Scheherazade New/ }).click();
   await expect(arabicInspector.getByRole("button", { name: "SemiBold", exact: true })).toHaveAttribute(
     "aria-pressed",
@@ -187,6 +188,13 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   const arabicInspector = page.getByTestId("inspector-arabic");
   await arabicInspector.locator("summary").click();
   await expect(
+    arabicInspector.getByRole("button", { name: /Bold social/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(arabicInspector.getByText("Split text needs room", { exact: true })).toBeVisible();
+  await arabicInspector.getByRole("button", { name: /Fit text to/ }).click();
+  await expect(arabicInspector.getByText("Split text needs room", { exact: true })).toHaveCount(0);
+  await arabicInspector.getByRole("button", { name: "Compare all five fonts" }).click();
+  await expect(
     arabicInspector.getByRole("button", { name: /Noto Naskh Arabic/ }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(
@@ -197,6 +205,8 @@ test("split compositions expose precise media, panel, solid, and gradient contro
     "aria-pressed",
     "true",
   );
+  await expect(page.getByLabel("Solid width")).toHaveValue("50");
+  await expect(page.getByLabel("Fade width")).toHaveValue("20");
   await page.getByLabel("Solid width").fill("48");
   await page.getByLabel("Fade width").fill("24");
   await page.getByLabel("Panel opacity").fill("92");

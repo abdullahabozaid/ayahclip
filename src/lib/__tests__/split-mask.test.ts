@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { drawSplitMask, normalizeSplitMask } from "@/lib/canvas-utils";
+import {
+  analyzeArabicTextFit,
+  drawSplitMask,
+  normalizeSplitMask,
+  splitTextRegion,
+} from "@/lib/canvas-utils";
 
 describe("split mask rendering", () => {
   it("clamps solid and fade widths to the frame", () => {
@@ -39,5 +44,46 @@ describe("split mask rendering", () => {
       [1, "rgba(0, 0, 0, 0.8)"],
     ]);
     expect(context.fillRect).toHaveBeenCalledWith(500, 0, 500, 600);
+  });
+
+  it("moves and resizes the reading region with the creator's solid panel", () => {
+    const left = splitTextRegion(1000, { side: "left", solidWidth: 50 });
+    const right = splitTextRegion(1000, { side: "right", solidWidth: 30 });
+
+    expect(left.centerX).toBe(250);
+    expect(left.maxWidth).toBe(410);
+    expect(right.centerX).toBe(850);
+    expect(right.maxWidth).toBe(216);
+  });
+
+  it("recommends a smaller real font size when a short split caption over-wraps", () => {
+    let currentFont = "";
+    const context = {
+      get font() {
+        return currentFont;
+      },
+      set font(value: string) {
+        currentFont = value;
+      },
+      measureText(text: string) {
+        const size = Number(/([\d.]+)px/.exec(currentFont)?.[1] ?? 16);
+        return { width: Array.from(text).length * size * 0.45 };
+      },
+    } as unknown as CanvasRenderingContext2D;
+
+    const fit = analyzeArabicTextFit(
+      context,
+      "بسم الله الرحمن الرحيم",
+      {
+        arabicFont: "noto-naskh-arabic",
+        arabicFontWeight: 700,
+        arabicFontSize: 42,
+        splitMask: { solidWidth: 50, fadeWidth: 20 },
+      },
+    );
+
+    expect(fit.targetLines).toBe(2);
+    expect(fit.cramped).toBe(true);
+    expect(fit.recommendedFontSize).toBeLessThan(42);
   });
 });

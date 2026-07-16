@@ -5,10 +5,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { applyTemplate } from "@/lib/apply-template";
 import {
+  analyzeArabicTextFit,
   DEFAULT_MEDIA_TRANSFORM,
   DEFAULT_SPLIT_MASK,
   TRANSLATION_FONTS,
+  ensureFontsReady,
   normalizeSplitMask,
+  type ArabicTextFitResult,
 } from "@/lib/canvas-utils";
 import {
   getSavedTemplates,
@@ -34,6 +37,8 @@ import {
 } from "@/lib/template-canvas";
 import { TemplateIcon, type TemplateIconName } from "./TemplateIcon";
 import { BackgroundEditor } from "@/components/BackgroundEditor";
+import { ArabicFontSpecimen } from "@/components/ArabicFontSpecimen";
+import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 import {
   FALLBACK_SAMPLE,
   loadTemplateSamples,
@@ -165,6 +170,8 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const [status, setStatus] = useState("");
   const [fullscreen, setFullscreen] = useState(false);
   const [canvasTool, setCanvasTool] = useState<"text" | "media">("text");
+  const [showAdvancedFonts, setShowAdvancedFonts] = useState(false);
+  const [arabicFit, setArabicFit] = useState<ArabicTextFitResult | null>(null);
   const [movingText, setMovingText] = useState(false);
   const [movingMedia, setMovingMedia] = useState(false);
   const movingTextRef = useRef(false);
@@ -199,6 +206,40 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   }, [initialTemplateId]);
 
   const sample = samples[Math.min(sampleIndex, samples.length - 1)];
+
+  useEffect(() => {
+    if (!draft || draft.settings.textLayout !== "left-panel") {
+      setArabicFit(null);
+      return;
+    }
+    let cancelled = false;
+    const measure = async () => {
+      await ensureFontsReady(
+        draft.settings.arabicFont,
+        draft.settings.translationFont,
+        draft.settings.arabicFontWeight,
+        draft.settings.translationFontWeight,
+      );
+      if (draft.settings.arabicFont === "qcf" && sample.qcfWords?.length) {
+        await ensureQcfFontsReady(sample.qcfWords);
+      }
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context || cancelled) return;
+      const result = analyzeArabicTextFit(context, sample.arabicText, {
+        arabicFont: draft.settings.arabicFont,
+        arabicFontWeight: draft.settings.arabicFontWeight,
+        arabicFontSize: draft.settings.arabicFontSize,
+        qcfWords: sample.qcfWords,
+        arabicVerseNumber: draft.settings.arabicVerseNumber,
+        splitMask: draft.settings.splitMask,
+      });
+      if (!cancelled) setArabicFit(result);
+    };
+    void measure();
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, sample]);
   const selectedTreatment = useMemo(() => {
     if (!draft) return "clean";
     if (draft.settings.highlightEnabled) return "gold";
@@ -686,6 +727,47 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
 
             <InspectorSection title="Arabic" icon="type">
               <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-deep)]">Quick choice</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { font: "qcf", weight: 400, label: "Mushaf faithful", sample: "ٱلۡحَمۡدُ" },
+                    { font: "noto-naskh-arabic", weight: 700, label: "Bold social", sample: "ٱلۡحَمۡدُ" },
+                  ].map((mode) => {
+                    const selected = draft.settings.arabicFont === mode.font && draft.settings.arabicFontWeight === mode.weight;
+                    return (
+                      <button
+                        key={mode.font}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setStyle("arabicFont", mode.font);
+                          setStyle("arabicFontWeight", mode.weight);
+                        }}
+                        className={`min-h-20 rounded-xl border p-3 text-left transition-colors ${selected ? "border-gold bg-gold/5" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
+                      >
+                        <span className={`block text-[10px] font-semibold ${selected ? "text-gold-soft" : "text-[var(--muted)]"}`}>{mode.label}</span>
+                        <ArabicFontSpecimen
+                          font={mode.font}
+                          weight={mode.weight}
+                          qcfWords={mode.font === "qcf" ? sample.qcfWords?.slice(0, 1) : undefined}
+                          fallback={mode.sample}
+                          className="mt-1 text-right text-[22px] leading-[1.7] text-parchment"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  aria-expanded={showAdvancedFonts}
+                  onClick={() => setShowAdvancedFonts((open) => !open)}
+                  className="flex min-h-10 w-full items-center justify-between rounded-lg px-1 text-[11px] text-[var(--muted)] hover:text-parchment"
+                >
+                  Compare all five fonts
+                  <span aria-hidden="true" className={`text-base transition-transform ${showAdvancedFonts ? "rotate-45" : ""}`}>+</span>
+                </button>
+              </div>
+              {showAdvancedFonts && <div className="space-y-2">
                 {ARABIC_FONT_OPTIONS.map((font) => {
                   const selected = draft.settings.arabicFont === font.value;
                   return (
@@ -703,24 +785,18 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                         <span className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${selected ? "text-gold-soft" : "text-[var(--muted)]"}`}>{font.label}</span>
                         {selected && <TemplateIcon name="check" className="h-3.5 w-3.5 text-gold" />}
                       </span>
-                      <span
-                        dir="rtl"
-                        lang="ar"
-                        className="mt-2 block text-right text-[22px] leading-[1.9] text-parchment"
-                        style={{
-                          fontFamily: font.family,
-                          fontWeight: selected
-                            ? draft.settings.arabicFontWeight
-                            : font.defaultWeight,
-                        }}
-                      >
-                        وَقِيلَ يَـٰأَرْضُ ٱبْلَعِى مَآءَكِ وَيَـٰسَمَآءُ أَقْلِعِىۖ ﴿٤٤﴾
-                      </span>
+                      <ArabicFontSpecimen
+                        font={font.value}
+                        weight={selected ? draft.settings.arabicFontWeight : font.defaultWeight}
+                        qcfWords={sample.qcfWords}
+                        fallback={sample.arabicText}
+                        className="mt-2 text-right text-[22px] leading-[1.9] text-parchment"
+                      />
                       <span className="mt-1 block text-[10px] leading-4 text-[var(--muted)]">{font.note}</span>
                     </button>
                   );
                 })}
-              </div>
+              </div>}
               {(draft.settings.arabicFont === "scheherazade-new" || draft.settings.arabicFont === "noto-naskh-arabic") && (
                 <Segmented
                   value={String(draft.settings.arabicFontWeight)}
@@ -733,8 +809,21 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   onChange={(value) => setStyle("arabicFontWeight", Number(value))}
                 />
               )}
-              <p className="text-[10px] leading-4 text-[var(--muted)]">The sample includes full marks, a pause mark, and an ayah end. Scheherazade and Noto Naskh expose real weights, so stronger captions never rely on synthetic bolding.</p>
+              <p className="text-[10px] leading-4 text-[var(--muted)]">Use Short, Medium, and Long above the canvas to compare real Quran marks and line fit. QCF uses the actual page glyphs; Scheherazade and Noto Naskh use genuine heavier faces.</p>
               <RangeField label="Size" value={draft.settings.arabicFontSize} min={18} max={72} suffix="px" onChange={(value) => setStyle("arabicFontSize", value)} />
+              {draft.settings.textLayout === "left-panel" && arabicFit?.cramped && (
+                <div className="rounded-xl border border-gold/25 bg-gold/[0.06] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gold-soft">Split text needs room</p>
+                  <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">This sample wraps to {arabicFit.lineCount} lines. Fit it to {arabicFit.targetLines} without changing the panel or font.</p>
+                  <button
+                    type="button"
+                    onClick={() => setStyle("arabicFontSize", arabicFit.recommendedFontSize)}
+                    className="mt-2 min-h-10 w-full rounded-lg border border-[var(--hairline)] text-[11px] font-medium text-parchment hover:border-gold"
+                  >
+                    Fit text to {arabicFit.recommendedFontSize}px
+                  </button>
+                </div>
+              )}
               <RangeField label="Line height" value={draft.settings.lineHeight} min={0.75} max={1.7} step={0.05} suffix="×" onChange={(value) => setStyle("lineHeight", value)} />
               <SwitchField label="Arabic verse number" checked={Boolean(draft.settings.arabicVerseNumber)} onChange={(checked) => setStyle("arabicVerseNumber", checked)} />
             </InspectorSection>
