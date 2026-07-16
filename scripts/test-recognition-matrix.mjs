@@ -84,8 +84,8 @@ const failures = [
   aggregate.autoAppliedCases < 40
     ? `safe auto-apply coverage fell below 40 cases (${aggregate.autoAppliedCases})`
     : null,
-  aggregate.candidateRangeRecall < 0.84
-    ? `candidate recall fell below 0.840 (${aggregate.candidateRangeRecall.toFixed(3)})`
+  aggregate.candidateRangeRecall < 0.97
+    ? `candidate recall fell below 0.970 (${aggregate.candidateRangeRecall.toFixed(3)})`
     : null,
 ].filter(Boolean);
 

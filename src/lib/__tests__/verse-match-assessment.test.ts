@@ -110,11 +110,25 @@ describe("assessVerseMatch", () => {
     expect(assessVerseMatch(text).confidence).toBe("low");
   });
 
-  it("defers a noisy short-verse transcript that previously auto-applied the wrong surah", () => {
+  it("recovers the correct short ayah without confidently applying a wrong surah", () => {
     const assessment = assessVerseMatch("مالك يوم الدينين");
 
-    expect(assessment.match).toMatchObject({ surah: 15, ayahStart: 35, ayahEnd: 35 });
-    expect(assessment.match?.score).toBeLessThan(0.84);
+    expect(assessment.match).toMatchObject({ surah: 1, ayahStart: 4, ayahEnd: 4 });
+    expect(assessment.match?.score).toBeGreaterThan(0.8);
     expect(assessment.confidence).toBe("low");
+  });
+
+  it("keeps exact repeated short ayahs available for creator review", () => {
+    const assessment = assessVerseMatch("الرحمن الرحيم");
+    const candidates = selectRecognitionCandidates(
+      assessment.match!,
+      assessment.alternatives,
+      10,
+    );
+
+    expect(assessment.confidence).toBe("low");
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ surah: 1, ayahStart: 3, ayahEnd: 3 }),
+    ]));
   });
 });

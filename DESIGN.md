@@ -75,6 +75,8 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Never hide model download or local processing behind a generic “AI analysing” message. Show determinate download progress when bytes are available, an honest current action, cancellation, and the on-device privacy guarantee.
 - Quran range and timing confidence are separate claims. Show the detected range prominently, identify the alignment method, and enumerate only the ayah transitions that need review.
 - A creator must explicitly confirm the Quran range before continuing. Manual surah/from/to controls remain editable whether recognition succeeds, is ambiguous, is cancelled, or fails.
+- Short or repeated ayahs must be retrieved both as whole-surah ranges and individual-verse candidates. Tied phrases stay low-confidence and are offered for creator review instead of being silently auto-applied.
+- Recognition releases require zero false automatic ranges and at least 97% expected-range recall in the maintained real-audio candidate set; boundary alignment remains a separate real-audio gate.
 - When text matching is ambiguous, show up to three distinct likely Quran ranges and preserve prepared cuts for the range the creator selects. Never collapse known alternatives into a generic error.
 - Alignment is transactional: existing timing edits remain unchanged until a complete result is ready. Cancellation and failure preserve the current timeline.
 - Use creator language such as “Align by recitation” and “Rebuild from pauses”; avoid unexplained implementation terms such as “Deep align”.

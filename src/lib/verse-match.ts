@@ -248,6 +248,75 @@ interface AlignedSurahCandidate {
   score: number;
 }
 
+/**
+ * A whole-surah aligner can expose only one location per surah. That is not
+ * enough for short ayahs: identical or near-identical phrases occur across
+ * many surahs, and the correct creator-review choice can disappear even when
+ * the transcript itself is good. Search individual verses for short queries
+ * so ambiguity becomes an explicit candidate set instead of a missing result.
+ */
+function shortVerseMatches(query: string): VerseMatch[] {
+  if (!bySurah) throw new Error("call loadCorpus() first");
+  const compactQueryLength = query.replace(/ /g, "").length;
+  if (compactQueryLength >= 32) return [];
+  const matches: VerseMatch[] = [];
+  for (const verses of bySurah.values()) {
+    for (const verse of verses) {
+      const alignment = alignToRef(query, verse.clean);
+      if (alignment.score < MIN_SCORE) continue;
+      matches.push({
+        surah: verse.surah,
+        ayahStart: verse.ayah,
+        ayahEnd: verse.ayah,
+        score: alignment.score,
+      });
+    }
+  }
+  return matches;
+}
+
+function referenceCoverage(match: VerseMatch, query: string): number {
+  const reference = getVersesText(match.surah, match.ayahStart, match.ayahEnd).text;
+  const referenceLength = reference.replace(/ /g, "").length;
+  if (referenceLength === 0) return 0;
+  return Math.min(1, query.replace(/ /g, "").length / referenceLength);
+}
+
+function recognitionRankScore(match: VerseMatch, query: string): number {
+  // Whole-verse coverage breaks ties between an exact ayah and a phrase merely
+  // contained inside a longer verse. Keep the adjustment small: transcript
+  // similarity remains the primary signal.
+  return match.score * (0.85 + 0.15 * referenceCoverage(match, query));
+}
+
+function matchKey(match: VerseMatch): string {
+  return `${match.surah}:${match.ayahStart}-${match.ayahEnd}`;
+}
+
+function dedupeVerseMatches(matches: readonly VerseMatch[]): VerseMatch[] {
+  const seen = new Set<string>();
+  return matches.filter((match) => {
+    const key = matchKey(match);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mergeReviewCandidates(
+  primary: VerseMatch,
+  ranked: readonly VerseMatch[],
+  surahCandidates: readonly VerseMatch[],
+): VerseMatch[] {
+  const ordered = [primary];
+  const depth = Math.max(ranked.length, surahCandidates.length);
+  for (let index = 0; index < depth; index++) {
+    if (ranked[index + 1]) ordered.push(ranked[index + 1]);
+    if (surahCandidates[index]) ordered.push(surahCandidates[index]);
+  }
+  return dedupeVerseMatches(ordered);
+}
+
 export interface VerseMatchAssessment {
   match: VerseMatch | null;
   alternatives: VerseMatch[];
@@ -380,7 +449,21 @@ export function assessVerseMatch(transcript: string): VerseMatchAssessment {
   }
 
   const mapped = aligned.map(mapAlignmentToVerses);
-  const match = mapped[0];
+  const rankScores = new Map<string, number>();
+  const rankScore = (candidate: VerseMatch) => {
+    const key = matchKey(candidate);
+    const cached = rankScores.get(key);
+    if (cached !== undefined) return cached;
+    const score = recognitionRankScore(candidate, q);
+    rankScores.set(key, score);
+    return score;
+  };
+  const ranked = dedupeVerseMatches([...mapped, ...shortVerseMatches(q)])
+    .sort((left, right) =>
+      rankScore(right) - rankScore(left) ||
+      referenceCoverage(right, q) - referenceCoverage(left, q)
+    );
+  const match = ranked[0];
   // Some ayahs are repeated verbatim within one surah (most visibly the
   // refrain in Ar-Rahman). The per-surah aligner can return only one location,
   // so add the other identical verses explicitly. Audio alone cannot decide
@@ -403,14 +486,21 @@ export function assessVerseMatch(transcript: string): VerseMatchAssessment {
     : [];
   // Preserve a deeper private candidate set for evaluation and future recovery.
   // The import UI still deliberately shows only three choices at once.
-  const alternatives = [...duplicateVerseMatches, ...mapped.slice(1)]
-    .filter((candidate, index, candidates) => candidates.findIndex((item) =>
-      item.surah === candidate.surah &&
-      item.ayahStart === candidate.ayahStart &&
-      item.ayahEnd === candidate.ayahEnd
-    ) === index)
-    .slice(0, 9);
-  const margin = match.score - (alternatives[0]?.score ?? 0);
+  const reviewCandidates = mergeReviewCandidates(match, ranked, mapped);
+  const alternatives = dedupeVerseMatches([
+    ...duplicateVerseMatches,
+    ...reviewCandidates.slice(1),
+  ]).slice(0, 9);
+  const nearestRankedAlternative = ranked.find((candidate) =>
+    candidate.surah !== match.surah ||
+    candidate.ayahStart !== match.ayahStart ||
+    candidate.ayahEnd !== match.ayahEnd
+  );
+  const margin = q === basmala
+    ? 0
+    : rankScore(match) - (
+      nearestRankedAlternative ? rankScore(nearestRankedAlternative) : 0
+    );
   // Medium confidence is an auto-apply boundary in the editor, so it must be
   // conservative. A 0.72 score admitted a real Hudhaify ASR error
   // ("مالك يوم الدينين") as the wrong short verse with medium confidence.

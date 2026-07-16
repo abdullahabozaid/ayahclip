@@ -84,6 +84,8 @@ Editor mode contains:
 - Import recognition exposes four real stages: **Prepare**, **Listen**, **Match**, and **Align**. Studio alignment exposes **Prepare**, **Listen**, and **Place cuts**.
 - Show model-download percentage when available, the current local action, cancel, and a short on-device privacy note. Do not use generic AI icons, magic language, fake confidence percentages, or indefinite “analysing” copy.
 - Treat Quran-range confidence and boundary confidence separately. The result names the suggested surah and ayah range, alignment method, and only the ayah transitions that require listening.
+- Retrieve short or repeated ayahs through both whole-surah and individual-verse candidate paths. Tied phrases remain low-confidence creator choices, never silent automatic metadata.
+- Hold recognition releases to zero false automatic ranges and at least 97% expected-range recall in the maintained real-audio candidate set; evaluate boundary timing independently.
 - Manual range controls remain available in every outcome. Require explicit Quran-range confirmation before the creator can continue.
 - Alignment is transactional and reversible. Existing timing edits remain untouched until a full result succeeds; cancellation and errors explain the recovery path.
 - Use “Align by recitation” and “Rebuild from pauses” instead of implementation jargon.
