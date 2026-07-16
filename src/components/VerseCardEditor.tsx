@@ -20,6 +20,7 @@ import {
   verseNumbersForAlignment,
 } from "@/lib/timing-ops";
 import { importedPlayer } from "@/lib/imported-player";
+import { browserDeviceMemoryGb } from "@/lib/import-limits";
 import { sanitizeArabic } from "@/lib/canvas-utils";
 import { QcfVerse } from "./QcfVerse";
 import type { QcfWord } from "@/types";
@@ -332,6 +333,7 @@ export function VerseCardEditor() {
   // ---- Redetect / Deep align ------------------------------------------------
   const [redetecting, setRedetecting] = useState(false);
   const [deepMsg, setDeepMsg] = useState<string | null>(null);
+  const deepAbortRef = useRef<AbortController | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [alignmentReview, setAlignmentReview] = useState<AlignmentReview | null>(null);
 
@@ -377,6 +379,9 @@ export function VerseCardEditor() {
     // Forced alignment wants the unique, sorted verse list (one timing per verse).
     const verseNumbers = verseNumbersForAlignment(cur.timings);
     if (verseNumbers.length === 0) return;
+    deepAbortRef.current?.abort();
+    const controller = new AbortController();
+    deepAbortRef.current = controller;
     setDeepErr(null);
     setDeepMsg("Preparing…");
     try {
@@ -384,6 +389,8 @@ export function VerseCardEditor() {
         buffer: buf,
         surah: surahId,
         verseNumbers,
+        signal: controller.signal,
+        deviceMemoryGb: browserDeviceMemoryGb(),
         onModelProgress: (loaded, total) => setDeepMsg(
           total
             ? `Downloading model (one-time, ~131 MB)… ${Math.round((loaded / total) * 100)}%`
@@ -397,9 +404,19 @@ export function VerseCardEditor() {
     } catch (error) {
       setDeepErr(alignmentFailureMessage(error));
     } finally {
-      setDeepMsg(null);
+      if (deepAbortRef.current === controller) {
+        deepAbortRef.current = null;
+        setDeepMsg(null);
+      }
     }
   }, [commit]);
+
+  const cancelDeepAlign = useCallback(() => {
+    setDeepMsg("Cancelling…");
+    deepAbortRef.current?.abort();
+  }, []);
+
+  useEffect(() => () => deepAbortRef.current?.abort(), []);
 
   if (!imported || timings.length === 0) return null;
 
@@ -473,6 +490,15 @@ export function VerseCardEditor() {
           >
             {deepMsg ?? "Deep align"}
           </button>
+          {deepMsg && (
+            <button
+              type="button"
+              onClick={cancelDeepAlign}
+              className="rounded-full border border-[var(--hairline-soft)] px-3 py-1.5 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </div>
 

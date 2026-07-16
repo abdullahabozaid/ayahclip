@@ -30,6 +30,21 @@ const PREEMPH = 0.97;
 const DITHER = 1e-5;
 const LOG_GUARD = 1e-5;
 
+function recognitionAbortError(): Error {
+  const error = new Error("Recognition cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw recognitionAbortError();
+}
+
+async function yieldForCancellation(signal?: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  throwIfAborted(signal);
+}
+
 let _melFilters: number[][] | null = null;
 let _window: Float64Array | null = null;
 
@@ -54,8 +69,10 @@ function getWindow(): Float64Array {
 }
 
 async function computeMel(
-  audio: Float32Array
+  audio: Float32Array,
+  signal?: AbortSignal,
 ): Promise<{ features: Float32Array; timeFrames: number }> {
+  throwIfAborted(signal);
   const dithered = new Float32Array(audio.length);
   // NeMo's feature recipe expects a tiny dither, but Math.random() made the
   // exact same clip produce different transcripts and boundary positions on
@@ -66,8 +83,10 @@ async function computeMel(
     ditherState = (Math.imul(ditherState, 1664525) + 1013904223) >>> 0;
     const noise = (ditherState / 4294967296) * 2 - 1;
     dithered[i] = audio[i] + DITHER * noise;
+    if (i > 0 && i % 1_048_576 === 0) await yieldForCancellation(signal);
   }
 
+  throwIfAborted(signal);
   const spec = await spectrogram(dithered, getWindow(), WIN_LENGTH, HOP_LENGTH, {
     fft_length: N_FFT,
     power: 2.0,
@@ -80,6 +99,7 @@ async function computeMel(
     // log_mel omitted (undefined) → no built-in log; we apply ln(mel + guard) below.
     transpose: false,
   });
+  throwIfAborted(signal);
 
   const data = spec.data as Float32Array;
   const timeFrames = spec.dims[1];
@@ -100,6 +120,7 @@ async function computeMel(
     for (let t = 0; t < timeFrames; t++) {
       logged[m * timeFrames + t] = (logged[m * timeFrames + t] - mean) / std;
     }
+    if (m > 0 && m % 8 === 0) await yieldForCancellation(signal);
   }
 
   return { features: logged, timeFrames };
@@ -139,16 +160,29 @@ async function cacheSet(key: string, data: ArrayBuffer): Promise<void> {
 
 export type Progress = (loaded: number, total: number) => void;
 
-async function loadModelBuffer(onProgress?: Progress): Promise<ArrayBuffer> {
-  const cached = await cacheGet(MODEL_KEY);
+async function loadModelBuffer(
+  onProgress?: Progress,
+  signal?: AbortSignal,
+): Promise<ArrayBuffer> {
+  throwIfAborted(signal);
+  let cached: ArrayBuffer | null = null;
+  try {
+    cached = await cacheGet(MODEL_KEY);
+  } catch (error) {
+    console.warn("Recognition model cache unavailable; continuing without it.", error);
+  }
+  throwIfAborted(signal);
   if (cached) return cached;
 
-  const res = await fetch(MODEL_URL);
+  const res = await fetch(MODEL_URL, { signal });
+  if (!res.ok) throw new Error(`Recognition model request failed (${res.status})`);
   const total = parseInt(res.headers.get("content-length") || "0");
-  const reader = res.body!.getReader();
+  if (!res.body) throw new Error("Recognition model response had no body");
+  const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let loaded = 0;
   for (;;) {
+    throwIfAborted(signal);
     const { done, value } = await reader.read();
     if (done) break;
     chunks.push(value);
@@ -161,7 +195,11 @@ async function loadModelBuffer(onProgress?: Progress): Promise<ArrayBuffer> {
     buf.set(c, off);
     off += c.length;
   }
-  await cacheSet(MODEL_KEY, buf.buffer);
+  try {
+    await cacheSet(MODEL_KEY, buf.buffer);
+  } catch (error) {
+    console.warn("Recognition model could not be cached; this session can still continue.", error);
+  }
   return buf.buffer;
 }
 
@@ -171,16 +209,21 @@ let vocab: Map<number, string> | null = null;
 let vocabRecord: Record<string, string> | null = null;
 let blankId = 1024;
 
-async function ensureReady(onProgress?: Progress): Promise<void> {
+async function ensureReady(onProgress?: Progress, signal?: AbortSignal): Promise<void> {
+  throwIfAborted(signal);
   if (session && vocab) return;
   ort.env.wasm.numThreads = 1;
   ort.env.wasm.simd = true;
   ort.env.wasm.wasmPaths = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
   const [modelBuf, vocabJson] = await Promise.all([
-    loadModelBuffer(onProgress),
-    fetch(VOCAB_URL).then((r) => r.json() as Promise<Record<string, string>>),
+    loadModelBuffer(onProgress, signal),
+    fetch(VOCAB_URL, { signal }).then((r) => {
+      if (!r.ok) throw new Error(`Recognition vocabulary request failed (${r.status})`);
+      return r.json() as Promise<Record<string, string>>;
+    }),
   ]);
+  throwIfAborted(signal);
 
   vocab = new Map();
   vocabRecord = vocabJson;
@@ -193,6 +236,7 @@ async function ensureReady(onProgress?: Progress): Promise<void> {
   session = await ort.InferenceSession.create(modelBuf, {
     executionProviders: ["wasm"],
   });
+  throwIfAborted(signal);
 }
 
 export interface Transcription {
@@ -255,15 +299,30 @@ function decodeCTC(
 // (greedy decode) and computeEmissions() (forced alignment).
 async function runModel(
   audio16k: Float32Array,
-  onProgress?: Progress
+  onProgress?: Progress,
+  signal?: AbortSignal,
 ): Promise<{ data: Float32Array; T: number; V: number; frameDur: number }> {
-  await ensureReady(onProgress);
-  const { features, timeFrames } = await computeMel(audio16k);
+  await ensureReady(onProgress, signal);
+  throwIfAborted(signal);
+  onProgress?.(0, 0);
+  const { features, timeFrames } = await computeMel(audio16k, signal);
 
   const input = new ort.Tensor("float32", features, [1, N_MELS, timeFrames]);
   const length = new ort.Tensor("int64", BigInt64Array.from([BigInt(timeFrames)]), [1]);
   const names = session!.inputNames;
-  const results = await session!.run({ [names[0]]: input, [names[1]]: length });
+  const runOptions: ort.InferenceSession.RunOptions = {
+    tag: "ayahclip-recognition",
+    terminate: false,
+  };
+  const terminateRun = () => { runOptions.terminate = true; };
+  signal?.addEventListener("abort", terminateRun, { once: true });
+  let results: ort.InferenceSession.ReturnType;
+  try {
+    results = await session!.run({ [names[0]]: input, [names[1]]: length }, runOptions);
+  } finally {
+    signal?.removeEventListener("abort", terminateRun);
+  }
+  throwIfAborted(signal);
   const out = results[session!.outputNames[0]];
   const [, T, V] = out.dims as number[];
   const durationSec = audio16k.length / SAMPLE_RATE;
@@ -275,7 +334,12 @@ async function runModel(
 // (then logsumexp over a normalized row is 0, so this is a no-op); corrective if
 // it outputs raw logits. Forced alignment needs true per-frame log-probs so that
 // "emit token" vs "emit blank" is compared on the same normalized scale.
-function logSoftmaxPerFrame(data: Float32Array, T: number, V: number): Float32Array {
+async function logSoftmaxPerFrame(
+  data: Float32Array,
+  T: number,
+  V: number,
+  signal?: AbortSignal,
+): Promise<Float32Array> {
   const out = new Float32Array(T * V);
   for (let t = 0; t < T; t++) {
     const base = t * V;
@@ -285,6 +349,7 @@ function logSoftmaxPerFrame(data: Float32Array, T: number, V: number): Float32Ar
     for (let v = 0; v < V; v++) sum += Math.exp(data[base + v] - max);
     const lse = max + Math.log(sum);
     for (let v = 0; v < V; v++) out[base + v] = data[base + v] - lse;
+    if (t > 0 && t % 256 === 0) await yieldForCancellation(signal);
   }
   return out;
 }
@@ -292,9 +357,11 @@ function logSoftmaxPerFrame(data: Float32Array, T: number, V: number): Float32Ar
 /** Transcribe 16 kHz mono Float32 audio to Arabic text + word onsets. Loads/caches the model on first use. */
 export async function transcribe(
   audio16k: Float32Array,
-  onProgress?: Progress
+  onProgress?: Progress,
+  signal?: AbortSignal,
 ): Promise<Transcription> {
-  const { data, T, V, frameDur } = await runModel(audio16k, onProgress);
+  const { data, T, V, frameDur } = await runModel(audio16k, onProgress, signal);
+  throwIfAborted(signal);
   return decodeCTC(data, T, V, frameDur);
 }
 
@@ -318,11 +385,14 @@ export interface Emissions {
  */
 export async function computeEmissions(
   audio16k: Float32Array,
-  onProgress?: Progress
+  onProgress?: Progress,
+  signal?: AbortSignal,
 ): Promise<Emissions> {
-  const { data, T, V, frameDur } = await runModel(audio16k, onProgress);
+  const { data, T, V, frameDur } = await runModel(audio16k, onProgress, signal);
+  const logProbs = await logSoftmaxPerFrame(data, T, V, signal);
+  throwIfAborted(signal);
   return {
-    logProbs: logSoftmaxPerFrame(data, T, V),
+    logProbs,
     T,
     V,
     frameDur,

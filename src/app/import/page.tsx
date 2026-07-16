@@ -27,7 +27,13 @@ import {
   type AlignmentReview,
 } from "@/lib/alignment-feedback";
 import { Surah } from "@/types";
-import { importSizeError, RECOMMENDED_IMPORT_BYTES } from "@/lib/import-limits";
+import {
+  browserDeviceMemoryGb,
+  importSizeError,
+  recognitionDurationError,
+  recognitionDurationWarning,
+  RECOMMENDED_IMPORT_BYTES,
+} from "@/lib/import-limits";
 
 export default function ImportPage() {
   const router = useRouter();
@@ -49,6 +55,7 @@ export default function ImportPage() {
   const [building, setBuilding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const decodeOperationRef = useRef(0);
+  const detectAbortRef = useRef<AbortController | null>(null);
 
   const openFilePicker = () => {
     const el = fileInputRef.current;
@@ -74,6 +81,14 @@ export default function ImportPage() {
 
   const autoDetect = async () => {
     if (!buffer) return;
+    const durationError = recognitionDurationError(buffer.duration, browserDeviceMemoryGb());
+    if (durationError) {
+      setError(durationError);
+      return;
+    }
+    detectAbortRef.current?.abort();
+    const controller = new AbortController();
+    detectAbortRef.current = controller;
     setDetecting(true);
     setDetected(null);
     setError(null);
@@ -87,7 +102,12 @@ export default function ImportPage() {
       const emissions = await computeEmissions(audio, (loaded, total) => {
         if (total) setDetectMsg(`Downloading model… ${Math.round((loaded / total) * 100)}%`);
         else setDetectMsg("Recognising…");
-      });
+      }, controller.signal);
+      if (controller.signal.aborted) {
+        const abortError = new Error("Recognition cancelled");
+        abortError.name = "AbortError";
+        throw abortError;
+      }
       const transcript = emissions.transcription.text;
       setDetectMsg("Matching to the Quran…");
       const assessment = assessVerseMatch(transcript);
@@ -159,19 +179,30 @@ export default function ImportPage() {
     } catch (error) {
       setError(`${alignmentFailureMessage(error)} You can still pick the verses manually below.`);
     } finally {
-      setDetecting(false);
-      setDetectMsg(null);
+      if (detectAbortRef.current === controller) {
+        detectAbortRef.current = null;
+        setDetecting(false);
+        setDetectMsg(null);
+      }
     }
+  };
+
+  const cancelDetection = () => {
+    setDetectMsg("Cancelling…");
+    detectAbortRef.current?.abort();
   };
 
   useEffect(() => {
     fetchSurahs().then(setSurahs);
   }, []);
 
+  useEffect(() => () => detectAbortRef.current?.abort(), []);
+
   const surah = surahs.find((s) => s.id === surahId);
 
   const handleFile = async (f: File | undefined) => {
     if (!f) return;
+    detectAbortRef.current?.abort();
     const sizeError = importSizeError(f.size);
     if (sizeError) {
       setError(sizeError);
@@ -277,6 +308,12 @@ export default function ImportPage() {
   };
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${Math.round(s % 60).toString().padStart(2, "0")}`;
+  const recognitionBlock = buffer
+    ? recognitionDurationError(buffer.duration, browserDeviceMemoryGb())
+    : null;
+  const recognitionWarning = buffer && !recognitionBlock
+    ? recognitionDurationWarning(buffer.duration)
+    : null;
 
   return (
     <main className="bg-mihrab min-h-[calc(100dvh-65px)]">
@@ -349,6 +386,15 @@ export default function ImportPage() {
             )}
           </div>
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+          {(recognitionBlock || recognitionWarning) && (
+            <p className={`mt-3 rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+              recognitionBlock
+                ? "border-red-400/25 bg-red-400/10 text-red-200"
+                : "border-amber-400/25 bg-amber-400/10 text-amber-100/85"
+            }`}>
+              {recognitionBlock ?? recognitionWarning}
+            </p>
+          )}
 
           {/* A video may be used intact or treated as an audio source. */}
           {videoUrl && buffer && (
@@ -391,13 +437,24 @@ export default function ImportPage() {
                 <p className="text-sm font-medium text-parchment">Detect from the recitation</p>
                 <p className="mt-0.5 text-[11px] text-[var(--muted)]">Best first step, you can correct the result.</p>
               </div>
-              <button
-                onClick={autoDetect}
-                disabled={detecting || !buffer}
-                className="btn-gold rounded-full px-4 py-2 text-xs disabled:opacity-50"
-              >
-                {detecting ? "Detecting…" : "Auto-detect verses"}
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={autoDetect}
+                  disabled={detecting || !buffer || !!recognitionBlock}
+                  className="btn-gold rounded-full px-4 py-2 text-xs disabled:opacity-50"
+                >
+                  {detecting ? "Detecting…" : "Auto-detect verses"}
+                </button>
+                {detecting && (
+                  <button
+                    type="button"
+                    onClick={cancelDetection}
+                    className="min-h-9 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-[var(--muted)] hover:border-gold hover:text-parchment"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </div>
             {detectMsg && <p className="mt-2 text-xs text-[var(--muted)]">{detectMsg}</p>}
             {detected && (

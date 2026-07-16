@@ -21,6 +21,7 @@ import {
   verseNumbersForAlignment,
 } from "@/lib/timing-ops";
 import { importedPlayer } from "@/lib/imported-player";
+import { browserDeviceMemoryGb } from "@/lib/import-limits";
 import { pinchZoom, timelinePointerTime } from "@/lib/timeline-gestures";
 import {
   appendTimelineSnapshot,
@@ -139,6 +140,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const lastSnapRef = useRef<number | null>(null);
   const [redetecting, setRedetecting] = useState(false);
   const [deepMsg, setDeepMsg] = useState<string | null>(null);
+  const deepAbortRef = useRef<AbortController | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [alignmentReview, setAlignmentReview] = useState<AlignmentReview | null>(null);
   const [looping, setLooping] = useState(false);
@@ -1066,6 +1068,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     if (!buf || cur.mode !== "imported" || !surahId) return;
     const verseNumbers = verseNumbersForAlignment(cur.timings);
     if (verseNumbers.length === 0) return;
+    deepAbortRef.current?.abort();
+    const controller = new AbortController();
+    deepAbortRef.current = controller;
     setDeepErr(null);
     setDeepMsg("Preparing…");
     try {
@@ -1073,6 +1078,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         buffer: buf,
         surah: surahId,
         verseNumbers,
+        signal: controller.signal,
+        deviceMemoryGb: browserDeviceMemoryGb(),
         onModelProgress: (loaded, total) => setDeepMsg(
           total
             ? `Downloading model (one-time, ~131 MB)… ${Math.round((loaded / total) * 100)}%`
@@ -1086,9 +1093,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     } catch (error) {
       setDeepErr(alignmentFailureMessage(error));
     } finally {
-      setDeepMsg(null);
+      if (deepAbortRef.current === controller) {
+        deepAbortRef.current = null;
+        setDeepMsg(null);
+      }
     }
   };
+
+  const cancelDeepAlign = () => {
+    setDeepMsg("Cancelling…");
+    deepAbortRef.current?.abort();
+  };
+
+  useEffect(() => () => deepAbortRef.current?.abort(), []);
 
   if (!imported || timings.length === 0) return null;
 
@@ -1271,6 +1288,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           >
             {deepMsg ? deepMsg : "Deep align"}
           </button>
+          {deepMsg && (
+            <button
+              type="button"
+              onClick={cancelDeepAlign}
+              className="btn-ghost rounded-full px-3 py-1.5 text-[11px]"
+            >
+              Cancel
+            </button>
+          )}
           <span className="mx-1 h-4 w-px bg-[var(--hairline)]" />
           <button
             onClick={() => trimTo("start")}

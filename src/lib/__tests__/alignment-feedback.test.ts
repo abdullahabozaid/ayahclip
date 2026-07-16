@@ -35,6 +35,9 @@ describe("alignment feedback", () => {
   });
 
   it("distinguishes memory, capability, model, and unknown failures", () => {
+    expect(alignmentFailureMessage(new RangeError(
+      "Automatic Quran recognition is limited to 4 minutes on this device. Trim the source."
+    ))).toContain("limited to 4 minutes");
     expect(alignmentFailureMessage(new RangeError("Out of memory"))).toContain("available memory");
     expect(alignmentFailureMessage(new Error("WebAssembly SIMD not supported"))).toContain("latest Chrome or Edge");
     expect(alignmentFailureMessage(new Error("failed to fetch ONNX model"))).toContain("model could not load or run");

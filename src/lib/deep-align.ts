@@ -10,6 +10,7 @@ import {
   type BoundaryDiagnostic,
 } from "./forced-align";
 import { getVerseWeights, loadCorpus } from "./verse-match";
+import { recognitionDurationError } from "./import-limits";
 
 export interface DeepAlignmentResult {
   timings: VerseTiming[];
@@ -45,15 +46,29 @@ export async function alignImportedAudio(params: {
   surah: number;
   verseNumbers: number[];
   onModelProgress?: (loaded: number, total: number) => void;
+  signal?: AbortSignal;
+  deviceMemoryGb?: number;
 }): Promise<DeepAlignmentResult> {
-  const { buffer, surah, onModelProgress } = params;
+  const { buffer, surah, onModelProgress, signal } = params;
   const verseNumbers = [...new Set(params.verseNumbers)].sort((a, b) => a - b);
   if (verseNumbers.length === 0) throw new Error("No verses to align");
+  const durationError = recognitionDurationError(buffer.duration, params.deviceMemoryGb);
+  if (durationError) throw new RangeError(durationError);
+  if (signal?.aborted) {
+    const error = new Error("Recognition cancelled");
+    error.name = "AbortError";
+    throw error;
+  }
 
   await loadCorpus();
+  if (signal?.aborted) {
+    const error = new Error("Recognition cancelled");
+    error.name = "AbortError";
+    throw error;
+  }
   const audio = await resampleTo16kMono(buffer);
   const { computeEmissions } = await import("./asr");
-  const emissions = await computeEmissions(audio, onModelProgress);
+  const emissions = await computeEmissions(audio, onModelProgress, signal);
   const detailed = forceAlignVersesDetailed({
     emissions,
     surah,

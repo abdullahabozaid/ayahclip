@@ -55,6 +55,9 @@ export function alignmentFailureMessage(error: unknown): string {
     : "";
   const raw = error instanceof Error ? `${error.name} ${error.message}` : String(error ?? "");
 
+  if (error instanceof Error && /Automatic Quran recognition is limited/i.test(error.message)) {
+    return error.message;
+  }
   if (name === "AbortError" || /abort|cancel/i.test(raw)) {
     return "Recognition was cancelled. No timing changes were applied.";
   }
