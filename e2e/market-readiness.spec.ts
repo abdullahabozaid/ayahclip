@@ -50,6 +50,7 @@ test("import clearly supports local audio and phone video formats", async ({ pag
 });
 
 test("a real local audio file survives import, template choice, save, and reopen", async ({ page }) => {
+  test.slow();
   const assertNoErrors = failOnPageErrors(page);
   await page.goto("/import");
 
@@ -89,6 +90,27 @@ test("a real local audio file survives import, template choice, save, and reopen
   await page.getByRole("heading", { level: 3, name: "Adh-Dhariyat 1-2" }).click();
   await expect(page).toHaveURL(/\/studio/);
   await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Preview the final MP4" }).click();
+  await expect(page.getByText("Final MP4", { exact: false })).toBeVisible({ timeout: 60_000 });
+  const finalVideo = page.locator("video");
+  await expect(finalVideo).toBeVisible();
+  await expect.poll(
+    () => finalVideo.evaluate((video: HTMLVideoElement) => video.readyState),
+    { timeout: 20_000 },
+  ).toBeGreaterThanOrEqual(1);
+  const rendered = await finalVideo.evaluate(async (video: HTMLVideoElement) => {
+    const blob = await fetch(video.src).then((response) => response.blob());
+    return {
+      duration: video.duration,
+      size: blob.size,
+      type: blob.type,
+    };
+  });
+  expect(rendered.type).toBe("video/mp4");
+  expect(rendered.size).toBeGreaterThan(10_000);
+  expect(rendered.duration).toBeGreaterThan(0.8);
+  expect(rendered.duration).toBeLessThan(1.3);
   assertNoErrors();
 });
 
