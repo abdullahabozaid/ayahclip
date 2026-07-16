@@ -867,7 +867,12 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
 
 function InspectorSection({ title, icon, children }: { title: string; icon: TemplateIconName; children: React.ReactNode }) {
   return (
-    <details open className="group px-5 py-5">
+    <details
+      open
+      aria-label={`${title} controls`}
+      data-testid={`inspector-${title.toLowerCase().replace(/\s+/g, "-")}`}
+      className="group px-5 py-5"
+    >
       <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)] marker:hidden">
         <TemplateIcon name={icon} className="h-4 w-4 text-gold-soft/70" />
         {title}

@@ -9,6 +9,30 @@ function failOnPageErrors(page: Page) {
   return () => expect(errors, "page emitted browser errors").toEqual([]);
 }
 
+function toneWav(durationSeconds = 1.2, sampleRate = 16_000): Buffer {
+  const sampleCount = Math.round(durationSeconds * sampleRate);
+  const dataSize = sampleCount * 2;
+  const wav = Buffer.alloc(44 + dataSize);
+  wav.write("RIFF", 0);
+  wav.writeUInt32LE(36 + dataSize, 4);
+  wav.write("WAVEfmt ", 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36);
+  wav.writeUInt32LE(dataSize, 40);
+  for (let i = 0; i < sampleCount; i++) {
+    const envelope = i < sampleRate * 0.1 || i > sampleCount - sampleRate * 0.1 ? 0 : 1;
+    const sample = Math.round(Math.sin((2 * Math.PI * 220 * i) / sampleRate) * 0.18 * 32767 * envelope);
+    wav.writeInt16LE(sample, 44 + i * 2);
+  }
+  return wav;
+}
+
 test("import clearly supports local audio and phone video formats", async ({ page }) => {
   const assertNoErrors = failOnPageErrors(page);
   await page.goto("/import");
@@ -22,6 +46,46 @@ test("import clearly supports local audio and phone video formats", async ({ pag
     "audio/*,video/*,.mov,.m4v",
   );
   await expect(page.getByText("processed locally", { exact: false })).toBeVisible();
+  assertNoErrors();
+});
+
+test("a real local audio file survives import, template choice, save, and reopen", async ({ page }) => {
+  const assertNoErrors = failOnPageErrors(page);
+  await page.goto("/import");
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "market-readiness.wav",
+    mimeType: "audio/wav",
+    buffer: toneWav(),
+  });
+  await expect(page.getByRole("button", { name: /market-readiness\.wav/ })).toContainText("Loaded");
+  await expect(page.getByRole("button", { name: "Auto-detect verses" })).toBeEnabled();
+
+  await page.getByRole("combobox", { name: "Surah" }).selectOption("51");
+  await page.getByRole("spinbutton", { name: "From" }).fill("1");
+  await page.getByRole("spinbutton", { name: "To" }).fill("2");
+  await page.getByRole("button", { name: "Choose a template" }).click();
+
+  await expect(page).toHaveURL(/\/styles\?from=import/);
+  await expect(page.getByText("Your recitation audio is ready")).toBeVisible();
+  const templateCard = page.locator("article").filter({
+    has: page.getByRole("heading", { level: 2, name: "AyahClip Gold Line" }),
+  });
+  await templateCard.getByRole("button", { name: "Use template" }).click();
+
+  await expect(page).toHaveURL(/\/studio/);
+  await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Show" }).click();
+  await page.getByRole("button", { name: "Timeline" }).click();
+  await expect(page.getByText("Loop verse", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Saved", exact: true })).toBeVisible();
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 2, name: "Your clips" })).toBeVisible();
+  await page.getByRole("heading", { level: 3, name: "Adh-Dhariyat 1-2" }).click();
+  await expect(page).toHaveURL(/\/studio/);
+  await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
   assertNoErrors();
 });
 
@@ -68,6 +132,42 @@ test("canvas creator saves a reusable preset with ordered B-roll slots", async (
   await page.goto("/styles");
   await page.getByRole("button", { name: "My templates" }).click();
   await expect(page.getByRole("heading", { name: "My Canvas Preset" })).toBeVisible();
+  assertNoErrors();
+});
+
+test("split compositions expose precise media, panel, solid, and gradient controls", async ({ page }) => {
+  const assertNoErrors = failOnPageErrors(page);
+  await page.goto("/styles/editor?template=reciter-split-fade");
+
+  await expect(page.getByRole("button", { name: "Split fade", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByLabel("Solid width").fill("48");
+  await page.getByLabel("Fade width").fill("24");
+  await page.getByLabel("Panel opacity").fill("92");
+  await expect(page.getByLabel("Solid width")).toHaveValue("48");
+  await expect(page.getByLabel("Fade width")).toHaveValue("24");
+  await expect(page.getByLabel("Panel opacity")).toHaveValue("92");
+
+  await page.getByRole("button", { name: "media", exact: true }).click();
+  const directMediaPosition = page.getByRole("slider", { name: "Media position" });
+  await directMediaPosition.press("ArrowRight");
+  await expect(directMediaPosition).toHaveAttribute("aria-valuetext", /horizontal/);
+  const mediaInspector = page.getByTestId("inspector-media");
+  await mediaInspector.getByLabel("Zoom").fill("1.75");
+  await mediaInspector.getByLabel("Horizontal position").fill("35");
+  await mediaInspector.getByLabel("Vertical position").fill("-20");
+  await expect(mediaInspector.getByLabel("Zoom")).toHaveValue("1.75");
+  await expect(mediaInspector.getByLabel("Horizontal position")).toHaveValue("35");
+  await expect(mediaInspector.getByLabel("Vertical position")).toHaveValue("-20");
+
+  await page.getByRole("button", { name: "gradient", exact: true }).click();
+  await expect(page.getByLabel("Gradient preview")).toBeVisible();
+  await page.getByRole("button", { name: "Add color stop" }).click();
+  await expect(page.getByLabel("Gradient stop 3 color")).toBeVisible();
+  await page.getByRole("button", { name: "solid", exact: true }).click();
+  await expect(page.getByLabel("Canvas color")).toBeVisible();
   assertNoErrors();
 });
 
