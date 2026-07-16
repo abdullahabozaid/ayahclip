@@ -97,6 +97,7 @@ const ARABIC_FONT_OPTIONS = [
   { value: "uthmanic-hafs", label: "Uthmanic Hafs" },
   { value: "amiri-quran", label: "Amiri Quran" },
   { value: "scheherazade-new", label: "Scheherazade New (true bold)" },
+  { value: "noto-naskh-arabic", label: "Noto Naskh Arabic (caption bold)" },
 ];
 
 function Section({
@@ -576,7 +577,9 @@ export function StudioSettings() {
             value={store.arabicFont}
             onChange={(font) => {
               store.setArabicFont(font);
-              store.setArabicFontWeight(font === "scheherazade-new" ? 600 : 400);
+              store.setArabicFontWeight(
+                font === "scheherazade-new" || font === "noto-naskh-arabic" ? 600 : 400,
+              );
             }}
             options={ARABIC_FONT_OPTIONS}
           />
@@ -590,15 +593,17 @@ export function StudioSettings() {
                   ? 'var(--font-amiri-quran), "UthmanicHafs", serif'
                   : store.arabicFont === "scheherazade-new"
                     ? 'var(--font-scheherazade), "UthmanicHafs", serif'
+                    : store.arabicFont === "noto-naskh-arabic"
+                      ? 'var(--font-noto-naskh), "UthmanicHafs", serif'
                     : '"UthmanicHafs", serif',
                 fontWeight: store.arabicFontWeight,
               }}
             >
-              بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+              وَقِيلَ يَـٰأَرْضُ ٱبْلَعِى مَآءَكِ وَيَـٰسَمَآءُ أَقْلِعِىۖ ﴿٤٤﴾
             </p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Mushaf, Uthmanic, and Amiri use their real Regular face. Scheherazade provides genuine heavier weights without synthetic thickening.</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">This sample includes full marks, a pause mark, and an ayah end. Scheherazade and Noto Naskh provide genuine heavier weights without synthetic thickening.</p>
           </div>
-          {store.arabicFont === "scheherazade-new" && (
+          {(store.arabicFont === "scheherazade-new" || store.arabicFont === "noto-naskh-arabic") && (
             <WeightControl
               label="Arabic Weight"
               value={store.arabicFontWeight}

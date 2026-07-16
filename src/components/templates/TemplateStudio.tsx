@@ -94,6 +94,13 @@ const ARABIC_FONT_OPTIONS: {
     family: 'var(--font-scheherazade), "UthmanicHafs", serif',
     defaultWeight: 600,
   },
+  {
+    value: "noto-naskh-arabic",
+    label: "Noto Naskh Arabic",
+    note: "Compact multi-weight Naskh for bold social captions with dense harakat.",
+    family: 'var(--font-noto-naskh), "UthmanicHafs", serif',
+    defaultWeight: 600,
+  },
 ];
 
 function cloneTemplate(template: TemplateDefinition): TemplateDefinition {
@@ -696,14 +703,14 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                             : font.defaultWeight,
                         }}
                       >
-                        بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                        وَقِيلَ يَـٰأَرْضُ ٱبْلَعِى مَآءَكِ وَيَـٰسَمَآءُ أَقْلِعِىۖ ﴿٤٤﴾
                       </span>
                       <span className="mt-1 block text-[10px] leading-4 text-[var(--muted)]">{font.note}</span>
                     </button>
                   );
                 })}
               </div>
-              {draft.settings.arabicFont === "scheherazade-new" && (
+              {(draft.settings.arabicFont === "scheherazade-new" || draft.settings.arabicFont === "noto-naskh-arabic") && (
                 <Segmented
                   value={String(draft.settings.arabicFontWeight)}
                   options={[
@@ -715,7 +722,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   onChange={(value) => setStyle("arabicFontWeight", Number(value))}
                 />
               )}
-              <p className="text-[10px] leading-4 text-[var(--muted)]">Mushaf, Uthmanic, and Amiri stay at their real Regular face. Scheherazade exposes true font weights, so stronger captions never rely on synthetic bolding.</p>
+              <p className="text-[10px] leading-4 text-[var(--muted)]">The sample includes full marks, a pause mark, and an ayah end. Scheherazade and Noto Naskh expose real weights, so stronger captions never rely on synthetic bolding.</p>
               <RangeField label="Size" value={draft.settings.arabicFontSize} min={18} max={72} suffix="px" onChange={(value) => setStyle("arabicFontSize", value)} />
               <RangeField label="Line height" value={draft.settings.lineHeight} min={0.75} max={1.7} step={0.05} suffix="×" onChange={(value) => setStyle("lineHeight", value)} />
               <SwitchField label="Arabic verse number" checked={Boolean(draft.settings.arabicVerseNumber)} onChange={(checked) => setStyle("arabicVerseNumber", checked)} />

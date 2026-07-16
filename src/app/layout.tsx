@@ -5,6 +5,7 @@ import {
   Cormorant_Garamond,
   Lora,
   Marcellus,
+  Noto_Naskh_Arabic,
   Outfit,
   Playfair_Display,
   Scheherazade_New,
@@ -29,6 +30,12 @@ const scheherazade = Scheherazade_New({
   weight: ["400", "500", "600", "700"],
   subsets: ["arabic", "latin"],
   variable: "--font-scheherazade",
+  display: "swap",
+});
+const notoNaskh = Noto_Naskh_Arabic({
+  weight: "variable",
+  subsets: ["arabic", "latin"],
+  variable: "--font-noto-naskh",
   display: "swap",
 });
 
@@ -76,7 +83,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable} ${scheherazade.variable}`}
+      className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoNaskh.variable}`}
     >
       <body className="grain min-h-dvh text-parchment antialiased">
         <SiteNav />

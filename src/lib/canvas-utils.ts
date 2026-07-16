@@ -99,6 +99,7 @@ export const ARABIC_FONTS: Record<string, string> = {
   "uthmanic-hafs": '"UthmanicHafs", serif',
   "amiri-quran": '"Amiri Quran", "UthmanicHafs", serif',
   "scheherazade-new": '"Scheherazade New", "UthmanicHafs", serif',
+  "noto-naskh-arabic": '"Noto Naskh Arabic", "UthmanicHafs", serif',
 };
 
 export const ARABIC_FONT_WEIGHTS: Record<string, readonly number[]> = {
@@ -106,6 +107,7 @@ export const ARABIC_FONT_WEIGHTS: Record<string, readonly number[]> = {
   "uthmanic-hafs": [400],
   "amiri-quran": [400],
   "scheherazade-new": [400, 500, 600, 700],
+  "noto-naskh-arabic": [400, 500, 600, 700],
 };
 
 export const TRANSLATION_FONTS: Record<string, string> = {
@@ -128,6 +130,7 @@ const TRANSLATION_FONT_VARIABLES: Record<string, string> = {
 const ARABIC_FONT_VARIABLES: Record<string, string> = {
   "amiri-quran": "--font-amiri-quran",
   "scheherazade-new": "--font-scheherazade",
+  "noto-naskh-arabic": "--font-noto-naskh",
 };
 
 export function getArabicFontFamily(font: string): string {
@@ -173,6 +176,7 @@ const ARABIC_PRIMARY: Record<string, string> = {
   "uthmanic-hafs": '"UthmanicHafs"',
   "amiri-quran": '"Amiri Quran"',
   "scheherazade-new": '"Scheherazade New"',
+  "noto-naskh-arabic": '"Noto Naskh Arabic"',
 };
 const TRANSLATION_PRIMARY: Record<string, string> = {
   serif: "Georgia",

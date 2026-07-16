@@ -111,6 +111,8 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
+      arabicFont: "noto-naskh-arabic",
+      arabicFontWeight: 700,
       arabicFontSize: 42,
       lineHeight: 1.08,
       textPosition: 49,

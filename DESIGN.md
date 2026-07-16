@@ -26,7 +26,7 @@ Midnight Mihrab. All tokens live in `src/app/globals.css` as CSS variables and T
 
 - **Display**: `Marcellus` (classical roman) — page titles, surah name in studio header
 - **Body**: `Outfit` (geometric sans, 300/400/500/600) — UI, copy, controls
-- **Quran Arabic**: selectable `Mushaf QCF`, `Uthmanic Hafs`, `Amiri Quran`, and `Scheherazade New`. QCF, Uthmanic Hafs, and Amiri Quran remain at their native Regular face. Scheherazade New exposes its real 400/500/600/700 faces for creators who need stronger social captions. Never synthesize Quran Arabic bold.
+- **Quran Arabic**: selectable `Mushaf QCF`, `Uthmanic Hafs`, `Amiri Quran`, `Scheherazade New`, and `Noto Naskh Arabic`. QCF, Uthmanic Hafs, and Amiri Quran remain at their native Regular face. Scheherazade New and Noto Naskh Arabic expose real 400/500/600/700 faces for creators who need stronger social captions. Never synthesize Quran Arabic bold.
 - **Translation**: serif / sans / Cinzel / Times New Roman / Lora / Playfair Display (user-selectable).
 
 Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px (information density area), copy on browse/home is 14px+.

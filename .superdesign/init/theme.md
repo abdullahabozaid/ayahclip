@@ -21,7 +21,7 @@ The design system is **Midnight Mihrab**: quiet, editorial, reverent, and cinema
 - Product/UI: Outfit.
 - Display: Marcellus, with Cormorant Garamond available for editorial accents.
 - Translation presets: Outfit for crisp utility, Lora for readable literary text, Playfair Display for editorial/cinematic text, Cinzel only for restrained title treatment.
-- Quran Arabic: Mushaf QCF, Uthmanic Hafs, and Amiri Quran at their native Regular face; Scheherazade New at its real 400/500/600/700 faces. Never synthesize Quran Arabic bold.
+- Quran Arabic: Mushaf QCF, Uthmanic Hafs, and Amiri Quran at their native Regular face; Scheherazade New and Noto Naskh Arabic at their real 400/500/600/700 faces. Never synthesize Quran Arabic bold.
 
 ## Shape and depth
 

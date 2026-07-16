@@ -16,7 +16,7 @@ Two modes:
 
 ## Brand and tone
 
-**Midnight Mihrab** — reverent dark luxury. Ink-navy base, gilded brass-gold accent, deep emerald secondary, warm parchment text. Classical roman display (Marcellus), modern body (Outfit), and verified Quran Arabic modes for Mushaf QCF, Uthmanic Hafs, Amiri Quran, and true-weight Scheherazade New.
+**Midnight Mihrab** — reverent dark luxury. Ink-navy base, gilded brass-gold accent, deep emerald secondary, warm parchment text. Classical roman display (Marcellus), modern body (Outfit), and verified Quran Arabic modes for Mushaf QCF, Uthmanic Hafs, Amiri Quran, true-weight Scheherazade New, and true-weight Noto Naskh Arabic.
 
 Tone: quiet, sacred, precise. No hype, no growth-hacking, no startup playfulness. Closer to a luthier's workshop than a SaaS dashboard.
 

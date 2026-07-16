@@ -184,6 +184,15 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   const assertNoErrors = failOnPageErrors(page);
   await page.goto("/styles/editor?template=reciter-split-fade");
 
+  const arabicInspector = page.getByTestId("inspector-arabic");
+  await arabicInspector.locator("summary").click();
+  await expect(
+    arabicInspector.getByRole("button", { name: /Noto Naskh Arabic/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    arabicInspector.getByRole("button", { name: "Bold", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+
   await expect(page.getByRole("button", { name: "Split fade", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",

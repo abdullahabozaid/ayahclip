@@ -22,6 +22,7 @@ describe("Arabic rendering modes", () => {
     expect(shouldUseQcf("uthmanic-hafs", words)).toBe(false);
     expect(shouldUseQcf("amiri-quran", words)).toBe(false);
     expect(shouldUseQcf("scheherazade-new", words)).toBe(false);
+    expect(shouldUseQcf("noto-naskh-arabic", words)).toBe(false);
     expect(shouldUseQcf("qcf", [])).toBe(false);
   });
 
@@ -34,5 +35,7 @@ describe("Arabic rendering modes", () => {
     expect(supportedArabicFontWeight("amiri-quran", 600)).toBe(400);
     expect(supportedArabicFontWeight("scheherazade-new", 600)).toBe(600);
     expect(supportedArabicFontWeight("scheherazade-new", 700)).toBe(700);
+    expect(supportedArabicFontWeight("noto-naskh-arabic", 600)).toBe(600);
+    expect(supportedArabicFontWeight("noto-naskh-arabic", 700)).toBe(700);
   });
 });
