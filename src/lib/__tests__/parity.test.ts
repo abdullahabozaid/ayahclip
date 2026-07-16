@@ -66,3 +66,17 @@ describe("preview/export audio parity", () => {
     expect(effectiveAudioBounds(tm, verseWordCount(TEXT))).toEqual([2, 10]);
   });
 });
+
+describe("effectiveAudioBounds is the shared audio-span rule", () => {
+  it("maps a mid-verse trim proportionally", () => {
+    const tm: VerseTiming = { verseNumber: 1, start: 10, end: 20, wordRange: { from: 5, to: 9 } };
+    const [lo, hi] = effectiveAudioBounds(tm, 10);
+    expect(lo).toBe(15);
+    expect(hi).toBe(20);
+  });
+
+  it("a zero-length verse is left alone", () => {
+    const tm: VerseTiming = { verseNumber: 1, start: 5, end: 5, wordRange: { from: 0, to: 1 } };
+    expect(effectiveAudioBounds(tm, 10)).toEqual([5, 5]);
+  });
+});

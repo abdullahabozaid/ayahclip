@@ -11,7 +11,8 @@ import {
   type SceneMedia,
 } from "./render-core";
 import { clipFadeProgress, applyAudioFadeIn } from "./clip-fade";
-import { verseTextAt, type VerseTiming } from "./audio-import";
+import { effectiveAudioBounds, verseTextAt, type VerseTiming } from "./audio-import";
+import { verseWordCount } from "./clip-rows";
 import { ensureQcfFontsReady } from "./qcf-font-loader";
 import { resolveBackgroundScene, type BackgroundScene } from "./background-sequence";
 import {
@@ -475,8 +476,14 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
         !!bgVideo || hasIntro || !!tm?.splits?.length || !!vSegs || (clipFadeMs > 0 && i === 0);
 
       if (importedBuffer && options.importedAudio) {
-        const start = sourceStart;
-        const dur = Math.max(0.05, (tm?.end ?? importedBuffer.duration) - start);
+        // Word-trimmed verses must play only their kept span — the same span
+        // imported-player.ts uses for preview. Slicing start..end here is what
+        // made the export re-include trimmed words.
+        const [lo, hi] = tm
+          ? effectiveAudioBounds(tm, verseWordCount(verse.text_uthmani))
+          : [0, importedBuffer.duration];
+        const start = lo;
+        const dur = Math.max(0.05, hi - lo);
         source.buffer = importedBuffer;
         source.connect(master);
         source.start(0, start, dur);
@@ -580,8 +587,11 @@ async function assembleAudio(
       );
       for (const verse of options.verses) {
         const tm = options.importedAudio.timings.find((t) => t.verseNumber === verse.verse_number);
-        const start = Math.max(0, tm?.start ?? 0);
-        const end = Math.min(full.duration, tm?.end ?? full.duration);
+        const [lo, hi] = tm
+          ? effectiveAudioBounds(tm, verseWordCount(verse.text_uthmani))
+          : [0, full.duration];
+        const start = Math.max(0, lo);
+        const end = Math.min(full.duration, hi);
         slices.push({ buf: full, offset: start, dur: Math.max(0.05, end - start) });
       }
     } else {
