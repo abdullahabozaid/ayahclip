@@ -19,6 +19,10 @@ describe("template application media handoff", () => {
     });
   });
 
+  it("ships the split preset already fitted to its two-line reading panel", () => {
+    expect(split.settings.arabicFontSize).toBe(36);
+  });
+
   it("creates an ordered media request for every reusable slot", () => {
     applyTemplate(broll);
 

@@ -578,6 +578,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
               extras={draft.extras}
               sample={sample}
               replayToken={replayToken}
+              animateIntro
               previewMedia={draft.mediaSlots.length > 0}
             />
             {draft.extras.safeAreaTarget && draft.extras.safeAreaTarget !== "none" && (
@@ -1009,6 +1010,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
               extras={draft.extras}
               sample={sample}
               replayToken={replayToken}
+              animateIntro
               previewMedia={draft.mediaSlots.length > 0}
             />
           </div>

@@ -113,7 +113,9 @@ export const TEMPLATES: TemplateDefinition[] = [
       ...base,
       arabicFont: "noto-naskh-arabic",
       arabicFontWeight: 700,
-      arabicFontSize: 42,
+      // The Short sample fits the 50% reading panel in two lines at this size;
+      // the former 42px default shipped in the editor's own cramped warning.
+      arabicFontSize: 36,
       lineHeight: 1.08,
       textPosition: 49,
       textLayout: "left-panel",

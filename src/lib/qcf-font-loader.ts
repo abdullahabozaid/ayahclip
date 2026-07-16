@@ -12,17 +12,22 @@ async function loadPageFont(page: number): Promise<void> {
   if (loadingPages.has(page)) return loadingPages.get(page)!;
 
   const promise = (async () => {
-    const resp = await fetch(`/api/qcf-font?page=${page}`);
-    if (!resp.ok) throw new Error(`Failed to load QCF font p${page}`);
-    const buf = await resp.arrayBuffer();
-    const face = new FontFace(`p${page}-v2`, buf, {
-      style: "normal",
-      weight: "400",
-    });
-    await face.load();
-    document.fonts.add(face);
-    loadedPages.add(page);
-    loadingPages.delete(page);
+    try {
+      const resp = await fetch(`/api/qcf-font?page=${page}`);
+      if (!resp.ok) throw new Error(`Failed to load QCF font p${page}`);
+      const buf = await resp.arrayBuffer();
+      const face = new FontFace(`p${page}-v2`, buf, {
+        style: "normal",
+        weight: "400",
+      });
+      await face.load();
+      document.fonts.add(face);
+      loadedPages.add(page);
+    } finally {
+      // A transient request failure must not poison this page forever. A later
+      // preview/export can retry instead of reusing a rejected promise.
+      loadingPages.delete(page);
+    }
   })();
 
   loadingPages.set(page, promise);

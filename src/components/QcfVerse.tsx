@@ -17,9 +17,15 @@ export function QcfVerse({ qcfWords, fallback, className = "" }: QcfVerseProps) 
   useEffect(() => {
     if (!qcfWords || qcfWords.length === 0) return;
     let cancelled = false;
-    ensureQcfFontsReady(qcfWords).then(() => {
-      if (!cancelled) setFontsReady(true);
-    });
+    ensureQcfFontsReady(qcfWords)
+      .then(() => {
+        if (!cancelled) setFontsReady(true);
+      })
+      .catch(() => {
+        // Keep the readable Uthmanic fallback. The loader clears its failed
+        // request so a later render can retry the page font.
+        if (!cancelled) setFontsReady(false);
+      });
     return () => { cancelled = true; };
   }, [qcfWords]);
 

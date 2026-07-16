@@ -596,9 +596,13 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       ? store.verses.flatMap((v) => v.qcfWords ?? [])
       : [];
     if (allQcf.length > 0) {
-      ensureQcfFontsReady(allQcf).then(() => {
-        if (!cancelled) drawRef.current();
-      });
+      ensureQcfFontsReady(allQcf)
+        .then(() => {
+          if (!cancelled) drawRef.current();
+        })
+        .catch(() => {
+          if (!cancelled) drawRef.current();
+        });
     }
     document.fonts?.ready.then(() => {
       if (!cancelled) drawRef.current();

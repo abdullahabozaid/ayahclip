@@ -37,6 +37,8 @@ Editor mode contains:
 ## Typography rules
 
 - Mushaf QCF, Uthmanic Hafs, and Amiri Quran stay at their native Regular face. Scheherazade New and Noto Naskh Arabic may use their real 400/500/600/700 faces. Never fake a heavy Arabic weight.
+- The browser specimen, canvas preview, and exported frame must use the same native face; do not advertise a synthetic weight in CSS. Export waits for the selected Quran face rather than silently capturing a fallback.
+- Template gallery previews are settled, comparable frames. Motion belongs in the editor Replay action. The default Reciter Split Fade Short specimen fits its reading panel in two Arabic lines without asking the creator to repair the preset.
 - English defaults to Outfit 600 for concise social captions or Lora 500 for reflective/editorial translations.
 - Arabic should be the primary hierarchy in Quran-first templates. Translation is normally 40–55% of the apparent Arabic size.
 - Line lengths must remain readable inside TikTok safe areas. Favor 2–3 Arabic lines and 2–3 English lines per frame.

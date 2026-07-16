@@ -199,6 +199,7 @@ export async function ensureFontsReady(
   translationFont: string,
   arabicWeight = 400,
   translationWeight = 400,
+  options: { timeoutMs?: number; throwOnTimeout?: boolean } = {},
 ): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
   const ar = ARABIC_FONT_VARIABLES[arabicFont]
@@ -213,14 +214,19 @@ export async function ensureFontsReady(
       document.fonts.load(`${translationWeight} 24px ${tr}`, "Aa"),
     ]);
     // A missing or browser-generated font family can leave FontFaceSet.load()
-    // pending indefinitely. Canvas callers must still be able to paint with a
-    // safe fallback instead of freezing previews or export preparation.
-    await Promise.race([
-      fontLoads,
-      new Promise<void>((resolve) => window.setTimeout(resolve, 800)),
+    // pending indefinitely. Previews may fall back and repaint later; export
+    // opts into a longer, strict timeout so it never records the wrong face.
+    const timeoutMs = Math.max(1, options.timeoutMs ?? 800);
+    const completed = await Promise.race([
+      fontLoads.then(() => true),
+      new Promise<false>((resolve) => window.setTimeout(() => resolve(false), timeoutMs)),
     ]);
-  } catch {
-    /* best-effort: fall through to whatever is available */
+    if (!completed && options.throwOnTimeout) {
+      throw new Error("The selected Quran font did not finish loading. Please retry the export.");
+    }
+  } catch (error) {
+    if (options.throwOnTimeout) throw error;
+    /* Preview is best-effort: repaint again when document.fonts.ready settles. */
   }
 }
 

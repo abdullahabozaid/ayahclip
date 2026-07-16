@@ -190,8 +190,7 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await expect(
     arabicInspector.getByRole("button", { name: /Bold social/ }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(arabicInspector.getByText("Split text needs room", { exact: true })).toBeVisible();
-  await arabicInspector.getByRole("button", { name: /Fit text to/ }).click();
+  await expect(arabicInspector.getByLabel("Size")).toHaveValue("36");
   await expect(arabicInspector.getByText("Split text needs room", { exact: true })).toHaveCount(0);
   await arabicInspector.getByRole("button", { name: "Compare all five fonts" }).click();
   await expect(

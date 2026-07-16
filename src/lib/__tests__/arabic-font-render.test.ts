@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ensureFontsReady,
   getArabicFontFamily,
   shouldUseQcf,
   supportedArabicFontWeight,
@@ -15,6 +16,10 @@ const words: QcfWord[] = [{
   text_uthmani: "بِسْمِ",
   char_type_name: "word",
 }];
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("Arabic rendering modes", () => {
   it("uses QCF glyphs only when the saved rendering mode requests them", () => {
@@ -37,5 +42,24 @@ describe("Arabic rendering modes", () => {
     expect(supportedArabicFontWeight("scheherazade-new", 700)).toBe(700);
     expect(supportedArabicFontWeight("noto-naskh-arabic", 600)).toBe(600);
     expect(supportedArabicFontWeight("noto-naskh-arabic", 700)).toBe(700);
+  });
+
+  it("fails a strict export wait instead of silently drawing a fallback face", async () => {
+    const load = vi.fn(() => new Promise<FontFace[]>(() => undefined));
+    vi.stubGlobal("document", { fonts: { load } });
+    vi.stubGlobal("window", { setTimeout });
+
+    await expect(ensureFontsReady(
+      "uthmanic-hafs",
+      "serif",
+      700,
+      400,
+      { timeoutMs: 1, throwOnTimeout: true },
+    )).rejects.toThrow("selected Quran font did not finish loading");
+
+    expect(load).toHaveBeenCalledWith(
+      '400 32px "UthmanicHafs"',
+      "بِسْمِ ٱللَّهِ ﴿١﴾",
+    );
   });
 });

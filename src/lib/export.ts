@@ -288,6 +288,7 @@ export async function exportVideoWithInfo(options: ExportOptions): Promise<Expor
     options.translationFont,
     options.arabicFontWeight,
     options.translationFontWeight,
+    { timeoutMs: 10_000, throwOnTimeout: true },
   );
   const allQcf = options.arabicFont === "qcf"
     ? options.verses.flatMap((v) => v.qcfWords ?? [])

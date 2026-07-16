@@ -76,6 +76,7 @@ export function TemplatePreview({
   extras = {},
   sample = FALLBACK_SAMPLE,
   replayToken = 0,
+  animateIntro = false,
   previewMedia = false,
   className = "block h-full w-full",
 }: {
@@ -83,6 +84,8 @@ export function TemplatePreview({
   extras?: TemplateExtras;
   sample?: SampleVerse;
   replayToken?: number;
+  /** Animate only in the editor/replay surface. Gallery cards stay settled and scannable. */
+  animateIntro?: boolean;
   /** Show a representative landscape source so crop/zoom/position controls are visible. */
   previewMedia?: boolean;
   className?: string;
@@ -117,7 +120,7 @@ export function TemplatePreview({
     };
     const start = () => {
       cancelAnimationFrame(animationFrame);
-      if ((style.verseIntro ?? "none") === "none") {
+      if (!animateIntro || (style.verseIntro ?? "none") === "none") {
         drawAt(1);
         return;
       }
@@ -160,7 +163,7 @@ export function TemplatePreview({
       cancelled = true;
       cancelAnimationFrame(animationFrame);
     };
-  }, [extras, previewMedia, replayToken, sample, style]);
+  }, [animateIntro, extras, previewMedia, replayToken, sample, style]);
 
   return <canvas ref={canvasRef} className={className} aria-label="Template preview" />;
 }
