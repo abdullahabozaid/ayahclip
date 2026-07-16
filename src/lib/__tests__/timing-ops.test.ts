@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { normalizeTimings } from "../timing-ops";
+import {
+  applyAlignedTimingsToRows,
+  normalizeTimings,
+  verseNumbersForAlignment,
+} from "../timing-ops";
 import type { VerseTiming } from "../audio-import";
 
 const t = (over: Partial<VerseTiming>): VerseTiming => ({
@@ -77,5 +81,89 @@ describe("normalizeTimings", () => {
     const [out] = normalizeTimings([t({ start: 1, end: 4 })]);
     expect(out.splits).toBeUndefined();
     expect(out).toEqual(t({ start: 1, end: 4 }));
+  });
+});
+
+describe("alignment row projection", () => {
+  it("deduplicates and sorts the Quran reference range", () => {
+    expect(verseNumbersForAlignment([
+      t({ verseNumber: 3 }),
+      t({ verseNumber: 2 }),
+      t({ verseNumber: 2 }),
+    ])).toEqual([2, 3]);
+  });
+
+  it("preserves duplicate rows, splits, and word metadata", () => {
+    const current = [
+      t({
+        verseNumber: 1,
+        start: 0,
+        end: 4,
+        splits: [2],
+        splitWords: [3],
+        splitWordTotal: 8,
+        splitCharFractions: [0.42],
+        wordRange: { from: 0, to: 3 },
+      }),
+      t({
+        verseNumber: 1,
+        start: 4,
+        end: 10,
+        wordRange: { from: 4, to: 7 },
+      }),
+      t({ verseNumber: 2, start: 10, end: 15 }),
+    ];
+    const aligned = [
+      t({
+        verseNumber: 1,
+        start: 20,
+        end: 30,
+        alignmentMethod: "hybrid",
+        alignmentConfidence: "medium",
+        alignmentAgreementSeconds: 0.55,
+      }),
+      t({ verseNumber: 2, start: 30, end: 38 }),
+    ];
+
+    const result = applyAlignedTimingsToRows(current, aligned);
+
+    expect(result).toHaveLength(3);
+    expect(result.map((row) => row.verseNumber)).toEqual([1, 1, 2]);
+    expect(result[0]).toMatchObject({ start: 20, end: 24, splits: [22] });
+    expect(result[1]).toMatchObject({ start: 24, end: 30 });
+    expect(result[2]).toMatchObject({ start: 30, end: 38 });
+    expect(result[0].splitWords).toEqual([3]);
+    expect(result[0].splitCharFractions).toEqual([0.42]);
+    expect(result[0].wordRange).toEqual({ from: 0, to: 3 });
+    expect(result[1].wordRange).toEqual({ from: 4, to: 7 });
+    expect(result[0]).toMatchObject({
+      alignmentMethod: "hybrid",
+      alignmentConfidence: "medium",
+      alignmentAgreementSeconds: 0.55,
+    });
+    expect(result[1]).toMatchObject({
+      alignmentMethod: "hybrid",
+      alignmentConfidence: "medium",
+      alignmentAgreementSeconds: 0.55,
+    });
+  });
+
+  it("distributes degenerate duplicate rows across the aligned span", () => {
+    const current = [
+      t({ verseNumber: 5, start: 2, end: 2 }),
+      t({ verseNumber: 5, start: 2, end: 2 }),
+    ];
+    const result = applyAlignedTimingsToRows(current, [
+      t({ verseNumber: 5, start: 10, end: 14 }),
+    ]);
+    expect(result.map(({ start, end }) => [start, end])).toEqual([
+      [10, 12],
+      [12, 14],
+    ]);
+  });
+
+  it("leaves rows without an aligned reference intact", () => {
+    const current = [t({ verseNumber: 9, start: 1, end: 3 })];
+    expect(applyAlignedTimingsToRows(current, [])).toEqual(current);
   });
 });

@@ -141,16 +141,7 @@ export interface Project {
    *  separately in IndexedDB under `audio:<id>` / `video:<id>`. */
   imported?: {
     name: string;
-    timings: {
-      verseNumber: number;
-      start: number;
-      end: number;
-      splits?: number[];
-      splitWords?: number[];
-      splitWordTotal?: number;
-      splitCharFractions?: number[];
-      wordRange?: { from: number; to: number };
-    }[];
+    timings: import("@/lib/audio-import").VerseTiming[];
     videoBg: boolean;
   };
   /** Reciter (library) clips: manual word-part boundaries per verse. */

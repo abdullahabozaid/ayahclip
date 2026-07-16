@@ -7,7 +7,7 @@ claim broad Quran-wide accuracy yet.
 ## Method
 
 - Source: public per-ayah MP3 files from EveryAyah.
-- Passage: Al-Fatihah 1:1–7.
+- Core passage: Al-Fatihah 1:1–7.
 - Reciters: Mishary Alafasy, Muhammad Al-Minshawi, Abdul Rahman Al-Sudais,
   Mahmoud Al-Husary, and Abdul Basit (Murattal).
 - Ground truth: each MP3 is decoded independently, then PCM is concatenated, so
@@ -22,6 +22,7 @@ claim broad Quran-wide accuracy yet.
 Run one case with:
 
 ```sh
+npm run benchmark:fixtures
 npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/alafasy
 npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/alafasy --trim-silence
 ```
@@ -45,11 +46,42 @@ with the first voiced sample and recovers the preceding verse when several
 seconds of speech would otherwise be discarded. Recovered ranges are downgraded
 for user review rather than presented as unquestionable.
 
+### Expanded passage coverage
+
+The same Alafasy recording set was then tested against four structurally
+different passages. Each was evaluated with natural pauses and again after
+removing every per-ayah leading/trailing silence.
+
+| Passage / failure class | Natural mean / max | Run-on mean / max | Detection |
+|---|---:|---:|---|
+| Al-Baqarah 2:1–5 · muqattaʿāt | 0.139s / 0.331s | 0.209s / 0.354s | high |
+| Al-Fajr 89:6–10 · mid-surah start | 0.202s / 0.287s | 0.106s / 0.207s | high |
+| Al-Baqarah 2:255–256 · starts 18s inside ayah 255 | 0.063s / 0.063s | 0.198s / 0.198s | high |
+| Al-Baqarah 2:254–256 · long ayah | 0.096s / 0.132s | 0.370s / 0.468s | high |
+| Ar-Rahman 55:13–16 · repeated refrain | 0.150s / 0.220s | 0.080s / 0.141s | medium / high |
+
+The partial-start case uses `--crop-first 18`; despite a 0.25–0.26 character
+error rate because the known reference includes the omitted opening, detection
+still returns 2:255–256 at high confidence and the internal verse cut remains
+within 0.20s in both modes.
+
+The repeated refrain initially exposed a real method-selection failure: global
+transcript alignment jumped verse 16 about 0.8s early even though CTC and a
+strong pause agreed near the correct cut. Boundary-level fusion now switches
+only that disputed boundary to the acoustically supported cut. Natural mean
+error improved from **0.335s to 0.150s** and maximum error from **0.774s to
+0.220s**, while the pause-free run-on result remained at **0.080s mean**.
+
+The original five-reciter matrix was rerun after fusion and remained unchanged,
+confirming the edge-case fix did not regress the established baseline.
+
 ## Remaining gates
 
-- Expand beyond Al-Fatihah to long verses, mid-verse starts, muqatta'at, repeated
-  phrases, and clips containing non-recitation speech or music.
+- Add real clips containing mixed non-recitation speech or music. Text-level
+  adversarial Arabic speech/greeting/shahada/takbir cases are rejected, but the
+  acoustic model still needs mixed-audio evaluation.
 - Add phone recordings and unseen reciters using a leakage-free licensed set.
-- Persist per-boundary confidence and surface low-agreement boundaries in the
-  timeline instead of showing one undifferentiated “aligned” state.
+- Calibrate the persisted per-boundary confidence thresholds against the future
+  unseen-reciter and mixed-audio sets; low-agreement cuts are already saved and
+  surfaced as amber review markers in the timeline.
 - Keep manual correction first-class; model output is never Quran text authority.

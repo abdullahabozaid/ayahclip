@@ -64,4 +64,13 @@ describe("assessVerseMatch", () => {
   it("returns no match for unusable input", () => {
     expect(assessVerseMatch("اب").match).toBeNull();
   });
+
+  it.each([
+    "مرحبا بكم في هذا الفيديو اليوم سنتحدث عن موضوع مهم",
+    "لا إله إلا الله محمد رسول الله",
+    "السلام عليكم ورحمة الله وبركاته كيف حالكم",
+    "الله أكبر الله أكبر لا إله إلا الله",
+  ])("does not confidently auto-apply non-recitation Arabic: %s", (text) => {
+    expect(assessVerseMatch(text).confidence).toBe("low");
+  });
 });

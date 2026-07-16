@@ -13,10 +13,30 @@ import { getVerseWeights, loadCorpus } from "./verse-match";
 
 export interface DeepAlignmentResult {
   timings: VerseTiming[];
-  method: "transcript" | "ctc" | "pause";
+  method: "transcript" | "ctc" | "hybrid" | "pause";
   transcriptSimilarity: number | null;
   methodAgreementSeconds: number | null;
   boundaryDiagnostics: BoundaryDiagnostic[];
+}
+
+export function attachAlignmentDiagnostics(
+  timings: readonly VerseTiming[],
+  method: DeepAlignmentResult["method"],
+  diagnostics: readonly BoundaryDiagnostic[],
+): VerseTiming[] {
+  const byVerse = new Map(diagnostics.map((diagnostic) => [
+    diagnostic.verseNumber,
+    diagnostic,
+  ]));
+  return timings.map((timing) => {
+    const diagnostic = byVerse.get(timing.verseNumber);
+    return {
+      ...timing,
+      alignmentMethod: method,
+      alignmentConfidence: diagnostic?.confidence ?? "low",
+      alignmentAgreementSeconds: diagnostic?.agreementSeconds ?? null,
+    };
+  });
 }
 
 /** One shared deep-alignment pipeline for both timeline editor surfaces. */
@@ -42,12 +62,29 @@ export async function alignImportedAudio(params: {
     audioStart: findSpeechSpan(buffer).start,
     silences: findSilenceCenters(buffer),
   });
-  if (detailed) return detailed;
+  if (detailed) {
+    return {
+      ...detailed,
+      timings: attachAlignmentDiagnostics(
+        detailed.timings,
+        detailed.method,
+        detailed.boundaryDiagnostics,
+      ),
+    };
+  }
 
   const lo = verseNumbers[0];
   const hi = verseNumbers[verseNumbers.length - 1];
   return {
-    timings: autoSegment(buffer, verseNumbers, getVerseWeights(surah, lo, hi)),
+    timings: attachAlignmentDiagnostics(
+      autoSegment(buffer, verseNumbers, getVerseWeights(surah, lo, hi)),
+      "pause",
+      verseNumbers.map((verseNumber) => ({
+        verseNumber,
+        agreementSeconds: null,
+        confidence: "low",
+      })),
+    ),
     method: "pause",
     transcriptSimilarity: null,
     methodAgreementSeconds: null,

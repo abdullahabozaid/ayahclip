@@ -22,6 +22,9 @@ import { alignTranscriptVerses } from "./transcript-align";
 const MIN_DUR = 0.12;
 // A forced-aligned boundary snaps to a detected pause center within this window.
 const SNAP_WINDOW = 0.4;
+const FUSION_DISAGREEMENT_SECONDS = 0.45;
+const FUSION_PAUSE_WINDOW_SECONDS = 0.16;
+const FUSION_MIN_PAUSE_SECONDS = 0.18;
 
 export interface ForceAlignInput {
   emissions: Emissions;
@@ -36,11 +39,58 @@ export interface ForceAlignInput {
 
 export interface AlignmentDiagnostics {
   timings: VerseTiming[];
-  method: "transcript" | "ctc";
+  method: "transcript" | "ctc" | "hybrid";
   transcriptSimilarity: number | null;
   /** Mean absolute difference between the two independent boundary methods. */
   methodAgreementSeconds: number | null;
   boundaryDiagnostics: BoundaryDiagnostic[];
+}
+
+export interface FusedAlignment {
+  timings: VerseTiming[];
+  usedCtcBoundaries: number[];
+}
+
+/**
+ * Fuse independent transcript and acoustic timing one boundary at a time.
+ * Repeated Quran phrases can make the text alignment jump to the wrong refrain;
+ * when that happens, prefer CTC only if a strong real pause supports the CTC
+ * cut and does not equally support the transcript cut. Run-on recitation has no
+ * such pause evidence, so its accurate transcript boundary remains untouched.
+ */
+export function fuseAlignmentTimings(params: {
+  transcriptTimings: readonly VerseTiming[];
+  ctcTimings: readonly VerseTiming[];
+  silences?: readonly { time: number; len: number }[];
+}): FusedAlignment {
+  const timings = params.transcriptTimings.map((timing) => ({ ...timing }));
+  const usedCtcBoundaries: number[] = [];
+  const silences = (params.silences ?? []).filter(
+    (silence) => silence.len >= FUSION_MIN_PAUSE_SECONDS
+  );
+  const pauseDistance = (time: number) => silences.reduce(
+    (best, silence) => Math.min(best, Math.abs(silence.time - time)),
+    Infinity
+  );
+
+  const count = Math.min(timings.length, params.ctcTimings.length);
+  for (let index = 1; index < count; index++) {
+    const transcriptBoundary = timings[index].start;
+    const ctcBoundary = params.ctcTimings[index].start;
+    const disagreement = Math.abs(transcriptBoundary - ctcBoundary);
+    const ctcPauseDistance = pauseDistance(ctcBoundary);
+    const transcriptPauseDistance = pauseDistance(transcriptBoundary);
+    const ctcHasDistinctPauseEvidence =
+      ctcPauseDistance <= FUSION_PAUSE_WINDOW_SECONDS &&
+      transcriptPauseDistance >= ctcPauseDistance + FUSION_PAUSE_WINDOW_SECONDS;
+
+    if (disagreement >= FUSION_DISAGREEMENT_SECONDS && ctcHasDistinctPauseEvidence) {
+      timings[index - 1].end = ctcBoundary;
+      timings[index].start = ctcBoundary;
+      usedCtcBoundaries.push(timings[index].verseNumber);
+    }
+  }
+  return { timings, usedCtcBoundaries };
 }
 
 export interface BoundaryDiagnostic {
@@ -245,13 +295,19 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
         };
       });
       if (alternative.similarity >= 0.65) {
+        const transcriptTimings = refineTranscriptCuts({
+          timings: alternative.timings,
+          silences: input.silences,
+          audioStart: input.audioStart,
+        });
+        const fused = fuseAlignmentTimings({
+          transcriptTimings,
+          ctcTimings,
+          silences: input.silences,
+        });
         return {
-          timings: refineTranscriptCuts({
-            timings: alternative.timings,
-            silences: input.silences,
-            audioStart: input.audioStart,
-          }),
-          method: "transcript",
+          timings: fused.timings,
+          method: fused.usedCtcBoundaries.length ? "hybrid" : "transcript",
           transcriptSimilarity: alternative.similarity,
           methodAgreementSeconds: disagreement,
           boundaryDiagnostics,

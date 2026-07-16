@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   assembleTimings,
   classifyBoundaryConfidence,
+  fuseAlignmentTimings,
   refineTranscriptCuts,
 } from "@/lib/forced-align";
 
@@ -130,5 +131,52 @@ describe("refineTranscriptCuts", () => {
     });
 
     expect(timings[1].start).toBe(6);
+  });
+});
+
+describe("fuseAlignmentTimings", () => {
+  const transcript = [
+    { verseNumber: 13, start: 0, end: 5.1 },
+    { verseNumber: 14, start: 5.1, end: 10 },
+  ];
+  const ctc = [
+    { verseNumber: 13, start: 0, end: 5.75 },
+    { verseNumber: 14, start: 5.75, end: 10 },
+  ];
+
+  it("uses the acoustic cut when a distinct strong pause supports it", () => {
+    const result = fuseAlignmentTimings({
+      transcriptTimings: transcript,
+      ctcTimings: ctc,
+      silences: [{ time: 5.74, len: 0.32 }],
+    });
+    expect(result.timings[0].end).toBe(5.75);
+    expect(result.timings[1].start).toBe(5.75);
+    expect(result.usedCtcBoundaries).toEqual([14]);
+  });
+
+  it("keeps transcript timing for run-on recitation without pause evidence", () => {
+    const result = fuseAlignmentTimings({
+      transcriptTimings: transcript,
+      ctcTimings: ctc,
+      silences: [],
+    });
+    expect(result.timings).toEqual(transcript);
+    expect(result.usedCtcBoundaries).toEqual([]);
+  });
+
+  it("ignores weak hesitation and non-distinct pause evidence", () => {
+    const weak = fuseAlignmentTimings({
+      transcriptTimings: transcript,
+      ctcTimings: ctc,
+      silences: [{ time: 5.75, len: 0.1 }],
+    });
+    const equallyClose = fuseAlignmentTimings({
+      transcriptTimings: transcript,
+      ctcTimings: ctc,
+      silences: [{ time: 5.42, len: 0.4 }],
+    });
+    expect(weak.usedCtcBoundaries).toEqual([]);
+    expect(equallyClose.usedCtcBoundaries).toEqual([]);
   });
 });

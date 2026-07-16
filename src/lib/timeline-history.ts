@@ -15,6 +15,9 @@ export function cloneVerseTimings(
     ...timing,
     splits: timing.splits ? [...timing.splits] : undefined,
     splitWords: timing.splitWords ? [...timing.splitWords] : undefined,
+    splitCharFractions: timing.splitCharFractions
+      ? [...timing.splitCharFractions]
+      : undefined,
     wordRange: timing.wordRange ? { ...timing.wordRange } : undefined,
   }));
 }

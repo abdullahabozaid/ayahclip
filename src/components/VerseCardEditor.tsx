@@ -9,7 +9,16 @@ import {
   type VerseTiming,
 } from "@/lib/audio-import";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
-import { alignImportedAudio } from "@/lib/deep-align";
+import { alignImportedAudio, attachAlignmentDiagnostics } from "@/lib/deep-align";
+import {
+  alignmentFailureMessage,
+  buildAlignmentReview,
+  type AlignmentReview,
+} from "@/lib/alignment-feedback";
+import {
+  applyAlignedTimingsToRows,
+  verseNumbersForAlignment,
+} from "@/lib/timing-ops";
 import { importedPlayer } from "@/lib/imported-player";
 import { sanitizeArabic } from "@/lib/canvas-utils";
 import { QcfVerse } from "./QcfVerse";
@@ -30,6 +39,8 @@ function cloneTimings(timings: readonly VerseTiming[]): VerseTiming[] {
     ...t,
     splits: t.splits ? [...t.splits] : undefined,
     splitWords: t.splitWords ? [...t.splitWords] : undefined,
+    splitCharFractions: t.splitCharFractions ? [...t.splitCharFractions] : undefined,
+    wordRange: t.wordRange ? { ...t.wordRange } : undefined,
   }));
 }
 
@@ -322,13 +333,14 @@ export function VerseCardEditor() {
   const [redetecting, setRedetecting] = useState(false);
   const [deepMsg, setDeepMsg] = useState<string | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
+  const [alignmentReview, setAlignmentReview] = useState<AlignmentReview | null>(null);
 
   const redetect = useCallback(async () => {
     const buf = bufferRef.current;
     const cur = useAppStore.getState().audioSource;
     const surahId = useAppStore.getState().surah?.id;
     if (!buf || cur.mode !== "imported" || !surahId) return;
-    const verseNumbers = cur.timings.map((t) => t.verseNumber);
+    const verseNumbers = verseNumbersForAlignment(cur.timings);
     if (verseNumbers.length === 0) return;
     setRedetecting(true);
     try {
@@ -338,7 +350,19 @@ export function VerseCardEditor() {
         verseNumbers[0],
         verseNumbers[verseNumbers.length - 1]
       );
-      commit(autoSegment(buf, verseNumbers, weights));
+      const diagnostics = verseNumbers.map((verseNumber) => ({
+        verseNumber,
+        agreementSeconds: null,
+        confidence: "low" as const,
+      }));
+      const aligned = attachAlignmentDiagnostics(
+        autoSegment(buf, verseNumbers, weights),
+        "pause",
+        diagnostics,
+      );
+      commit(applyAlignedTimingsToRows(cur.timings, aligned));
+      setDeepErr(null);
+      setAlignmentReview(buildAlignmentReview("pause", diagnostics));
     } finally {
       setRedetecting(false);
     }
@@ -351,9 +375,7 @@ export function VerseCardEditor() {
     const surahId = state.surah?.id;
     if (!buf || cur.mode !== "imported" || !surahId) return;
     // Forced alignment wants the unique, sorted verse list (one timing per verse).
-    const verseNumbers = [...new Set(cur.timings.map((t) => t.verseNumber))].sort(
-      (a, b) => a - b
-    );
+    const verseNumbers = verseNumbersForAlignment(cur.timings);
     if (verseNumbers.length === 0) return;
     setDeepErr(null);
     setDeepMsg("Preparing…");
@@ -369,16 +391,11 @@ export function VerseCardEditor() {
         ),
       });
       setDeepMsg("Aligning…");
-      commit(result.timings);
-      if (result.method === "pause") {
-        setDeepErr(
-          "Couldn't align to the verses — used pause detection instead. Fine-tune by ear."
-        );
-      }
-    } catch {
-      setDeepErr(
-        "Deep align failed (model couldn't load). Check your connection and retry."
-      );
+      commit(applyAlignedTimingsToRows(cur.timings, result.timings));
+      setAlignmentReview(buildAlignmentReview(result.method, result.boundaryDiagnostics));
+      setDeepErr(null);
+    } catch (error) {
+      setDeepErr(alignmentFailureMessage(error));
     } finally {
       setDeepMsg(null);
     }
@@ -469,6 +486,26 @@ export function VerseCardEditor() {
             onClick={() => setDeepErr(null)}
             aria-label="Dismiss"
             className="ml-auto shrink-0 text-amber-200/60 hover:text-amber-100"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {alignmentReview && (
+        <div
+          role="status"
+          className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] ${
+            alignmentReview.reviewVerseNumbers.length
+              ? "border-amber-400/30 bg-amber-400/10 text-amber-100/90"
+              : "border-emerald-soft/25 bg-emerald-soft/10 text-emerald-soft"
+          }`}
+        >
+          <span className="leading-relaxed">{alignmentReview.message}</span>
+          <button
+            onClick={() => setAlignmentReview(null)}
+            aria-label="Dismiss alignment report"
+            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
           >
             ✕
           </button>

@@ -61,3 +61,92 @@ export function normalizeTimings(
     return unchanged ? t : { ...t, start, end, splits };
   });
 }
+
+/**
+ * Return the contiguous Quran reference rows that recognition/alignment should
+ * operate on. Editor rows are deliberately not the reference: a user can split
+ * one ayah into several duplicate rows, so passing the raw row list to
+ * autoSegment creates a verse/weight length mismatch.
+ */
+export function verseNumbersForAlignment(timings: readonly VerseTiming[]): number[] {
+  return [...new Set(timings.map((timing) => timing.verseNumber))].sort((a, b) => a - b);
+}
+
+/**
+ * Project one aligned timing per ayah back onto the user's current editor rows.
+ *
+ * Alignment engines work on a unique Quran range, while the editor can contain
+ * duplicated rows, word trims, and intra-ayah caption splits. Replacing the
+ * editor array with the engine result silently erased that structure. This
+ * function instead rescales every existing row and split inside the newly
+ * aligned ayah span, preserving row order and all word/text metadata.
+ */
+export function applyAlignedTimingsToRows(
+  current: readonly VerseTiming[],
+  aligned: readonly VerseTiming[],
+): VerseTiming[] {
+  const alignedByVerse = new Map<number, VerseTiming>();
+  for (const timing of aligned) {
+    if (!alignedByVerse.has(timing.verseNumber)) alignedByVerse.set(timing.verseNumber, timing);
+  }
+
+  const rowsByVerse = new Map<number, { indexes: number[]; start: number; end: number }>();
+  current.forEach((timing, index) => {
+    const group = rowsByVerse.get(timing.verseNumber);
+    if (group) {
+      group.indexes.push(index);
+      group.start = Math.min(group.start, timing.start);
+      group.end = Math.max(group.end, timing.end);
+    } else {
+      rowsByVerse.set(timing.verseNumber, {
+        indexes: [index],
+        start: timing.start,
+        end: timing.end,
+      });
+    }
+  });
+
+  return current.map((timing, rowIndex) => {
+    const target = alignedByVerse.get(timing.verseNumber);
+    const group = rowsByVerse.get(timing.verseNumber);
+    if (!target || !group) return { ...timing };
+
+    const oldDuration = group.end - group.start;
+    const newDuration = Math.max(0, target.end - target.start);
+    let mapTime: (time: number) => number;
+    let start: number;
+    let end: number;
+
+    if (oldDuration > 1e-6) {
+      mapTime = (time) => target.start +
+        ((time - group.start) / oldDuration) * newDuration;
+      start = mapTime(timing.start);
+      end = mapTime(timing.end);
+    } else {
+      // Degenerate legacy data: distribute duplicate rows evenly rather than
+      // stacking every row at the same timestamp.
+      const position = group.indexes.indexOf(rowIndex);
+      const count = Math.max(1, group.indexes.length);
+      start = target.start + (position / count) * newDuration;
+      end = target.start + ((position + 1) / count) * newDuration;
+      const oldRowDuration = Math.max(1e-6, timing.end - timing.start);
+      mapTime = (time) => start +
+        ((time - timing.start) / oldRowDuration) * Math.max(0, end - start);
+    }
+
+    return {
+      ...timing,
+      start,
+      end,
+      splits: timing.splits?.map(mapTime),
+      splitWords: timing.splitWords ? [...timing.splitWords] : undefined,
+      splitCharFractions: timing.splitCharFractions
+        ? [...timing.splitCharFractions]
+        : undefined,
+      wordRange: timing.wordRange ? { ...timing.wordRange } : undefined,
+      alignmentMethod: target.alignmentMethod,
+      alignmentConfidence: target.alignmentConfidence,
+      alignmentAgreementSeconds: target.alignmentAgreementSeconds,
+    };
+  });
+}

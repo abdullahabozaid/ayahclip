@@ -10,7 +10,16 @@ import {
   type VerseTiming,
 } from "@/lib/audio-import";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
-import { alignImportedAudio } from "@/lib/deep-align";
+import { alignImportedAudio, attachAlignmentDiagnostics } from "@/lib/deep-align";
+import {
+  alignmentFailureMessage,
+  buildAlignmentReview,
+  type AlignmentReview,
+} from "@/lib/alignment-feedback";
+import {
+  applyAlignedTimingsToRows,
+  verseNumbersForAlignment,
+} from "@/lib/timing-ops";
 import { importedPlayer } from "@/lib/imported-player";
 import { pinchZoom, timelinePointerTime } from "@/lib/timeline-gestures";
 import {
@@ -131,6 +140,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const [redetecting, setRedetecting] = useState(false);
   const [deepMsg, setDeepMsg] = useState<string | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
+  const [alignmentReview, setAlignmentReview] = useState<AlignmentReview | null>(null);
   const [looping, setLooping] = useState(false);
   const [viewportW, setViewportW] = useState(0);
   // True while WE set scrollLeft (playback follow / zoom recenter), so the scroll
@@ -1022,13 +1032,25 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     const cur = useAppStore.getState().audioSource;
     const surahId = useAppStore.getState().surah?.id;
     if (!buf || cur.mode !== "imported" || !surahId) return;
-    const verseNumbers = cur.timings.map((t) => t.verseNumber);
+    const verseNumbers = verseNumbersForAlignment(cur.timings);
     if (verseNumbers.length === 0) return;
     setRedetecting(true);
     try {
       await loadCorpus();
       const weights = getVerseWeights(surahId, verseNumbers[0], verseNumbers[verseNumbers.length - 1]);
-      commit(autoSegment(buf, verseNumbers, weights));
+      const diagnostics = verseNumbers.map((verseNumber) => ({
+        verseNumber,
+        agreementSeconds: null,
+        confidence: "low" as const,
+      }));
+      const aligned = attachAlignmentDiagnostics(
+        autoSegment(buf, verseNumbers, weights),
+        "pause",
+        diagnostics,
+      );
+      commit(applyAlignedTimingsToRows(cur.timings, aligned));
+      setDeepErr(null);
+      setAlignmentReview(buildAlignmentReview("pause", diagnostics));
     } finally {
       setRedetecting(false);
     }
@@ -1042,9 +1064,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     const cur = state.audioSource;
     const surahId = state.surah?.id;
     if (!buf || cur.mode !== "imported" || !surahId) return;
-    const verseNumbers = [...new Set(cur.timings.map((t) => t.verseNumber))].sort(
-      (a, b) => a - b
-    );
+    const verseNumbers = verseNumbersForAlignment(cur.timings);
     if (verseNumbers.length === 0) return;
     setDeepErr(null);
     setDeepMsg("Preparing…");
@@ -1060,12 +1080,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         ),
       });
       setDeepMsg("Aligning…");
-      commit(result.timings);
-      if (result.method === "pause") {
-        setDeepErr("Couldn't align to the verses — used pause detection instead. Fine-tune by ear.");
-      }
-    } catch {
-      setDeepErr("Deep align failed (model couldn't load). Check your connection and retry, or use Redetect.");
+      commit(applyAlignedTimingsToRows(cur.timings, result.timings));
+      setAlignmentReview(buildAlignmentReview(result.method, result.boundaryDiagnostics));
+      setDeepErr(null);
+    } catch (error) {
+      setDeepErr(alignmentFailureMessage(error));
     } finally {
       setDeepMsg(null);
     }
@@ -1287,6 +1306,26 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             className="ml-auto shrink-0 text-gold-soft/60 transition-colors hover:text-gold-soft"
           >
             <TlIcon d={TL_ICON.x} className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {alignmentReview && (
+        <div
+          role="status"
+          className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] ${
+            alignmentReview.reviewVerseNumbers.length
+              ? "border-amber-400/30 bg-amber-400/10 text-amber-100/90"
+              : "border-emerald-soft/25 bg-emerald-soft/10 text-emerald-soft"
+          }`}
+        >
+          <span className="leading-relaxed">{alignmentReview.message}</span>
+          <button
+            onClick={() => setAlignmentReview(null)}
+            aria-label="Dismiss alignment report"
+            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
+          >
+            ✕
           </button>
         </div>
       )}
@@ -1551,6 +1590,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                 const leftSplitIdx = isFirst ? undefined : seg.pIdx - 1;
                 const rightDrag = isLast ? "end" as DragKind : "split" as DragKind;
                 const rightSplitIdx = isLast ? undefined : seg.pIdx;
+                const isReferenceBoundary = isFirst && seg.tIdx > 0 &&
+                  timings[seg.tIdx - 1]?.verseNumber !== seg.vn;
+                const needsReview = isReferenceBoundary &&
+                  (alignmentReview?.reviewVerseNumbers.includes(seg.vn) ||
+                    timings[seg.tIdx]?.alignmentConfidence === "medium" ||
+                    timings[seg.tIdx]?.alignmentConfidence === "low");
                 return (
                   <div
                     key={`seg-${seg.tIdx}-${seg.pIdx}`}
@@ -1565,6 +1610,13 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     }`}
                     style={{ left: `${left}%`, width: `${width}%` }}
                   >
+                    {needsReview && (
+                      <span
+                        aria-label={`Review boundary before ayah ${seg.vn}`}
+                        title={`Low-confidence boundary before ayah ${seg.vn}`}
+                        className="pointer-events-none absolute inset-y-0 left-0 z-20 w-1 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.75)]"
+                      />
+                    )}
                     <span
                       className={`pointer-events-none absolute left-1 top-1 z-[1] rounded px-1.5 py-px text-[10px] font-semibold tabular-nums ${
                         active
@@ -1675,6 +1727,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               const points = [tg.start, ...(tg.splits ?? []), tg.end];
               const active = i === activeIdx;
               return segs.map((segText, si) => {
+                if (!segText) return null;
                 const lo = points[si];
                 const hi = points[si + 1];
                 const leftPct = pct(lo);

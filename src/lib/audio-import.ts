@@ -33,6 +33,11 @@ export interface VerseTiming {
    * uthmani text. When unset (default), the whole verse plays.
    */
   wordRange?: { from: number; to: number };
+  /** Recognition provenance for the boundary at this ayah's start. Persisted in
+   * saved projects so review markers survive a reload. */
+  alignmentMethod?: "transcript" | "ctc" | "hybrid" | "pause";
+  alignmentConfidence?: "high" | "medium" | "low";
+  alignmentAgreementSeconds?: number | null;
 }
 
 /**
@@ -156,7 +161,7 @@ export function verseSegments(timing: VerseTiming, fullText: string): string[] {
   const allWords = fullText.split(/\s+/).filter(Boolean);
   const kept = applyWordRange(allWords, timing.wordRange);
   const splits = timing.splits ?? [];
-  if (splits.length === 0 || kept.length < 2) return [kept.join(" ")];
+  if (splits.length === 0) return [kept.join(" ")];
 
   const sw = timing.splitWords;
   const range = timing.wordRange;
@@ -173,7 +178,9 @@ export function verseSegments(timing: VerseTiming, fullText: string): string[] {
       const wHi = wordBounds[i + 1];
       const keepLo = range ? Math.max(wLo, range.from) : wLo;
       const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
-      if (keepHi > keepLo) out.push(allWords.slice(keepLo, keepHi).join(" "));
+      // Preserve one entry per timed segment. Empty placeholders keep every
+      // later caption attached to its original split timestamp.
+      out.push(keepHi > keepLo ? allWords.slice(keepLo, keepHi).join(" ") : "");
     }
   } else {
     const dur = timing.end - timing.start;
@@ -189,10 +196,10 @@ export function verseSegments(timing: VerseTiming, fullText: string): string[] {
       );
       const keepLo = range ? Math.max(wLo, range.from) : wLo;
       const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
-      if (keepHi > keepLo) out.push(allWords.slice(keepLo, keepHi).join(" "));
+      out.push(keepHi > keepLo ? allWords.slice(keepLo, keepHi).join(" ") : "");
     }
   }
-  return out.length ? out : [kept.join(" ")];
+  return out.some(Boolean) ? out : [kept.join(" ")];
 }
 
 /**

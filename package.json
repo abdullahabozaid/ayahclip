@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:detection": "tsx scripts/test-detection.ts"
+    "test:detection": "tsx scripts/test-detection.ts",
+    "benchmark:fixtures": "node scripts/fetch-alignment-fixtures.mjs"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",

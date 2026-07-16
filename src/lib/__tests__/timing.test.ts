@@ -75,6 +75,19 @@ describe("verseSegments", () => {
     };
     expect(verseSegments(tm, TEXT)).toEqual(["w1 w2", "w3 w4", "w5 w6"]);
   });
+
+  it("keeps empty placeholders so trimmed captions retain their time index", () => {
+    const tm: VerseTiming = {
+      verseNumber: 1,
+      start: 0,
+      end: 12,
+      splits: [4, 8],
+      splitWords: [2, 4],
+      splitWordTotal: 6,
+      wordRange: { from: 2, to: 5 },
+    };
+    expect(verseSegments(tm, TEXT)).toEqual(["", "w3 w4", "w5 w6"]);
+  });
 });
 
 describe("effectiveAudioBounds", () => {

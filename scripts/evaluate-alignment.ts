@@ -2,6 +2,7 @@
 //
 // Usage:
 //   npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/alafasy
+//   npx tsx scripts/evaluate-alignment.ts tmp/alignment-benchmark/alafasy-mid-ayah --crop-first 18
 //
 // The directory must contain one MP3 per verse, named 001001.mp3, 001002.mp3,
 // etc. Each file is decoded independently, then the PCM is concatenated. That
@@ -180,6 +181,10 @@ function editDistance(a: string, b: string): number {
 async function main() {
   const sourceDir = resolve(process.argv[2] || "tmp/alignment-benchmark/alafasy");
   const trimSilence = process.argv.includes("--trim-silence");
+  const cropFirstIndex = process.argv.indexOf("--crop-first");
+  const cropFirstSeconds = cropFirstIndex >= 0
+    ? Math.max(0, Number(process.argv[cropFirstIndex + 1]) || 0)
+    : 0;
   const files = readdirSync(sourceDir)
     .filter((name) => /^\d{6}\.mp3$/.test(name))
     .sort();
@@ -190,6 +195,13 @@ async function main() {
   const surah = [...surahs][0];
   const verseNumbers = files.map((name) => Number(name.slice(3, 6)));
   const decodedParts = files.map((name) => decodeMp3(join(sourceDir, name)));
+  if (cropFirstSeconds > 0) {
+    const cropSamples = Math.floor(cropFirstSeconds * SAMPLE_RATE);
+    if (cropSamples >= decodedParts[0].length - SAMPLE_RATE) {
+      throw new Error("--crop-first must leave at least one second of the first ayah");
+    }
+    decodedParts[0] = decodedParts[0].slice(cropSamples);
+  }
   const parts = trimSilence ? decodedParts.map(trimToSpeech) : decodedParts;
   const expectedStarts: number[] = [];
   let samples = 0;
@@ -236,7 +248,7 @@ async function main() {
     recoverLeadingVerse,
   } =
     await import("../src/lib/verse-match");
-  const { forceAlignVerses } = await import("../src/lib/forced-align");
+  const { forceAlignVerses, forceAlignVersesDetailed } = await import("../src/lib/forced-align");
   const { autoSegment, findSilenceCenters, findSpeechSpan } = await import("../src/lib/audio-import");
   await loadCorpus();
   const asAudioBuffer = (pcm: Float32Array) => ({
@@ -265,7 +277,7 @@ async function main() {
     transcription: { ...decoded, wordStarts: [] },
   };
   const silences = findSilenceCenters(audioBuffer);
-  const aligned = forceAlignVerses({
+  const alignment = forceAlignVersesDetailed({
     emissions,
     surah,
     verseNumbers,
@@ -273,7 +285,8 @@ async function main() {
     audioStart: speechSpan.start,
     silences,
   });
-  if (!aligned) throw new Error("Alignment returned null");
+  if (!alignment) throw new Error("Alignment returned null");
+  const aligned = alignment.timings;
   const ctcOnly = forceAlignVerses({
     emissions: {
       ...emissions,
@@ -331,6 +344,7 @@ async function main() {
   console.log(JSON.stringify({
     sourceDir,
     mode: trimSilence ? "run-on (per-verse silence removed)" : "natural pauses",
+    croppedFirstAyahSeconds: cropFirstSeconds,
     durationSeconds: Number(duration.toFixed(3)),
     recognition: {
       transcript,
@@ -347,6 +361,25 @@ async function main() {
       leadingUnrecognizedSeconds: recovery
         ? Number(recovery.leadingUnrecognizedSeconds.toFixed(3))
         : 0,
+    },
+    alignment: {
+      method: alignment.method,
+      transcriptSimilarity: alignment.transcriptSimilarity === null
+        ? null
+        : Number(alignment.transcriptSimilarity.toFixed(3)),
+      methodAgreementSeconds: alignment.methodAgreementSeconds === null
+        ? null
+        : Number(alignment.methodAgreementSeconds.toFixed(3)),
+      reviewBoundaries: alignment.boundaryDiagnostics
+        .slice(1)
+        .filter((diagnostic) => diagnostic.confidence !== "high")
+        .map((diagnostic) => ({
+          verse: diagnostic.verseNumber,
+          confidence: diagnostic.confidence,
+          agreementSeconds: diagnostic.agreementSeconds === null
+            ? null
+            : Number(diagnostic.agreementSeconds.toFixed(3)),
+        })),
     },
     boundaries: aligned.map((timing, index) => ({
       verse: timing.verseNumber,

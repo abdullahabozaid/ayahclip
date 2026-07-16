@@ -20,6 +20,12 @@ import {
   recoverLeadingVerse,
 } from "@/lib/verse-match";
 import { forceAlignVersesDetailed } from "@/lib/forced-align";
+import { attachAlignmentDiagnostics } from "@/lib/deep-align";
+import {
+  alignmentFailureMessage,
+  buildAlignmentReview,
+  type AlignmentReview,
+} from "@/lib/alignment-feedback";
 import { Surah } from "@/types";
 import { importSizeError, RECOMMENDED_IMPORT_BYTES } from "@/lib/import-limits";
 
@@ -61,8 +67,9 @@ export default function ImportPage() {
     ayahStart: number;
     ayahEnd: number;
     timings: VerseTiming[];
-    method: "transcript" | "ctc" | "pause";
+    method: "transcript" | "ctc" | "hybrid" | "pause";
     confidence: "high" | "medium";
+    review: AlignmentReview;
   } | null>(null);
 
   const autoDetect = async () => {
@@ -113,10 +120,23 @@ export default function ImportPage() {
           audioStart: speechSpan.start,
           silences: findSilenceCenters(buffer),
         });
-        const timings = alignment?.timings ?? autoSegment(
+        const rawTimings = alignment?.timings ?? autoSegment(
           buffer,
           verseNumbers,
           getVerseWeights(m.surah, m.ayahStart, m.ayahEnd)
+        );
+        const method = alignment?.method ?? "pause";
+        const boundaryDiagnostics = alignment?.boundaryDiagnostics ?? verseNumbers.map(
+          (verseNumber) => ({
+            verseNumber,
+            agreementSeconds: null,
+            confidence: "low" as const,
+          })
+        );
+        const timings = attachAlignmentDiagnostics(
+          rawTimings,
+          method,
+          boundaryDiagnostics,
         );
         setDetected({
           transcript,
@@ -125,8 +145,9 @@ export default function ImportPage() {
           ayahStart: m.ayahStart,
           ayahEnd: m.ayahEnd,
           timings,
-          method: alignment?.method ?? "pause",
+          method,
           confidence: effectiveConfidence,
+          review: buildAlignmentReview(method, boundaryDiagnostics),
         });
       } else if (m) {
         setError(
@@ -135,8 +156,8 @@ export default function ImportPage() {
       } else {
         setError("Couldn't confidently match this clip. Pick the verses manually below.");
       }
-    } catch {
-      setError("Auto-detect failed. You can still pick the verses manually below.");
+    } catch (error) {
+      setError(`${alignmentFailureMessage(error)} You can still pick the verses manually below.`);
     } finally {
       setDetecting(false);
       setDetectMsg(null);
@@ -381,12 +402,24 @@ export default function ImportPage() {
             {detectMsg && <p className="mt-2 text-xs text-[var(--muted)]">{detectMsg}</p>}
             {detected && (
               <div className="mt-2">
-                <p className="text-sm text-gold-soft">Detected: {detected.ref}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-gold-soft">Detected: {detected.ref}</p>
+                  <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    {detected.confidence} match
+                  </span>
+                  <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    {detected.review.methodLabel}
+                  </span>
+                </div>
                 <p className="mt-1 font-arabic text-right text-base text-[var(--muted)]" dir="rtl">
                   {detected.transcript || "(no speech recognised)"}
                 </p>
-                <p className="mt-1 text-[11px] text-[var(--muted-deep)]">
-                  Check it below and adjust if needed — recognition isn&apos;t perfect.
+                <p className={`mt-2 rounded-lg border px-2.5 py-2 text-[11px] leading-relaxed ${
+                  detected.review.reviewVerseNumbers.length
+                    ? "border-amber-400/25 bg-amber-400/10 text-amber-100/85"
+                    : "border-emerald-soft/20 bg-emerald-soft/10 text-emerald-soft"
+                }`}>
+                  {detected.review.message} Confirm the Quran range below before continuing.
                 </p>
               </div>
             )}
