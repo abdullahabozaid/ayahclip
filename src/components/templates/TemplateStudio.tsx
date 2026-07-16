@@ -573,7 +573,13 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
           </div>
 
           <div ref={phoneCanvasRef} className="relative h-[min(64dvh,720px)] min-h-[460px] overflow-hidden rounded-[2.2rem] border-[7px] border-[var(--surface-2)] bg-[var(--ink-deep)] shadow-[0_32px_90px_-30px_rgba(0,0,0,0.95)]" style={{ aspectRatio: "9 / 16" }}>
-            <TemplatePreview style={draft.settings} extras={draft.extras} sample={sample} replayToken={replayToken} />
+            <TemplatePreview
+              style={draft.settings}
+              extras={draft.extras}
+              sample={sample}
+              replayToken={replayToken}
+              previewMedia={draft.mediaSlots.length > 0}
+            />
             {draft.extras.safeAreaTarget && draft.extras.safeAreaTarget !== "none" && (
               <div className="pointer-events-none absolute inset-[7%_14%_18%_4%] rounded-xl border border-dashed border-gold/25" aria-hidden="true">
                 <span className="absolute left-2 top-2 text-[8px] font-semibold uppercase tracking-[0.15em] text-gold-soft/45">{draft.extras.safeAreaTarget} safe area</span>
@@ -998,7 +1004,13 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
       {fullscreen && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/95 p-4" role="dialog" aria-modal="true" aria-label="Full-screen template preview">
           <div className="h-[84dvh] overflow-hidden rounded-[2rem] border-[6px] border-[var(--surface-2)]" style={{ aspectRatio: "9 / 16" }}>
-            <TemplatePreview style={draft.settings} extras={draft.extras} sample={sample} replayToken={replayToken} />
+            <TemplatePreview
+              style={draft.settings}
+              extras={draft.extras}
+              sample={sample}
+              replayToken={replayToken}
+              previewMedia={draft.mediaSlots.length > 0}
+            />
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => setReplayToken((value) => value + 1)} className="min-h-10 rounded-full border border-white/15 px-4 text-xs text-white/75">Replay</button>

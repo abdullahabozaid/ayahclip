@@ -5,6 +5,8 @@ import { TEMPLATES } from "../templates";
 
 const broll = TEMPLATES.find((template) => template.id === "broll-rotation");
 if (!broll) throw new Error("B-roll template fixture missing");
+const split = TEMPLATES.find((template) => template.id === "reciter-split-fade");
+if (!split) throw new Error("Split template fixture missing");
 
 describe("template application media handoff", () => {
   beforeEach(() => {
@@ -101,5 +103,37 @@ describe("template application media handoff", () => {
     expect(state.backgroundFit).toBe("cover");
     expect(state.fitBackdrop).toBe("black");
     expect(state.mediaTransform).toEqual({ scale: 1.4, x: 0.25, y: -0.1 });
+  });
+
+  it("preserves the clip asset but applies the template's media composition", () => {
+    useAppStore.setState({
+      background: { type: "video", value: "blob:creator-video", label: "Creator video" },
+      backgroundFit: "contain",
+      fitBackdrop: "blur",
+      mediaTransform: { scale: 1.8, x: -0.4, y: 0.25 },
+      videoLoopMode: "freeze",
+    });
+
+    applyTemplate({
+      ...split,
+      settings: {
+        ...split.settings,
+        backgroundFit: "cover",
+        fitBackdrop: "black",
+        mediaTransform: { scale: 1.35, x: 0.3, y: -0.1 },
+        videoLoopMode: "loop",
+      },
+    });
+
+    const state = useAppStore.getState();
+    expect(state.background).toEqual({
+      type: "video",
+      value: "blob:creator-video",
+      label: "Creator video",
+    });
+    expect(state.backgroundFit).toBe("cover");
+    expect(state.fitBackdrop).toBe("black");
+    expect(state.mediaTransform).toEqual({ scale: 1.35, x: 0.3, y: -0.1 });
+    expect(state.videoLoopMode).toBe("loop");
   });
 });

@@ -107,18 +107,15 @@ export const PRESET_KEYS: (keyof StyleSettings)[] = [
 ];
 
 /**
- * A style describes the WORDS, never the clip's background — applying one must
- * not replace the background the user chose/uploaded for the current clip.
+ * Preserve the creator's media source while still applying the template's
+ * composition. Fit, focal position, backdrop, and playback behaviour are part
+ * of the template design; only the actual background asset is clip-specific.
  */
 export function stripBackgroundKeys(
   style: Partial<StyleSettings>
 ): Partial<StyleSettings> {
   const rest = { ...style };
   delete rest.background;
-  delete rest.backgroundFit;
-  delete rest.mediaTransform;
-  delete rest.fitBackdrop;
-  delete rest.videoLoopMode;
   return rest;
 }
 

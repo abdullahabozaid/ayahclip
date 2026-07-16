@@ -76,12 +76,15 @@ export function TemplatePreview({
   extras = {},
   sample = FALLBACK_SAMPLE,
   replayToken = 0,
+  previewMedia = false,
   className = "block h-full w-full",
 }: {
   style: StyleSettings;
   extras?: TemplateExtras;
   sample?: SampleVerse;
   replayToken?: number;
+  /** Show a representative landscape source so crop/zoom/position controls are visible. */
+  previewMedia?: boolean;
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,6 +92,7 @@ export function TemplatePreview({
   useEffect(() => {
     let cancelled = false;
     let animationFrame = 0;
+    let mediaPreview: HTMLImageElement | undefined;
     const drawAt = (introProgress: number) => {
       const canvas = canvasRef.current;
       if (!canvas || cancelled) return;
@@ -97,16 +101,22 @@ export function TemplatePreview({
       if (canvas.height !== size.h) canvas.height = size.h;
       const context = canvas.getContext("2d");
       if (!context) return;
-      drawScene(context, toScene(style, extras), {
-        arabicText: sample.arabicText,
-        verseNumber: sample.verseNumber,
-        translation: style.translationEnabled ? sample.translation : undefined,
-        isLastPart: true,
-        introProgress,
-        qcfWords: sample.qcfWords,
-      });
+      drawScene(
+        context,
+        toScene(style, extras),
+        {
+          arabicText: sample.arabicText,
+          verseNumber: sample.verseNumber,
+          translation: style.translationEnabled ? sample.translation : undefined,
+          isLastPart: true,
+          introProgress,
+          qcfWords: sample.qcfWords,
+        },
+        mediaPreview ? { image: mediaPreview } : undefined,
+      );
     };
     const start = () => {
+      cancelAnimationFrame(animationFrame);
       if ((style.verseIntro ?? "none") === "none") {
         drawAt(1);
         return;
@@ -121,6 +131,15 @@ export function TemplatePreview({
       };
       animationFrame = requestAnimationFrame(tick);
     };
+    if (previewMedia) {
+      const image = new Image();
+      image.onload = () => {
+        if (cancelled) return;
+        mediaPreview = image;
+        start();
+      };
+      image.src = "/backgrounds/editor-media-preview.svg";
+    }
     Promise.all([
       ensureFontsReady(
         style.arabicFont,
@@ -141,7 +160,7 @@ export function TemplatePreview({
       cancelled = true;
       cancelAnimationFrame(animationFrame);
     };
-  }, [extras, replayToken, sample, style]);
+  }, [extras, previewMedia, replayToken, sample, style]);
 
   return <canvas ref={canvasRef} className={className} aria-label="Template preview" />;
 }

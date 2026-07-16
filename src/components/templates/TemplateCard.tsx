@@ -29,6 +29,7 @@ export function TemplateCard({
         <TemplatePreview
           style={template.settings}
           extras={template.extras}
+          previewMedia={template.mediaSlots.length > 0}
           className="relative z-[1] block h-full w-full"
         />
         <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-white/70 backdrop-blur">
