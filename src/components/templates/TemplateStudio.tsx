@@ -59,26 +59,42 @@ const FONT_LABELS: Record<string, string> = {
   "playfair-display": "Playfair Display",
 };
 
-const ARABIC_FONT_OPTIONS = [
+const ARABIC_FONT_OPTIONS: {
+  value: string;
+  label: string;
+  note: string;
+  family: string;
+  defaultWeight: number;
+}[] = [
   {
     value: "qcf",
     label: "Mushaf QCF",
     note: "Page-faithful Quran.com glyphs, including the authentic ayah mark.",
     family: '"UthmanicHafs", serif',
+    defaultWeight: 400,
   },
   {
     value: "uthmanic-hafs",
     label: "Uthmanic Hafs",
     note: "Compact Uthmani text with full recitation marks.",
     family: '"UthmanicHafs", serif',
+    defaultWeight: 400,
   },
   {
     value: "amiri-quran",
     label: "Amiri Quran",
     note: "A more open, literary Quran face for cinematic captions.",
     family: 'var(--font-amiri-quran), "UthmanicHafs", serif',
+    defaultWeight: 400,
   },
-] as const;
+  {
+    value: "scheherazade-new",
+    label: "Scheherazade New",
+    note: "Traditional Naskh with real Regular, Medium, SemiBold, and Bold faces.",
+    family: 'var(--font-scheherazade), "UthmanicHafs", serif',
+    defaultWeight: 600,
+  },
+];
 
 function cloneTemplate(template: TemplateDefinition): TemplateDefinition {
   return {
@@ -414,7 +430,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   }
 
   return (
-    <main className="flex min-h-dvh flex-col bg-[var(--ink)] text-parchment lg:h-dvh lg:overflow-hidden">
+    <main className="flex min-h-dvh flex-col bg-[var(--ink)] text-parchment lg:fixed lg:inset-0 lg:h-dvh lg:overflow-hidden">
       <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-[var(--hairline-soft)] bg-[var(--ink)]/95 px-4 py-3 backdrop-blur-xl sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Link href="/styles" aria-label="Back to templates" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment">
@@ -482,7 +498,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                 type="button"
                 onClick={() => setCanvasTool(tool)}
                 aria-pressed={canvasTool === tool}
-                className={`flex min-h-9 items-center justify-center gap-2 rounded-full px-4 text-[11px] font-semibold capitalize transition-colors ${
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-[11px] font-semibold capitalize transition-colors sm:min-h-9 ${
                   canvasTool === tool
                     ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                     : "text-[var(--muted)] hover:text-parchment"
@@ -501,7 +517,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                 type="button"
                 onClick={() => setSampleIndex(index)}
                 aria-pressed={sampleIndex === index}
-                className={`min-h-9 rounded-full px-4 text-xs transition-colors ${sampleIndex === index ? "bg-[var(--hairline)] text-parchment" : "text-[var(--muted)] hover:text-parchment"}`}
+                className={`min-h-11 rounded-full px-4 text-xs transition-colors sm:min-h-9 ${sampleIndex === index ? "bg-[var(--hairline)] text-parchment" : "text-[var(--muted)] hover:text-parchment"}`}
               >
                 {item.label}
               </button>
@@ -606,7 +622,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             <TemplateIcon name="settings" className="h-4 w-4 text-[var(--muted)]" />
           </div>
           <div className="divide-y divide-[var(--hairline-soft)]">
-            <InspectorSection title="Layout" icon="layout">
+            <InspectorSection title="Layout" icon="layout" defaultOpen>
               <Segmented
                 value={draft.extras.safeAreaTarget ?? "none"}
                 options={[{ value: "tiktok", label: "TikTok" }, { value: "reels", label: "Reels" }, { value: "none", label: "None" }]}
@@ -660,7 +676,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                       type="button"
                       onClick={() => {
                         setStyle("arabicFont", font.value);
-                        setStyle("arabicFontWeight", 400);
+                        setStyle("arabicFontWeight", font.defaultWeight);
                       }}
                       aria-pressed={selected}
                       className={`w-full rounded-xl border p-3 text-left transition-colors ${selected ? "border-gold bg-gold/5" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
@@ -669,7 +685,17 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                         <span className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${selected ? "text-gold-soft" : "text-[var(--muted)]"}`}>{font.label}</span>
                         {selected && <TemplateIcon name="check" className="h-3.5 w-3.5 text-gold" />}
                       </span>
-                      <span dir="rtl" lang="ar" className="mt-2 block text-right text-[22px] leading-[1.9] text-parchment" style={{ fontFamily: font.family }}>
+                      <span
+                        dir="rtl"
+                        lang="ar"
+                        className="mt-2 block text-right text-[22px] leading-[1.9] text-parchment"
+                        style={{
+                          fontFamily: font.family,
+                          fontWeight: selected
+                            ? draft.settings.arabicFontWeight
+                            : font.defaultWeight,
+                        }}
+                      >
                         بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                       </span>
                       <span className="mt-1 block text-[10px] leading-4 text-[var(--muted)]">{font.note}</span>
@@ -677,7 +703,19 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   );
                 })}
               </div>
-              <p className="text-[10px] leading-4 text-[var(--muted)]">Arabic stays at its verified native weight. Use size, crisp edge, glow, or a line treatment for emphasis without distorting harakat.</p>
+              {draft.settings.arabicFont === "scheherazade-new" && (
+                <Segmented
+                  value={String(draft.settings.arabicFontWeight)}
+                  options={[
+                    { value: "400", label: "Regular" },
+                    { value: "500", label: "Medium" },
+                    { value: "600", label: "SemiBold" },
+                    { value: "700", label: "Bold" },
+                  ]}
+                  onChange={(value) => setStyle("arabicFontWeight", Number(value))}
+                />
+              )}
+              <p className="text-[10px] leading-4 text-[var(--muted)]">Mushaf, Uthmanic, and Amiri stay at their real Regular face. Scheherazade exposes true font weights, so stronger captions never rely on synthetic bolding.</p>
               <RangeField label="Size" value={draft.settings.arabicFontSize} min={18} max={72} suffix="px" onChange={(value) => setStyle("arabicFontSize", value)} />
               <RangeField label="Line height" value={draft.settings.lineHeight} min={0.75} max={1.7} step={0.05} suffix="×" onChange={(value) => setStyle("lineHeight", value)} />
               <SwitchField label="Arabic verse number" checked={Boolean(draft.settings.arabicVerseNumber)} onChange={(checked) => setStyle("arabicVerseNumber", checked)} />
@@ -865,15 +903,25 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   );
 }
 
-function InspectorSection({ title, icon, children }: { title: string; icon: TemplateIconName; children: React.ReactNode }) {
+function InspectorSection({
+  title,
+  icon,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  icon: TemplateIconName;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <details
-      open
+      {...(defaultOpen ? { open: true } : {})}
       aria-label={`${title} controls`}
       data-testid={`inspector-${title.toLowerCase().replace(/\s+/g, "-")}`}
       className="group px-5 py-5"
     >
-      <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)] marker:hidden">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)] marker:hidden sm:min-h-8">
         <TemplateIcon name={icon} className="h-4 w-4 text-gold-soft/70" />
         {title}
         <span className="ml-auto text-base font-normal text-[var(--muted-deep)] transition-transform group-open:rotate-45">+</span>

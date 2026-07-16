@@ -26,7 +26,7 @@ Midnight Mihrab. All tokens live in `src/app/globals.css` as CSS variables and T
 
 - **Display**: `Marcellus` (classical roman) — page titles, surah name in studio header
 - **Body**: `Outfit` (geometric sans, 300/400/500/600) — UI, copy, controls
-- **Quran Arabic**: `Amiri Quran` → `Scheherazade New` → `Noto Naskh Arabic`. All preserve Hafs marks. Never use any "Uthmanic Hafs" web font that hasn't been verified to render U+06DF.
+- **Quran Arabic**: selectable `Mushaf QCF`, `Uthmanic Hafs`, `Amiri Quran`, and `Scheherazade New`. QCF, Uthmanic Hafs, and Amiri Quran remain at their native Regular face. Scheherazade New exposes its real 400/500/600/700 faces for creators who need stronger social captions. Never synthesize Quran Arabic bold.
 - **Translation**: serif / sans / Cinzel / Times New Roman / Lora / Playfair Display (user-selectable).
 
 Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px (information density area), copy on browse/home is 14px+.
@@ -59,7 +59,7 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Panel padding: 6 (24px) on top-level, 5 (20px) for compact, 4 (16px) for inline.
 - Stacked sections: gap-4 to gap-6.
 - Inline controls: gap-1.5 to gap-3.
-- Tap targets on touch: minimum 36px (`h-9 w-9`); the timeline currently violates this in places (drag handles ~14px wide, × buttons 16px).
+- Tap targets on touch: minimum 40px, preferably 44px. Compact 32–36px controls are desktop-only; mobile inspector headers and primary actions use 44px targets.
 
 ## Notes on the studio surface
 

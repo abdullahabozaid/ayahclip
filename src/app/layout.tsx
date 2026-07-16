@@ -7,6 +7,7 @@ import {
   Marcellus,
   Outfit,
   Playfair_Display,
+  Scheherazade_New,
 } from "next/font/google";
 import "./globals.css";
 import { SiteNav } from "@/components/SiteNav";
@@ -22,6 +23,12 @@ const amiriQuran = Amiri_Quran({
   weight: "400",
   subsets: ["arabic", "latin"],
   variable: "--font-amiri-quran",
+  display: "swap",
+});
+const scheherazade = Scheherazade_New({
+  weight: ["400", "500", "600", "700"],
+  subsets: ["arabic", "latin"],
+  variable: "--font-scheherazade",
   display: "swap",
 });
 
@@ -69,7 +76,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable}`}
+      className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable} ${scheherazade.variable}`}
     >
       <body className="grain min-h-dvh text-parchment antialiased">
         <SiteNav />

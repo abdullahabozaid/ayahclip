@@ -584,7 +584,12 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   // fonts are ready (and again when all document fonts settle).
   useEffect(() => {
     let cancelled = false;
-    ensureFontsReady(store.arabicFont, store.translationFont).then(() => {
+    ensureFontsReady(
+      store.arabicFont,
+      store.translationFont,
+      store.arabicFontWeight,
+      store.translationFontWeight,
+    ).then(() => {
       if (!cancelled) drawRef.current();
     });
     const allQcf = store.arabicFont === "qcf"
@@ -601,7 +606,13 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     return () => {
       cancelled = true;
     };
-  }, [store.arabicFont, store.translationFont, store.verses]);
+  }, [
+    store.arabicFont,
+    store.arabicFontWeight,
+    store.translationFont,
+    store.translationFontWeight,
+    store.verses,
+  ]);
 
   // Unified redraw: paints once on any settings/verse change, and runs a single
   // rAF loop while animating (playing, video background, or a verse intro in

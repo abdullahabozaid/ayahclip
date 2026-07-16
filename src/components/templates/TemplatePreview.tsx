@@ -122,7 +122,12 @@ export function TemplatePreview({
       animationFrame = requestAnimationFrame(tick);
     };
     Promise.all([
-      ensureFontsReady(style.arabicFont, style.translationFont),
+      ensureFontsReady(
+        style.arabicFont,
+        style.translationFont,
+        style.arabicFontWeight,
+        style.translationFontWeight,
+      ),
       style.arabicFont === "qcf" && sample.qcfWords?.length
         ? ensureQcfFontsReady(sample.qcfWords)
         : Promise.resolve(),

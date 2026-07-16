@@ -36,7 +36,7 @@ Editor mode contains:
 
 ## Typography rules
 
-- Quran Arabic stays in Uthmanic Hafs or Amiri Quran at normal face weight. Never fake a heavy Arabic weight.
+- Mushaf QCF, Uthmanic Hafs, and Amiri Quran stay at their native Regular face. Scheherazade New may use its real 400/500/600/700 faces. Never fake a heavy Arabic weight.
 - English defaults to Outfit 600 for concise social captions or Lora 500 for reflective/editorial translations.
 - Arabic should be the primary hierarchy in Quran-first templates. Translation is normally 40–55% of the apparent Arabic size.
 - Line lengths must remain readable inside TikTok safe areas. Favor 2–3 Arabic lines and 2–3 English lines per frame.
@@ -68,7 +68,7 @@ Editor mode contains:
 
 ## Quran typography controls
 
-- Offer named, verified Quran rendering modes: **Mushaf (QCF page glyphs)** for Quran.com page-faithful glyphs, **Uthmanic Hafs** for a flowing digital line, and **Amiri Quran** as an editorial alternative once its font file and mark coverage are verified.
+- Offer named, verified Quran rendering modes: **Mushaf (QCF page glyphs)** for Quran.com page-faithful glyphs, **Uthmanic Hafs** for a flowing digital line, **Amiri Quran** as an editorial face, and **Scheherazade New** when a real Medium, SemiBold, or Bold Naskh face is required.
 - The selected Arabic rendering mode must actually change preview and export. QCF glyph data must not silently override a non-QCF font choice.
 - Show a real short/medium/long Quran sample with harakat, waqf marks, and an ayah end mark. A font option is only shippable after canvas and exported-frame mark-integrity checks.
 - Arabic uses real font faces at their supported weights. Never synthesize bold. Emphasis comes from size, color, outline, glow, or a line plate.

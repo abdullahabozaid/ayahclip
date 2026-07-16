@@ -127,6 +127,19 @@ test("templates render and open the focused editor", async ({ page }) => {
   await expect(page).toHaveURL(/\/styles\/editor\?template=ayahclip-gold-line/);
   await expect(page.getByLabel("Template name")).toHaveValue("AyahClip Gold Line");
   await expect(page.getByRole("button", { name: "Use template" })).toBeVisible();
+  const arabicInspector = page.getByTestId("inspector-arabic");
+  await expect(arabicInspector).not.toHaveAttribute("open", "");
+  await arabicInspector.locator("summary").click();
+  await arabicInspector.getByRole("button", { name: /Scheherazade New/ }).click();
+  await expect(arabicInspector.getByRole("button", { name: "SemiBold", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const dimensions = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    documentHeight: document.documentElement.scrollHeight,
+  }));
+  expect(dimensions.documentHeight).toBe(dimensions.viewportHeight);
   assertNoErrors();
 });
 
@@ -140,12 +153,16 @@ test("canvas creator saves a reusable preset with ordered B-roll slots", async (
   await canvasPosition.press("ArrowDown");
   await expect(canvasPosition).toHaveAttribute("aria-valuenow", "52");
 
+  const backgroundInspector = page.getByTestId("inspector-background");
+  await backgroundInspector.locator("summary").click();
   await page.getByRole("button", { name: "Use Midnight emerald background" }).click();
   await expect(
     page.getByRole("button", { name: "Use Midnight emerald background" }),
   ).toHaveAttribute("aria-pressed", "true");
 
-  await page.getByText("B-roll rotation", { exact: true }).click();
+  const mediaInspector = page.getByTestId("inspector-media");
+  await mediaInspector.locator("summary").click();
+  await mediaInspector.getByText("B-roll rotation", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "B-roll rotation" })).toBeChecked();
   await expect(page.getByText("B-roll 1", { exact: true })).toBeVisible();
   await expect(page.getByText("B-roll 2", { exact: true })).toBeVisible();
@@ -180,6 +197,7 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await directMediaPosition.press("ArrowRight");
   await expect(directMediaPosition).toHaveAttribute("aria-valuetext", /horizontal/);
   const mediaInspector = page.getByTestId("inspector-media");
+  await mediaInspector.locator("summary").click();
   await mediaInspector.getByLabel("Zoom").fill("1.75");
   await mediaInspector.getByLabel("Horizontal position").fill("35");
   await mediaInspector.getByLabel("Vertical position").fill("-20");
@@ -187,11 +205,13 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await expect(mediaInspector.getByLabel("Horizontal position")).toHaveValue("35");
   await expect(mediaInspector.getByLabel("Vertical position")).toHaveValue("-20");
 
-  await page.getByRole("button", { name: "gradient", exact: true }).click();
+  const backgroundInspector = page.getByTestId("inspector-background");
+  await backgroundInspector.locator("summary").click();
+  await backgroundInspector.getByRole("button", { name: "gradient", exact: true }).click();
   await expect(page.getByLabel("Gradient preview")).toBeVisible();
-  await page.getByRole("button", { name: "Add color stop" }).click();
+  await backgroundInspector.getByRole("button", { name: "Add color stop" }).click();
   await expect(page.getByLabel("Gradient stop 3 color")).toBeVisible();
-  await page.getByRole("button", { name: "solid", exact: true }).click();
+  await backgroundInspector.getByRole("button", { name: "solid", exact: true }).click();
   await expect(page.getByLabel("Canvas color")).toBeVisible();
   assertNoErrors();
 });

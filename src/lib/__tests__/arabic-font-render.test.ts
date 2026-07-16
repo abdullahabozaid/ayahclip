@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { getArabicFontFamily, shouldUseQcf } from "@/lib/canvas-utils";
+import {
+  getArabicFontFamily,
+  shouldUseQcf,
+  supportedArabicFontWeight,
+} from "@/lib/canvas-utils";
 import type { QcfWord } from "@/types";
 
 const words: QcfWord[] = [{
@@ -17,10 +21,18 @@ describe("Arabic rendering modes", () => {
     expect(shouldUseQcf("qcf", words)).toBe(true);
     expect(shouldUseQcf("uthmanic-hafs", words)).toBe(false);
     expect(shouldUseQcf("amiri-quran", words)).toBe(false);
+    expect(shouldUseQcf("scheherazade-new", words)).toBe(false);
     expect(shouldUseQcf("qcf", [])).toBe(false);
   });
 
   it("keeps an explicit Amiri Quran fallback outside the browser", () => {
     expect(getArabicFontFamily("amiri-quran")).toContain("Amiri Quran");
+  });
+
+  it("only permits genuine weights shipped by the selected Arabic face", () => {
+    expect(supportedArabicFontWeight("qcf", 700)).toBe(400);
+    expect(supportedArabicFontWeight("amiri-quran", 600)).toBe(400);
+    expect(supportedArabicFontWeight("scheherazade-new", 600)).toBe(600);
+    expect(supportedArabicFontWeight("scheherazade-new", 700)).toBe(700);
   });
 });

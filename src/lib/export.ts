@@ -283,7 +283,12 @@ export async function exportVideo(options: ExportOptions): Promise<Blob> {
 export async function exportVideoWithInfo(options: ExportOptions): Promise<ExportResult> {
   // Guarantee the Arabic web font is loaded before any frame is drawn — a system
   // fallback would corrupt the Quranic text in the exported file.
-  await ensureFontsReady(options.arabicFont, options.translationFont);
+  await ensureFontsReady(
+    options.arabicFont,
+    options.translationFont,
+    options.arabicFontWeight,
+    options.translationFontWeight,
+  );
   const allQcf = options.arabicFont === "qcf"
     ? options.verses.flatMap((v) => v.qcfWords ?? [])
     : [];

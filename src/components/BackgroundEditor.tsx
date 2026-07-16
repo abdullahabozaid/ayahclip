@@ -157,7 +157,7 @@ export function BackgroundEditor({
                   type="button"
                   onClick={() => setGradient({ ...gradient, stops: gradient.stops.filter((_, stopIndex) => stopIndex !== index) })}
                   disabled={gradient.stops.length <= 2}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-base text-[var(--muted)] hover:bg-white/[0.04] hover:text-parchment disabled:cursor-not-allowed disabled:opacity-30"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-base text-[var(--muted)] hover:bg-white/[0.04] hover:text-parchment disabled:cursor-not-allowed disabled:opacity-30 sm:h-8 sm:w-8"
                   aria-label={`Remove gradient stop ${index + 1}`}
                 >
                   ×

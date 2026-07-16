@@ -47,6 +47,7 @@ function SetCoverButton() {
 const WEIGHT_OPTIONS = [
   { value: 400, label: "Regular" },
   { value: 500, label: "Medium" },
+  { value: 600, label: "SemiBold" },
   { value: 700, label: "Bold" },
 ];
 
@@ -68,7 +69,7 @@ function WeightControl({
             key={w.value}
             onClick={() => onChange(w.value)}
             style={{ fontWeight: w.value }}
-            className={`flex-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${
+            className={`min-h-10 flex-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${
               value === w.value
                 ? "border-[var(--gold)] bg-[var(--gold)]/10 text-parchment"
                 : "border-[var(--hairline-soft)] text-[var(--muted)] hover:border-[var(--hairline)]"
@@ -95,6 +96,7 @@ const ARABIC_FONT_OPTIONS = [
   { value: "qcf", label: "Mushaf QCF (page-faithful)" },
   { value: "uthmanic-hafs", label: "Uthmanic Hafs" },
   { value: "amiri-quran", label: "Amiri Quran" },
+  { value: "scheherazade-new", label: "Scheherazade New (true bold)" },
 ];
 
 function Section({
@@ -549,7 +551,7 @@ export function StudioSettings() {
             value={store.arabicFont}
             onChange={(font) => {
               store.setArabicFont(font);
-              store.setArabicFontWeight(400);
+              store.setArabicFontWeight(font === "scheherazade-new" ? 600 : 400);
             }}
             options={ARABIC_FONT_OPTIONS}
           />
@@ -558,12 +560,26 @@ export function StudioSettings() {
               dir="rtl"
               lang="ar"
               className="text-right text-2xl leading-[1.9] text-parchment"
-              style={{ fontFamily: store.arabicFont === "amiri-quran" ? 'var(--font-amiri-quran), "UthmanicHafs", serif' : '"UthmanicHafs", serif' }}
+              style={{
+                fontFamily: store.arabicFont === "amiri-quran"
+                  ? 'var(--font-amiri-quran), "UthmanicHafs", serif'
+                  : store.arabicFont === "scheherazade-new"
+                    ? 'var(--font-scheherazade), "UthmanicHafs", serif'
+                    : '"UthmanicHafs", serif',
+                fontWeight: store.arabicFontWeight,
+              }}
             >
               بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
             </p>
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Native weight is locked to protect harakat. Use size and the edge/glow controls below for stronger captions.</p>
+            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">Mushaf, Uthmanic, and Amiri use their real Regular face. Scheherazade provides genuine heavier weights without synthetic thickening.</p>
           </div>
+          {store.arabicFont === "scheherazade-new" && (
+            <WeightControl
+              label="Arabic Weight"
+              value={store.arabicFontWeight}
+              onChange={store.setArabicFontWeight}
+            />
+          )}
           <Slider
             label="Arabic Size"
             value={store.arabicFontSize}

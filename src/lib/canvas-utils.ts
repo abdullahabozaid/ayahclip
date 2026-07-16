@@ -98,6 +98,14 @@ export const ARABIC_FONTS: Record<string, string> = {
   qcf: '"UthmanicHafs", serif',
   "uthmanic-hafs": '"UthmanicHafs", serif',
   "amiri-quran": '"Amiri Quran", "UthmanicHafs", serif',
+  "scheherazade-new": '"Scheherazade New", "UthmanicHafs", serif',
+};
+
+export const ARABIC_FONT_WEIGHTS: Record<string, readonly number[]> = {
+  qcf: [400],
+  "uthmanic-hafs": [400],
+  "amiri-quran": [400],
+  "scheherazade-new": [400, 500, 600, 700],
 };
 
 export const TRANSLATION_FONTS: Record<string, string> = {
@@ -117,14 +125,27 @@ const TRANSLATION_FONT_VARIABLES: Record<string, string> = {
   "playfair-display": "--font-playfair",
 };
 
+const ARABIC_FONT_VARIABLES: Record<string, string> = {
+  "amiri-quran": "--font-amiri-quran",
+  "scheherazade-new": "--font-scheherazade",
+};
+
 export function getArabicFontFamily(font: string): string {
-  if (font === "amiri-quran" && typeof document !== "undefined") {
+  const variable = ARABIC_FONT_VARIABLES[font];
+  if (variable && typeof document !== "undefined") {
     const resolved = getComputedStyle(document.documentElement)
-      .getPropertyValue("--font-amiri-quran")
+      .getPropertyValue(variable)
       .trim();
     if (resolved) return `${resolved}, "UthmanicHafs", serif`;
   }
   return ARABIC_FONTS[font] ?? '"UthmanicHafs", serif';
+}
+
+/** Never ask the canvas to synthesize a Quran font weight that the selected
+ * face does not ship. Scheherazade New is the intentional bold-capable mode. */
+export function supportedArabicFontWeight(font: string, weight = 400): number {
+  const available = ARABIC_FONT_WEIGHTS[font] ?? [400];
+  return available.includes(weight) ? weight : available[0];
 }
 
 export function shouldUseQcf(font: string, words: readonly QcfWord[] | undefined): boolean {
@@ -151,6 +172,7 @@ const ARABIC_PRIMARY: Record<string, string> = {
   qcf: '"UthmanicHafs"',
   "uthmanic-hafs": '"UthmanicHafs"',
   "amiri-quran": '"Amiri Quran"',
+  "scheherazade-new": '"Scheherazade New"',
 };
 const TRANSLATION_PRIMARY: Record<string, string> = {
   serif: "Georgia",
@@ -170,19 +192,21 @@ const TRANSLATION_PRIMARY: Record<string, string> = {
  */
 export async function ensureFontsReady(
   arabicFont: string,
-  translationFont: string
+  translationFont: string,
+  arabicWeight = 400,
+  translationWeight = 400,
 ): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
-  const ar = arabicFont === "amiri-quran"
+  const ar = ARABIC_FONT_VARIABLES[arabicFont]
     ? getArabicFontFamily(arabicFont).split(",")[0]
     : ARABIC_PRIMARY[arabicFont] ?? '"UthmanicHafs"';
   const tr = getTranslationFontFamily(translationFont) || TRANSLATION_PRIMARY[translationFont] || "Georgia";
+  const safeArabicWeight = supportedArabicFontWeight(arabicFont, arabicWeight);
   const sample = "بِسْمِ ٱللَّهِ ﴿١﴾";
   try {
     const fontLoads = Promise.all([
-      document.fonts.load(`400 32px ${ar}`, sample),
-      document.fonts.load(`700 32px ${ar}`, sample),
-      document.fonts.load(`400 24px ${tr}`, "Aa"),
+      document.fonts.load(`${safeArabicWeight} 32px ${ar}`, sample),
+      document.fonts.load(`${translationWeight} 24px ${tr}`, "Aa"),
     ]);
     // A missing or browser-generated font family can leave FontFaceSet.load()
     // pending indefinitely. Canvas callers must still be able to paint with a
@@ -691,7 +715,10 @@ export function drawVerseText(
 ) {
   const arabicSize = options.arabicFontSize * scale;
   const arabicFamily = getArabicFontFamily(options.arabicFont);
-  const arabicWeight = options.arabicFontWeight ?? 400;
+  const arabicWeight = supportedArabicFontWeight(
+    options.arabicFont,
+    options.arabicFontWeight,
+  );
   const transWeight = options.translationFontWeight ?? 400;
 
   const useQcf = shouldUseQcf(options.arabicFont, options.qcfWords);
