@@ -140,6 +140,13 @@ export default function ImportPage() {
     await loadCorpus();
     const weights = getVerseWeights(surah.id, lo, hi);
     const timings = autoSegment(buffer, verseNumbers, weights);
+    // Revoke the previous import's blob URL before minting a new one — it's about
+    // to be replaced wholesale by beginNewProject, so nothing references it. Saved
+    // projects persist the blob to IndexedDB (not the URL), so they're unaffected.
+    const prevSource = store.audioSource;
+    if (prevSource.mode === "imported" && prevSource.url.startsWith("blob:")) {
+      URL.revokeObjectURL(prevSource.url);
+    }
     const url = URL.createObjectURL(sourceAudio);
 
     store.beginNewProject();
