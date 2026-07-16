@@ -15,6 +15,9 @@ export function ExportButton() {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
+  // The export itself succeeded but the library save didn't (e.g. disk full).
+  // Distinct from `error`: the file is fine, only the library copy is missing.
+  const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   // On phones, the finished clip is handed to the OS share sheet ("Save Video"
   // → camera roll) instead of a download, which can't reach the gallery. We hold
   // the encoded file here so the user's tap on "Save to Photos" carries the
@@ -30,6 +33,7 @@ export function ExportButton() {
   ) => {
     setExporting(true);
     setError(null);
+    setLibraryWarning(null);
     setPendingFile(null);
     try {
       const rendered = await renderClipFile((current, total) =>
@@ -49,7 +53,12 @@ export function ExportButton() {
 
   const handleExport = () =>
     run(async (file) => {
-      await saveRenderedToLibrary(file);
+      const savedToLibrary = await saveRenderedToLibrary(file);
+      if (!savedToLibrary) {
+        setLibraryWarning(
+          "Exported — but this clip could not be saved to your library. Check free disk space."
+        );
+      }
       // After the async render there's no user gesture left, so on touch
       // devices we park the file behind a "Save to Photos" button.
       const isTouch =
@@ -144,6 +153,11 @@ export function ExportButton() {
       {error && (
         <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] leading-relaxed text-red-200/90">
           {error}
+        </p>
+      )}
+      {libraryWarning && (
+        <p role="alert" className="rounded-lg border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-3 py-2 text-[11px] leading-relaxed text-gold-soft">
+          {libraryWarning}
         </p>
       )}
     </div>

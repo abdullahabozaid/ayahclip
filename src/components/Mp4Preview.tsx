@@ -76,8 +76,10 @@ export function Mp4PreviewOverlay({
     if (libState !== "idle") return;
     setLibState("saving");
     try {
-      await saveRenderedToLibrary(clip.file);
-      setLibState("saved");
+      // saveRenderedToLibrary returns false (not throws) on a failed save, so a
+      // bare await would flip to "saved" when nothing was stored.
+      const ok = await saveRenderedToLibrary(clip.file);
+      setLibState(ok ? "saved" : "idle");
     } catch {
       setLibState("idle");
     }

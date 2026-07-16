@@ -180,11 +180,12 @@ export async function renderClipFile(
   return { file, fallbackReason };
 }
 
-/** Keep an encoded clip in the library (IndexedDB) so it can be scheduled
- *  from /library. Best-effort — never blocks delivery. */
-export async function saveRenderedToLibrary(file: File): Promise<void> {
+/** Keep an encoded clip in the library so it can be scheduled from /library.
+ *  Returns false if it was NOT stored — the caller must tell the user, because
+ *  the exported file itself is fine and the failure is otherwise invisible. */
+export async function saveRenderedToLibrary(file: File): Promise<boolean> {
   const s = useAppStore.getState();
-  if (!s.surah) return;
+  if (!s.surah) return false;
   try {
     const reciter = reciters.find((r) => r.id === s.reciterId);
     const nums = s.selectedVerseNumbers;
@@ -205,9 +206,10 @@ export async function saveRenderedToLibrary(file: File): Promise<void> {
       thumbnail: await captureThumbnail(file),
       status: "draft",
     };
-    await saveClip(meta, file);
+    return await saveClip(meta, file);
   } catch (err) {
     console.warn("Could not save clip to library:", err);
+    return false;
   }
 }
 
