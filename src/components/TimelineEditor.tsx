@@ -57,6 +57,7 @@ const TL_ICON = {
   type: ["M4 7V5h16v2", "M12 5v14", "M9 19h6"],
   x: ["M6 6l12 12", "M18 6 6 18"],
   trash: ["M3 6h18", "M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2", "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6", "M10 11v6", "M14 11v6"],
+  focus: ["M4 8V5a1 1 0 0 1 1-1h3", "M16 4h3a1 1 0 0 1 1 1v3", "M20 16v3a1 1 0 0 1-1 1h-3", "M8 20H5a1 1 0 0 1-1-1v-3", "M9 12h6"],
 } as const;
 
 function TlIcon({ d, className = "h-3.5 w-3.5" }: { d: readonly string[]; className?: string }) {
@@ -118,7 +119,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const [playing, setPlaying] = useState(false);
   const [headTime, setHeadTime] = useState(0);
   const [zoom, setZoom] = useState(1);
-  const [dragInfo, setDragInfo] = useState<{ pct: number; time: number } | null>(null);
+  const [dragInfo, setDragInfo] = useState<{ pct: number; time: number; snapped: boolean } | null>(null);
+  const lastSnapRef = useRef<number | null>(null);
   const [redetecting, setRedetecting] = useState(false);
   const [deepMsg, setDeepMsg] = useState<string | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
@@ -486,6 +488,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       } else if ((e.metaKey || e.ctrlKey) && e.code === "KeyZ" && e.shiftKey) {
         e.preventDefault();
         redo();
+      } else if (e.code === "Delete" || e.code === "Backspace") {
+        // Remove the selected verse (never the last one) — CapCut's Delete key.
+        e.preventDefault();
+        deleteVerse(useAppStore.getState().currentVerseIndex);
       } else if (e.code === "KeyS" && e.shiftKey) {
         // Shift+S: intra-verse split at the playhead — divides the verse's text
         // into segments that change at the marker. Distinct from plain S which
@@ -572,18 +578,30 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
 
     // Snap a dragged edge onto a nearby pause OR the playhead (within ~10px) for
     // easy precision. The playhead lets you click the exact break point first,
-    // then drag the boundary and it locks onto your cursor mark.
+    // then drag the boundary and it locks onto your cursor mark. On a fresh snap
+    // we flash the guide and fire a light haptic tick — the CapCut "money detail"
+    // for boundary work.
+    let snapped = false;
     if (drag.kind !== "body") {
       const tolSec = (10 / rect.width) * dur;
       let bd = tolSec;
+      let target: number | null = null;
       const candidates = [...pausesRef.current, headTimeRef.current];
       for (const p of candidates) {
         const d = Math.abs(p - t);
         if (d < bd) {
           bd = d;
           t = p;
+          target = p;
         }
       }
+      snapped = target !== null;
+      if (snapped && lastSnapRef.current !== target) {
+        navigator.vibrate?.(8); // light tick only on a NEW snap, not every frame
+      }
+      lastSnapRef.current = target;
+    } else {
+      lastSnapRef.current = null;
     }
 
     const cur = useAppStore.getState().audioSource;
@@ -628,7 +646,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     // Drag mutations don't record history per frame; the start snapshot is
     // pushed on release so undo restores to the pre-drag state in one step.
     commit(next, false);
-    setDragInfo({ pct: (edgeTime / dur) * 100, time: edgeTime });
+    setDragInfo({ pct: (edgeTime / dur) * 100, time: edgeTime, snapped });
     // commit reads the current Zustand snapshot and stable history refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1115,6 +1133,29 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           </button>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => {
+                const tm = timings[activeIdx];
+                const span = tm ? tm.end - tm.start : 0;
+                if (span > 0 && duration > 0) {
+                  setZoom(Math.min(24, Math.max(1, +((duration / span) * 0.8).toFixed(2))));
+                  seek((tm.start + tm.end) / 2);
+                }
+              }}
+              disabled={loading || duration === 0}
+              className="flex h-7 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-30"
+              title="Zoom to the selected verse"
+            >
+              <TlIcon d={TL_ICON.focus} className="h-3.5 w-3.5" /> Focus
+            </button>
+            <button
+              onClick={() => setZoom(1)}
+              disabled={zoom <= 1}
+              className="flex h-7 items-center rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-30"
+              title="Fit the whole clip"
+            >
+              Fit
+            </button>
+            <button
               onClick={() => setZoom((z) => Math.max(1, +(z / 1.5).toFixed(2)))}
               disabled={zoom <= 1}
               className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30"
@@ -1548,15 +1589,21 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               </div>
             )}
 
-            {/* Drag guide + live time label */}
+            {/* Drag guide + live time label — turns gold and thickens on a snap. */}
             {dragInfo && (
               <>
                 <div
-                  className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-parchment"
+                  className={`pointer-events-none absolute top-0 bottom-0 z-30 ${
+                    dragInfo.snapped ? "w-0.5 bg-gold shadow-[0_0_6px_rgba(201,162,75,0.8)]" : "w-px bg-parchment"
+                  }`}
                   style={{ left: `${dragInfo.pct}%` }}
                 />
                 <div
-                  className="pointer-events-none absolute top-0 z-30 -translate-x-1/2 rounded bg-[var(--ink)] px-1.5 py-0.5 text-[10px] tabular-nums text-parchment ring-1 ring-[var(--hairline)]"
+                  className={`pointer-events-none absolute top-0 z-30 -translate-x-1/2 rounded px-1.5 py-0.5 text-[10px] tabular-nums ring-1 ${
+                    dragInfo.snapped
+                      ? "bg-gold text-[var(--ink-deep)] ring-gold"
+                      : "bg-[var(--ink)] text-parchment ring-[var(--hairline)]"
+                  }`}
                   style={{ left: `${dragInfo.pct}%` }}
                 >
                   {fmt(dragInfo.time)}
@@ -1660,11 +1707,18 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               <dd className="text-[var(--muted)]">Snap nearest verse boundary to playhead</dd>
               <dt className="font-mono text-gold-soft">Shift+S</dt>
               <dd className="text-[var(--muted)]">Split the current verse’s text at playhead</dd>
+              <dt className="font-mono text-gold-soft">L / R</dt>
+              <dd className="text-[var(--muted)]">Pull the left / right boundary to the playhead</dd>
+              <dt className="font-mono text-gold-soft">Del</dt>
+              <dd className="text-[var(--muted)]">Remove the selected verse</dd>
+              <dt className="font-mono text-gold-soft">⌘Z</dt>
+              <dd className="text-[var(--muted)]">Undo · Shift to redo</dd>
             </dl>
             <div className="mt-3 border-t border-[var(--hairline-soft)] pt-3 text-[11px] leading-relaxed text-[var(--muted)]">
-              Drag a verse’s edges to retime · drag into a neighbour to push it
-              · drag the middle to move · drag the waveform to scrub. Trimmed
-              regions and gaps are skipped on play and export.
+              The playhead stays centred — drag the timeline to scrub, and it
+              snaps to the detected pauses. Drag a verse’s edges to retime · drag
+              the middle to move. Trimmed regions and gaps are skipped on play
+              and export.
             </div>
           </div>
         )}
