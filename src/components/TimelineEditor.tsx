@@ -103,7 +103,6 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const waveCanvasRef = useRef<HTMLCanvasElement>(null);
   const progressCanvasRef = useRef<HTMLCanvasElement>(null);
   const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
-  const playheadRef = useRef<HTMLDivElement>(null);
   const bufferRef = useRef<AudioBuffer | null>(null);
   // Cached min/max peaks (one amplitude per bucket), computed once at decode so
   // zoom/scroll redraws never re-scan the raw samples (millions of them).
@@ -125,6 +124,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [looping, setLooping] = useState(false);
   const [viewport, setViewport] = useState({ left: 0, width: 100 });
+  const [viewportW, setViewportW] = useState(0);
+  // True while WE set scrollLeft (playback follow / zoom recenter), so the scroll
+  // handler doesn't treat our own scroll as the user scrubbing.
+  const programmaticScrollRef = useRef(false);
+  const trackWRef = useRef(0);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [wordTrimOpen, setWordTrimOpen] = useState(false);
@@ -182,8 +186,6 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     useAppStore.getState().setVerseTimings(next);
     bumpHistory();
   };
-  const scrubWasPlaying = useRef(false);
-  const scrubMoved = useRef(false);
 
   durationRef.current = duration;
   headTimeRef.current = headTime;
@@ -215,12 +217,20 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     };
   }, [url]);
 
-  // Move the playhead line AND reveal the gold "played" waveform up to it — both
-  // are pure style updates (no canvas redraw), cheap enough to run every frame.
+  // Fixed-centre model: the playhead line never moves — instead we scroll the
+  // track so the current time sits under it, and reveal the gold "played"
+  // waveform up to that point. Both are cheap enough to run every frame.
   const setPlayheadVisual = useCallback((pct: number) => {
-    if (playheadRef.current) playheadRef.current.style.left = `${pct}%`;
     if (progressCanvasRef.current) {
       progressCanvasRef.current.style.clipPath = `inset(0 ${Math.max(0, 100 - pct)}% 0 0)`;
+    }
+    const cont = scrollRef.current;
+    if (cont && trackWRef.current > 0) {
+      programmaticScrollRef.current = true;
+      cont.scrollLeft = (pct / 100) * trackWRef.current;
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current = false;
+      });
     }
   }, []);
 
@@ -297,6 +307,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     return () => ro.disconnect();
   }, [drawWaveform]);
 
+  // Measure the scroll viewport so we can size the fixed-center-playhead model:
+  // the track is an explicit pixel width (viewport × zoom) with a half-viewport
+  // pad on each end, so time 0 and the clip end can both reach the centre line.
+  useEffect(() => {
+    const cont = scrollRef.current;
+    if (!cont) return;
+    const measure = () => setViewportW(cont.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(cont);
+    return () => ro.disconnect();
+  }, []);
+
   useEffect(() => {
     if (!decoded) return;
     requestAnimationFrame(() => {
@@ -331,54 +354,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     }
   }, [decoded]);
 
-  // Track the visible window for the minimap viewport box.
-  useEffect(() => {
-    const cont = scrollRef.current;
-    if (!cont) return;
-    const update = () => {
-      const sw = cont.scrollWidth || 1;
-      setViewport({ left: (cont.scrollLeft / sw) * 100, width: (cont.clientWidth / sw) * 100 });
-    };
-    update();
-    cont.addEventListener("scroll", update);
-    return () => cont.removeEventListener("scroll", update);
-  }, [zoom, decoded]);
-
-  const onMinimapPointer = (e: React.PointerEvent) => {
-    const cont = scrollRef.current;
-    if (!cont) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    cont.scrollLeft = frac * cont.scrollWidth - cont.clientWidth / 2;
-  };
-
-  // Keep zoom centered on the playhead.
-  useEffect(() => {
-    const cont = scrollRef.current;
-    const dur = durationRef.current;
-    if (!cont || dur <= 0) return;
-    const x = (headTimeRef.current / dur) * cont.scrollWidth;
-    cont.scrollLeft = Math.max(0, x - cont.clientWidth / 2);
-  }, [zoom]);
-
-  // ---- Shared player subscription: move the playhead + follow on play ----
+  // ---- Shared player subscription: centre the track on the playhead ----
+  // setPlayheadVisual already scrolls the track so the current time sits under
+  // the fixed centre line, so no separate follow-scroll is needed.
   useEffect(() => {
     return importedPlayer.subscribe((time, isPlaying) => {
       setPlaying(isPlaying);
       setHeadTime(time);
       const dur = durationRef.current;
-      if (dur > 0) {
-        setPlayheadVisual((time / dur) * 100);
-      }
-      if (isPlaying) {
-        const cont = scrollRef.current;
-        if (cont && dur > 0) {
-          const x = (time / dur) * cont.scrollWidth;
-          if (x < cont.scrollLeft || x > cont.scrollLeft + cont.clientWidth - 40) {
-            cont.scrollLeft = Math.max(0, x - cont.clientWidth * 0.3);
-          }
-        }
-      }
+      if (dur > 0) setPlayheadVisual((time / dur) * 100);
     });
   }, [setPlayheadVisual]);
 
@@ -414,6 +398,44 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const togglePlay = useCallback(() => {
     if (url) importedPlayer.toggle(url);
   }, [url]);
+
+  // Scroll = scrub. When the USER scrolls the track (drag / wheel / trackpad),
+  // the time under the fixed centre line is scrollLeft / trackW × duration —
+  // seek there. Our own scroll (playback follow, zoom recentre) is flagged so it
+  // doesn't loop back into a seek.
+  useEffect(() => {
+    const cont = scrollRef.current;
+    if (!cont) return;
+    const onScroll = () => {
+      // Minimap viewport box: centred on the current time, width = visible span.
+      const dur = durationRef.current;
+      const tw = trackWRef.current || 1;
+      const boxW = Math.min(100, (cont.clientWidth / tw) * 100);
+      const centerFrac = tw > 0 ? cont.scrollLeft / tw : 0;
+      setViewport({ left: Math.max(0, centerFrac * 100 - boxW / 2), width: boxW });
+      if (programmaticScrollRef.current || dur <= 0) return;
+      const t = Math.min(dur, Math.max(0, centerFrac * dur));
+      seek(t);
+    };
+    cont.addEventListener("scroll", onScroll, { passive: true });
+    return () => cont.removeEventListener("scroll", onScroll);
+  }, [seek]);
+
+  const onMinimapPointer = (e: React.PointerEvent) => {
+    const dur = durationRef.current;
+    if (dur <= 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    seek(frac * dur);
+  };
+
+  // Keep zoom centred on the playhead: trackW changed, so re-scroll to keep the
+  // current time under the centre line.
+  useEffect(() => {
+    const dur = durationRef.current;
+    if (dur <= 0) return;
+    setPlayheadVisual((headTimeRef.current / dur) * 100);
+  }, [zoom, viewportW, setPlayheadVisual]);
 
   // ---- Loop the selected verse (repeat its region to fine-tune in/out by ear) ----
   const toggleLoop = () => {
@@ -516,39 +538,28 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, setHead]);
 
-  // ---- Click / scrub on the track ----------------------------------------
-  // A plain click just parks the playhead and stays paused (so you can mark a
-  // break without a half-second of playback). Only an actual drag scrubs with
-  // audio, and that audio stops again on release if you were paused.
-  const onScrubMove = useCallback((e: PointerEvent) => {
-    const cur = useAppStore.getState().audioSource;
-    if (cur.mode !== "imported") return;
-    const t = pxToTime(e.clientX);
-    importedPlayer.seek(cur.url, t);
-    setHead(t);
-    if (!scrubMoved.current) {
-      scrubMoved.current = true;
-      // Started dragging — play so the user can scrub by ear.
-      if (!scrubWasPlaying.current) importedPlayer.play(cur.url);
-    }
-  }, [pxToTime, setHead]);
-  const onScrubEnd = useCallback(() => {
-    // Pause only if we actually scrubbed-to-hear from a paused state. A pure
-    // click never started playback, so it simply stays paused at the new spot.
-    if (scrubMoved.current && !scrubWasPlaying.current) importedPlayer.pause();
-    window.removeEventListener("pointermove", onScrubMove);
-    window.removeEventListener("pointerup", onScrubEnd);
-  }, [onScrubMove]);
-  const startScrub = (clientX: number) => {
-    const cur = useAppStore.getState().audioSource;
-    if (cur.mode !== "imported") return;
-    scrubWasPlaying.current = importedPlayer.isPlaying();
-    scrubMoved.current = false;
-    const t = pxToTime(clientX);
-    importedPlayer.seek(cur.url, t); // park the playhead; no playback on a click
-    setHead(t);
-    window.addEventListener("pointermove", onScrubMove);
-    window.addEventListener("pointerup", onScrubEnd);
+  // ---- Drag-to-pan the track (fixed-centre scrub) -------------------------
+  // Touch scrolls the track natively; for mouse (which doesn't drag-scroll an
+  // overflow container) we pan scrollLeft with the pointer. The scroll handler
+  // then maps the new centre time and seeks — so dragging left/right scrubs.
+  const panStartX = useRef(0);
+  const panStartScroll = useRef(0);
+  const onPanMove = useCallback((e: PointerEvent) => {
+    const cont = scrollRef.current;
+    if (!cont) return;
+    cont.scrollLeft = panStartScroll.current - (e.clientX - panStartX.current);
+  }, []);
+  const onPanEnd = useCallback(() => {
+    window.removeEventListener("pointermove", onPanMove);
+    window.removeEventListener("pointerup", onPanEnd);
+  }, [onPanMove]);
+  const startPan = (clientX: number) => {
+    const cont = scrollRef.current;
+    if (!cont) return;
+    panStartX.current = clientX;
+    panStartScroll.current = cont.scrollLeft;
+    window.addEventListener("pointermove", onPanMove);
+    window.addEventListener("pointerup", onPanEnd);
   };
 
   // ---- Dragging block edges / bodies (snap to pauses; push neighbours) ----
@@ -1003,6 +1014,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   if (!imported || timings.length === 0) return null;
 
   const pct = (t: number) => (duration > 0 ? (t / duration) * 100 : 0);
+
+  // Fixed-center geometry: an explicit-pixel track (viewport × zoom) padded by
+  // half a viewport on each side. scrollLeft = fraction × trackW then centres the
+  // matching time under the fixed playhead line (see setPlayheadVisual).
+  const vw = viewportW || 1;
+  const trackW = Math.max(vw, Math.round(vw * zoom));
+  const padPx = Math.round((viewportW || 0) / 2);
+  trackWRef.current = trackW;
   const activeIdx = store.currentVerseIndex;
   const tickStep = duration > 240 ? 30 : duration > 90 ? 10 : 5;
   const tickCount = duration > 0 ? Math.min(200, Math.floor(duration / tickStep) + 1) : 0;
@@ -1365,9 +1384,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         </div>
       )}
 
-      {/* Scroll viewport (zoom widens the inner track) */}
-      <div ref={scrollRef} className="overflow-x-auto overflow-y-hidden">
-        <div style={{ width: `${zoom * 100}%` }} className="min-w-full">
+      {/* Scroll viewport — fixed-centre model: the content is an explicit-pixel
+          track padded by half a viewport each side, and it scrolls under a
+          stationary centre playhead (below). Drag / wheel / trackpad to scrub. */}
+      <div className="relative">
+      <div ref={scrollRef} className="overflow-x-auto overflow-y-hidden overscroll-x-contain">
+        <div className="flex">
+        <div className="shrink-0" style={{ width: padPx }} aria-hidden />
+        <div className="shrink-0" style={{ width: trackW }}>
           {/* Ruler */}
           <div className="relative mb-1 h-4 select-none text-[10px] text-[var(--muted-deep)]">
             {Array.from({ length: tickCount }, (_, i) => {
@@ -1389,10 +1413,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             ref={trackRef}
             onPointerDown={(e) => {
               if (e.target === trackRef.current || (e.target as HTMLElement).dataset.wave) {
-                startScrub(e.clientX); // drag to scrub (seek + hear audio)
+                startPan(e.clientX); // drag left/right to scrub (scroll under the centre line)
               }
             }}
-            className={`relative cursor-text overflow-hidden rounded-xl border border-[var(--hairline)] bg-[var(--ink-deep)] ${
+            className={`relative cursor-ew-resize touch-pan-x overflow-hidden rounded-xl border border-[var(--hairline)] bg-[var(--ink-deep)] ${
               fullscreen ? "h-[clamp(180px,38dvh,420px)]" : "h-24"
             }`}
           >
@@ -1540,14 +1564,6 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               </>
             )}
 
-            {/* Playhead */}
-            <div
-              ref={playheadRef}
-              className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-gold shadow-[0_0_6px_rgba(201,162,75,0.8)]"
-              style={{ left: 0 }}
-            >
-              <span className="absolute -top-1 -left-[3px] h-0 w-0 border-x-4 border-t-4 border-x-transparent border-t-gold" />
-            </div>
           </div>
 
           {/* Captions track — a CapCut-style row under the waveform where every
@@ -1592,6 +1608,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               });
             })}
           </div>
+        </div>
+        <div className="shrink-0" style={{ width: padPx }} aria-hidden />
+        </div>
+      </div>
+        {/* Fixed centre playhead — the timeline scrolls under this stationary
+            line, so "at the playhead" always means screen-centre. */}
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 z-30 w-px -translate-x-1/2 bg-gold shadow-[0_0_6px_rgba(201,162,75,0.8)]">
+          <span className="absolute -top-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-gold" />
         </div>
       </div>
 
