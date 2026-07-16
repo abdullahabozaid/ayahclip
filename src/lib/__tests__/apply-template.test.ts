@@ -64,4 +64,42 @@ describe("template application media handoff", () => {
     state.fulfillTemplateMediaSlot("scene:2");
     expect(useAppStore.getState().pendingTemplateMedia).toBeNull();
   });
+
+  it("keeps the active B-roll scene and editor controls in sync", () => {
+    useAppStore.setState({
+      background: { type: "solid", value: "#999999", label: "Last selected" },
+      backgroundSequenceEnabled: true,
+      backgroundScenes: [
+        {
+          id: "first",
+          background: { type: "solid", value: "#111111", label: "First" },
+          duration: 4,
+          transition: "crossfade",
+          transitionDuration: 0.5,
+          fit: "cover",
+          backdrop: "black",
+          transform: { scale: 1.4, x: 0.25, y: -0.1 },
+        },
+        {
+          id: "last",
+          background: { type: "solid", value: "#999999", label: "Last selected" },
+          duration: 4,
+          transition: "crossfade",
+          transitionDuration: 0.5,
+          fit: "contain",
+          backdrop: "blur",
+          transform: { scale: 1, x: 0, y: 0 },
+        },
+      ],
+      activeBackgroundSceneId: "last",
+    });
+
+    applyTemplate(broll);
+    const state = useAppStore.getState();
+    expect(state.activeBackgroundSceneId).toBe("first");
+    expect(state.background.value).toBe("#111111");
+    expect(state.backgroundFit).toBe("cover");
+    expect(state.fitBackdrop).toBe("black");
+    expect(state.mediaTransform).toEqual({ scale: 1.4, x: 0.25, y: -0.1 });
+  });
 });

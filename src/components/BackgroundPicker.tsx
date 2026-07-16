@@ -74,13 +74,20 @@ function VideoThumb({
 interface BackgroundPickerProps {
   value: Background;
   onChange: (bg: Background) => void;
+  /** Edit the current solid/gradient without treating each input event as a new B-roll item. */
+  onEditCurrent?: (bg: Background) => void;
   /** False when uploads are appended to a B-roll sequence instead of replacing media. */
   revokePrevious?: boolean;
 }
 
 type Tab = "presets" | "pexels" | "video" | "upload";
 
-export function BackgroundPicker({ value, onChange, revokePrevious = true }: BackgroundPickerProps) {
+export function BackgroundPicker({
+  value,
+  onChange,
+  onEditCurrent = onChange,
+  revokePrevious = true,
+}: BackgroundPickerProps) {
   const [tab, setTab] = useState<Tab>("presets");
 
   const tabs: { id: Tab; label: string }[] = [
@@ -97,7 +104,7 @@ export function BackgroundPicker({ value, onChange, revokePrevious = true }: Bac
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 rounded-full px-2 py-1.5 text-xs font-medium transition-colors ${
+            className={`min-h-10 flex-1 rounded-full px-2 py-1.5 text-xs font-medium transition-colors ${
               tab === t.id
                 ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                 : "text-[var(--muted)] hover:text-parchment"
@@ -108,7 +115,9 @@ export function BackgroundPicker({ value, onChange, revokePrevious = true }: Bac
         ))}
       </div>
 
-      {tab === "presets" && <PresetsGrid value={value} onChange={onChange} />}
+      {tab === "presets" && (
+        <PresetsGrid value={value} onChange={onChange} onEditCurrent={onEditCurrent} />
+      )}
       {tab === "pexels" && <StockLibrary onSelect={onChange} />}
       {tab === "video" && <VideoSection value={value} onChange={onChange} revokePrevious={revokePrevious} />}
       {tab === "upload" && <UploadSection value={value} onChange={onChange} revokePrevious={revokePrevious} />}
@@ -119,9 +128,11 @@ export function BackgroundPicker({ value, onChange, revokePrevious = true }: Bac
 function PresetsGrid({
   value,
   onChange,
+  onEditCurrent,
 }: {
   value: Background;
   onChange: (bg: Background) => void;
+  onEditCurrent: (bg: Background) => void;
 }) {
   const solids = backgroundPresets.filter((b) => b.type === "solid");
   const gradients = backgroundPresets.filter((b) => b.type === "gradient");
@@ -136,7 +147,7 @@ function PresetsGrid({
             <button
               key={bg.value}
               onClick={() => onChange(bg)}
-              className={`h-8 w-8 rounded-md border-2 transition-all ${
+              className={`h-10 w-10 rounded-lg border-2 transition-all ${
                 value.value === bg.value
                   ? "border-[var(--gold)] scale-110"
                   : "border-transparent hover:border-[var(--hairline)]"
@@ -155,7 +166,7 @@ function PresetsGrid({
             <button
               key={bg.value}
               onClick={() => onChange(bg)}
-              className={`h-8 w-8 rounded-md border-2 transition-all ${
+              className={`h-10 w-10 rounded-lg border-2 transition-all ${
                 value.value === bg.value
                   ? "border-[var(--gold)] scale-110"
                   : "border-transparent hover:border-[var(--hairline)]"
@@ -167,7 +178,7 @@ function PresetsGrid({
           ))}
         </div>
       </div>
-      <BackgroundEditor value={value} onChange={onChange} />
+      <BackgroundEditor value={value} onChange={onEditCurrent} />
       <div>
         <p className="mb-2 text-xs text-[var(--muted)]">Images</p>
         <div className="flex flex-wrap gap-2">
@@ -175,7 +186,7 @@ function PresetsGrid({
             <button
               key={bg.value}
               onClick={() => onChange(bg)}
-              className={`h-8 w-8 rounded-md border-2 transition-all overflow-hidden ${
+              className={`h-10 w-10 overflow-hidden rounded-lg border-2 transition-all ${
                 value.value === bg.value
                   ? "border-[var(--gold)] scale-110"
                   : "border-transparent hover:border-[var(--hairline)]"

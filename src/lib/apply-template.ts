@@ -40,6 +40,14 @@ export function applyTemplate(template: TemplateDefinition): void {
       backgroundSequenceEnabled: true,
       backgroundScenes: scenes,
       activeBackgroundSceneId: scenes[0]?.id ?? null,
+      ...(scenes[0]
+        ? {
+            background: scenes[0].background,
+            backgroundFit: scenes[0].fit,
+            fitBackdrop: scenes[0].backdrop,
+            mediaTransform: scenes[0].transform,
+          }
+        : {}),
     });
   } else if (
     sequence &&

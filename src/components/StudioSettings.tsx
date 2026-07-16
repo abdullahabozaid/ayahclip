@@ -244,6 +244,16 @@ export function StudioSettings() {
     ? formatClipDuration(selectedCount * 5, true)
     : formatClipDuration(importedDuration);
 
+  const advanceToNextPendingScene = () => {
+    const nextSlot = useAppStore
+      .getState()
+      .pendingTemplateMedia?.slots.find((slot) => slot.id.startsWith("scene:"));
+    if (!nextSlot) return;
+    const nextIndex = Number(nextSlot.id.slice("scene:".length));
+    const nextScene = useAppStore.getState().backgroundScenes[nextIndex];
+    if (nextScene) useAppStore.getState().selectBackgroundScene(nextScene.id);
+  };
+
   const handleBackgroundSelection = (background: Background) => {
     const pendingSlot = store.pendingTemplateMedia?.slots[0];
     if (!pendingSlot) {
@@ -259,14 +269,29 @@ export function StudioSettings() {
       else store.addBackgroundScene(background);
       store.fulfillTemplateMediaSlot(pendingSlot.id);
 
-      const nextSlot = useAppStore
-        .getState()
-        .pendingTemplateMedia?.slots.find((slot) => slot.id.startsWith("scene:"));
-      if (nextSlot) {
-        const nextIndex = Number(nextSlot.id.slice("scene:".length));
-        const nextScene = useAppStore.getState().backgroundScenes[nextIndex];
-        if (nextScene) useAppStore.getState().selectBackgroundScene(nextScene.id);
-      }
+      advanceToNextPendingScene();
+      return;
+    }
+
+    store.setBackground(background);
+    store.fulfillTemplateMediaSlot(pendingSlot.id);
+  };
+
+  const handleCurrentBackgroundEdit = (background: Background) => {
+    const pendingSlot = store.pendingTemplateMedia?.slots[0];
+    if (!pendingSlot) {
+      store.setBackground(background);
+      return;
+    }
+
+    if (pendingSlot.id.startsWith("scene:")) {
+      const index = Number(pendingSlot.id.slice("scene:".length));
+      const scene = store.backgroundScenes[index];
+      if (scene) store.updateBackgroundScene(scene.id, { background });
+      else store.addBackgroundScene(background);
+      store.fulfillTemplateMediaSlot(pendingSlot.id);
+
+      advanceToNextPendingScene();
       return;
     }
 
@@ -1069,6 +1094,7 @@ export function StudioSettings() {
           <BackgroundPicker
             value={store.background}
             onChange={handleBackgroundSelection}
+            onEditCurrent={handleCurrentBackgroundEdit}
             revokePrevious={!store.backgroundSequenceEnabled}
           />
         </Section>
