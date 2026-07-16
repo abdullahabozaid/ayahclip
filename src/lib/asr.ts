@@ -57,8 +57,15 @@ async function computeMel(
   audio: Float32Array
 ): Promise<{ features: Float32Array; timeFrames: number }> {
   const dithered = new Float32Array(audio.length);
+  // NeMo's feature recipe expects a tiny dither, but Math.random() made the
+  // exact same clip produce different transcripts and boundary positions on
+  // repeated runs. A fixed LCG keeps the expected noise while making alignment
+  // reproducible across preview, export, browsers, and regression tests.
+  let ditherState = 0x6d2b79f5;
   for (let i = 0; i < audio.length; i++) {
-    dithered[i] = audio[i] + DITHER * (Math.random() * 2 - 1);
+    ditherState = (Math.imul(ditherState, 1664525) + 1013904223) >>> 0;
+    const noise = (ditherState / 4294967296) * 2 - 1;
+    dithered[i] = audio[i] + DITHER * noise;
   }
 
   const spec = await spectrogram(dithered, getWindow(), WIN_LENGTH, HOP_LENGTH, {
@@ -301,6 +308,8 @@ export interface Emissions {
   blankId: number;
   /** The raw model vocab (id → token), for skeleton reduction. */
   vocab: Record<string, string>;
+  /** Greedy decode from the same model pass, used as an independent aligner. */
+  transcription: Transcription;
 }
 
 /**
@@ -319,5 +328,6 @@ export async function computeEmissions(
     frameDur,
     blankId,
     vocab: vocabRecord!,
+    transcription: decodeCTC(data, T, V, frameDur),
   };
 }

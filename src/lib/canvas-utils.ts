@@ -298,12 +298,33 @@ export function parseGradientStops(
   css: string
 ): { offset: number; color: string }[] {
   const stops: { offset: number; color: string }[] = [];
-  const stopRegex = /(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))\s+(\d+)%/g;
+  const stopRegex = /(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\))\s+([\d.]+)%/g;
   let match;
   while ((match = stopRegex.exec(css)) !== null) {
-    stops.push({ color: match[1], offset: parseInt(match[2]) / 100 });
+    stops.push({ color: match[1], offset: Number(match[2]) / 100 });
   }
   return stops;
+}
+
+export function parseGradientAngle(css: string): number {
+  const match = css.match(/linear-gradient\(\s*(-?[\d.]+)deg\s*,/i);
+  return match ? Number(match[1]) : 180;
+}
+
+export function gradientLineForAngle(angleDegrees: number, w: number, h: number) {
+  // CSS angles start at the upward vertical and rotate clockwise.
+  const radians = (angleDegrees * Math.PI) / 180;
+  const dx = Math.sin(radians);
+  const dy = -Math.cos(radians);
+  const halfLength = Math.abs(dx) * w / 2 + Math.abs(dy) * h / 2;
+  const cx = w / 2;
+  const cy = h / 2;
+  return {
+    x0: cx - dx * halfLength,
+    y0: cy - dy * halfLength,
+    x1: cx + dx * halfLength,
+    y1: cy + dy * halfLength,
+  };
 }
 
 export function drawBackground(
@@ -317,7 +338,8 @@ export function drawBackground(
     ctx.fillRect(0, 0, w, h);
   } else if (bg.type === "gradient") {
     const stops = parseGradientStops(bg.value);
-    const gradient = ctx.createLinearGradient(0, 0, w, h);
+    const line = gradientLineForAngle(parseGradientAngle(bg.value), w, h);
+    const gradient = ctx.createLinearGradient(line.x0, line.y0, line.x1, line.y1);
     if (stops.length >= 2) {
       for (const s of stops) gradient.addColorStop(s.offset, s.color);
     } else {

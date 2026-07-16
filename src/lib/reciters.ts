@@ -8,7 +8,7 @@ export const reciters: Reciter[] = [
   { id: "basit-murattal",   name: "Abdul Basit (Murattal)",              folder: "Abdul_Basit_Murattal_192kbps",            quranComRecitationId: 2  },
   { id: "basit-mujawwad",   name: "Abdul Basit (Mujawwad)",              folder: "Abdul_Basit_Mujawwad_128kbps",            quranComRecitationId: 1  },
   { id: "husary",           name: "Mahmoud Khalil Al-Husary",            folder: "Husary_128kbps",                         quranComRecitationId: 6  },
-  { id: "minshawi-murattal",name: "Muhammad Al-Minshawi (Murattal)",     folder: "Minshawi_Murattal_128kbps",               quranComRecitationId: 9  },
+  { id: "minshawi-murattal",name: "Muhammad Al-Minshawi (Murattal)",     folder: "Minshawy_Murattal_128kbps",               quranComRecitationId: 9  },
   { id: "minshawi-mujawwad",name: "Muhammad Al-Minshawi (Mujawwad)",     folder: "Minshawy_Mujawwad_192kbps",              quranComRecitationId: 8  },
   { id: "shuraym",          name: "Saud Ash-Shuraym",                    folder: "Saood_ash-Shuraym_128kbps",               quranComRecitationId: 10 },
   { id: "shaatree",         name: "Abu Bakr Ash-Shaatree",               folder: "Abu_Bakr_Ash-Shaatree_128kbps",           quranComRecitationId: 4  },

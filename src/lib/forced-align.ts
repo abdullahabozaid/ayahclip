@@ -17,6 +17,7 @@ import {
 } from "./ctc-vocab";
 import { ctcForcedAlign } from "./ctc-align";
 import type { Emissions } from "./asr";
+import { alignTranscriptVerses } from "./transcript-align";
 
 const MIN_DUR = 0.12;
 // A forced-aligned boundary snaps to a detected pause center within this window.
@@ -138,11 +139,29 @@ export function forceAlignVerses(input: ForceAlignInput): VerseTiming[] | null {
     if (recEnds[v] < onsets[v]) recEnds[v] = onsets[v];
   }
 
-  return assembleTimings({
+  const ctcTimings = assembleTimings({
     onsets,
     recEnds,
     verseNumbers,
     audioDuration,
     silences: input.silences,
   });
+
+  // A greedy transcript and the full emission matrix fail differently. When
+  // the transcript agrees well with the exact Quran reference, its character
+  // timestamps are substantially less prone to CTC Viterbi jumps between
+  // acoustically similar phrases. Keep emission alignment as the fallback for
+  // noisy clips where the greedy decode is not trustworthy.
+  const transcript = emissions.transcription;
+  if (transcript) {
+    const alternative = alignTranscriptVerses({
+      text: transcript.text,
+      charTimes: transcript.charTimes,
+      surah,
+      verseNumbers,
+      audioDuration,
+    });
+    if (alternative && alternative.similarity >= 0.65) return alternative.timings;
+  }
+  return ctcTimings;
 }

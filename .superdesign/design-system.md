@@ -57,6 +57,22 @@ Editor mode contains:
 - All icon-only actions use inline SVG, accessible labels, and tooltips.
 - Minimum interactive target is 40px, preferably 44px on touch layouts.
 
+## Precision composition controls
+
+- The canvas is directly manipulable, but every direct gesture has an exact inspector value and reset action.
+- Split compositions expose separate controls for **Text region** and **Media region**. Media has fit, zoom, horizontal focal point, and vertical focal point. The creator must be able to place a face or subject at the center, edge, or any custom focal point without guessing.
+- The split mask is not a fixed preset. Expose the solid-panel width, fade width, fade direction, panel color, and panel opacity. Defaults may be tasteful, but the creator owns the composition.
+- Background color is a first-class mode, not a few swatches. Let the creator choose Solid or Gradient, edit colors, control gradient angle, move color stops, reverse them, and reset to the template default.
+- Advanced controls use compact rows with a visible numeric value. Do not hide essential placement behind unlabeled swatches.
+- Canvas gestures must distinguish text movement from media focal-point movement with an explicit canvas-tool selector. Never make the whole canvas ambiguously drag two different things.
+
+## Quran typography controls
+
+- Offer named, verified Quran rendering modes: **Mushaf (QCF page glyphs)** for Quran.com page-faithful glyphs, **Uthmanic Hafs** for a flowing digital line, and **Amiri Quran** as an editorial alternative once its font file and mark coverage are verified.
+- The selected Arabic rendering mode must actually change preview and export. QCF glyph data must not silently override a non-QCF font choice.
+- Show a real short/medium/long Quran sample with harakat, waqf marks, and an ayah end mark. A font option is only shippable after canvas and exported-frame mark-integrity checks.
+- Arabic uses real font faces at their supported weights. Never synthesize bold. Emphasis comes from size, color, outline, glow, or a line plate.
+
 ## Responsive rules
 
 - Desktop: three-column creative workspace with canvas dominant.
