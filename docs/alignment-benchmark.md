@@ -105,6 +105,18 @@ npm run benchmark:fixtures
 npm run test:alignment
 ```
 
+Run the manifest-driven recognition smoke gate with the repository's existing
+licensed fixtures:
+
+```sh
+npm run benchmark:recognition-corpus -- scripts/fixtures/recognition-smoke.jsonl \
+  --min-exact 0.7 --min-candidate-recall 0.7 --max-false-auto 0
+```
+
+The recognition evaluator is also the onboarding path for private, licensed
+unseen-handset audio. Its JSONL rows accept `audio`, `surah`, `ayahStart`, and
+`ayahEnd`; audio paths resolve relative to the manifest and remain outside git.
+
 ## Remaining gates
 
 - The reproducible harness now includes three hold-out voices plus deterministic

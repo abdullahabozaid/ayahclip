@@ -56,3 +56,24 @@ A new model can replace `asr-model-v1` only after all of these pass:
 Until that evidence exists, AyahClip improves the reliable part of the system:
 candidate retrieval, explicit ambiguity handling, hybrid CTC/transcript/pause
 alignment, per-boundary review markers, and reversible manual correction.
+
+## Licensed handset benchmark onboarding
+
+`Quran-Lab/quranic-asr-benchmark` is a manually gated dataset that includes a
+real-phone `tlog_holdout` split. Access must be requested from its Hugging Face
+page and used under the displayed upstream Tarteel tlog, EveryAyah, and QUL
+terms. Do not commit, redistribute, or upload its audio to this repository.
+
+After lawful access is granted, keep the downloaded files outside the repository
+and run either the directory convention (`surah_ayah_...`) or a JSONL manifest:
+
+```sh
+npm run benchmark:recognition-corpus -- /absolute/private/path/tlog_holdout \
+  --min-candidate-recall 0.95 --max-false-auto 0
+```
+
+The evaluator reports exact-range accuracy, creator-visible top-three recall,
+deeper candidate-set recall, auto-apply precision, false auto-applies, and
+character error rate. Repeated short verses are genuinely underdetermined from
+isolated audio, so the release gate prioritizes zero false auto-applies and safe
+creator review over forcing an exact first guess.

@@ -361,11 +361,15 @@ export function assessVerseMatch(transcript: string): VerseMatchAssessment {
     return { match: null, alternatives: [], margin: 0, confidence: "low" };
   }
 
+  // Short phrases are often repeated across the Quran. Search a wider set of
+  // surahs for those clips so creator review is not limited by a tied trigram
+  // pre-filter. Longer recitations remain on the faster narrow path.
+  const retrievalLimit = q.replace(/ /g, "").length < 32 ? 32 : 10;
   const aligned = surahIndex
     .map((su) => ({ su, overlap: intersectionSize(qTris, su.trigrams) }))
     .filter((candidate) => candidate.overlap > 0)
     .sort((a, b) => b.overlap - a.overlap)
-    .slice(0, 10)
+    .slice(0, retrievalLimit)
     .map(({ su }) => ({ su, ...alignToRef(q, su.text) }))
     .sort((a, b) => b.score - a.score);
   if (aligned.length === 0 || aligned[0].score < MIN_SCORE) {
@@ -374,7 +378,9 @@ export function assessVerseMatch(transcript: string): VerseMatchAssessment {
 
   const mapped = aligned.map(mapAlignmentToVerses);
   const match = mapped[0];
-  const alternatives = mapped.slice(1, 3);
+  // Preserve a deeper private candidate set for evaluation and future recovery.
+  // The import UI still deliberately shows only three choices at once.
+  const alternatives = mapped.slice(1, 10);
   const margin = match.score - (alternatives[0]?.score ?? 0);
   const confidence = match.score >= 0.9 && margin >= 0.12
     ? "high"

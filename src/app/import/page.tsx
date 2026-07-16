@@ -577,7 +577,7 @@ export default function ImportPage() {
                   Possible Quran ranges
                 </p>
                 <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
-                  Tap a range to keep its prepared ayah cuts. You will still confirm it before opening Studio.
+                  Tap a range to keep its prepared ayah cuts. Short verses can occur in more than one place, so use the editable Quran range below if yours is not listed.
                 </p>
                 <div role="group" aria-label="Possible Quran ranges" className="mt-3 grid gap-2">
                   {recognitionCandidates.map((candidate, index) => (

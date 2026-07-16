@@ -65,6 +65,12 @@ describe("assessVerseMatch", () => {
     expect(new Set(candidates.map((candidate) =>
       `${candidate.surah}:${candidate.ayahStart}-${candidate.ayahEnd}`
     )).size).toBe(candidates.length);
+    expect(assessment.alternatives.length).toBeGreaterThan(2);
+    expect(selectRecognitionCandidates(
+      assessment.match!,
+      assessment.alternatives,
+      10,
+    ).length).toBeGreaterThan(3);
   });
 
   it("returns no match for unusable input", () => {
