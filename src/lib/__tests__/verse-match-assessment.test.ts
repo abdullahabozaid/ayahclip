@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { assessVerseMatch, getVersesText, loadCorpus } from "@/lib/verse-match";
+import {
+  assessVerseMatch,
+  getVersesText,
+  loadCorpus,
+  recoverLeadingVerse,
+} from "@/lib/verse-match";
 
 beforeAll(async () => {
   const corpus = JSON.parse(
@@ -10,6 +15,31 @@ beforeAll(async () => {
   );
   vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => corpus })));
   await loadCorpus();
+});
+
+describe("recoverLeadingVerse", () => {
+  it("includes a preceding verse when voiced audio begins long before the transcript", () => {
+    const result = recoverLeadingVerse(
+      { surah: 1, ayahStart: 2, ayahEnd: 7, score: 0.95 },
+      5.5,
+      0.6
+    );
+
+    expect(result.recovered).toBe(true);
+    expect(result.match.ayahStart).toBe(1);
+    expect(result.leadingUnrecognizedSeconds).toBeCloseTo(4.9);
+  });
+
+  it("does not expand for normal model latency", () => {
+    const result = recoverLeadingVerse(
+      { surah: 2, ayahStart: 255, ayahEnd: 255, score: 0.9 },
+      0.8,
+      0.2
+    );
+
+    expect(result.recovered).toBe(false);
+    expect(result.match.ayahStart).toBe(255);
+  });
 });
 
 describe("assessVerseMatch", () => {

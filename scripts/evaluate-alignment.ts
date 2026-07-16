@@ -48,6 +48,31 @@ function concatenate(parts: Float32Array[]): Float32Array {
   return result;
 }
 
+function trimToSpeech(audio: Float32Array): Float32Array {
+  const windowSize = Math.max(1, Math.floor(SAMPLE_RATE * 0.03));
+  const windowCount = Math.floor(audio.length / windowSize);
+  if (windowCount === 0) return audio;
+  const rms = new Float32Array(windowCount);
+  let peak = 0;
+  for (let window = 0; window < windowCount; window++) {
+    let sum = 0;
+    const base = window * windowSize;
+    for (let index = 0; index < windowSize; index++) {
+      const sample = audio[base + index];
+      sum += sample * sample;
+    }
+    rms[window] = Math.sqrt(sum / windowSize);
+    peak = Math.max(peak, rms[window]);
+  }
+  if (peak === 0) return audio;
+  const threshold = peak * 0.08;
+  let first = 0;
+  let last = windowCount - 1;
+  while (first < windowCount && rms[first] < threshold) first++;
+  while (last > first && rms[last] < threshold) last--;
+  return audio.slice(first * windowSize, Math.min(audio.length, (last + 1) * windowSize));
+}
+
 async function computeMel(audio: Float32Array) {
   const filters = mel_filter_bank(
     N_FFT / 2 + 1, N_MELS, 0, 8000, SAMPLE_RATE, "slaney", "htk"
@@ -154,6 +179,7 @@ function editDistance(a: string, b: string): number {
 
 async function main() {
   const sourceDir = resolve(process.argv[2] || "tmp/alignment-benchmark/alafasy");
+  const trimSilence = process.argv.includes("--trim-silence");
   const files = readdirSync(sourceDir)
     .filter((name) => /^\d{6}\.mp3$/.test(name))
     .sort();
@@ -163,7 +189,8 @@ async function main() {
   if (surahs.size !== 1) throw new Error("All benchmark files must be from one surah");
   const surah = [...surahs][0];
   const verseNumbers = files.map((name) => Number(name.slice(3, 6)));
-  const parts = files.map((name) => decodeMp3(join(sourceDir, name)));
+  const decodedParts = files.map((name) => decodeMp3(join(sourceDir, name)));
+  const parts = trimSilence ? decodedParts.map(trimToSpeech) : decodedParts;
   const expectedStarts: number[] = [];
   let samples = 0;
   for (const part of parts) {
@@ -200,7 +227,14 @@ async function main() {
     }
     throw new Error(`Unexpected fetch: ${url}`);
   }) as typeof fetch;
-  const { assessVerseMatch, getVerseWeights, getVersesText, loadCorpus, normalizeArabic } =
+  const {
+    assessVerseMatch,
+    getVerseWeights,
+    getVersesText,
+    loadCorpus,
+    normalizeArabic,
+    recoverLeadingVerse,
+  } =
     await import("../src/lib/verse-match");
   const { forceAlignVerses } = await import("../src/lib/forced-align");
   const { autoSegment, findSilenceCenters, findSpeechSpan } = await import("../src/lib/audio-import");
@@ -219,37 +253,57 @@ async function main() {
     duration,
     getChannelData: () => audio,
   } as unknown as AudioBuffer;
+  const speechSpan = findSpeechSpan(audioBuffer);
   const decoded = greedyDecode(output.data as Float32Array, T, V, vocab, duration / T);
+  const emissions = {
+    logProbs: logSoftmax(output.data as Float32Array, T, V),
+    T,
+    V,
+    frameDur: duration / T,
+    blankId: 1024,
+    vocab,
+    transcription: { ...decoded, wordStarts: [] },
+  };
+  const silences = findSilenceCenters(audioBuffer);
   const aligned = forceAlignVerses({
+    emissions,
+    surah,
+    verseNumbers,
+    audioDuration: duration,
+    audioStart: speechSpan.start,
+    silences,
+  });
+  if (!aligned) throw new Error("Alignment returned null");
+  const ctcOnly = forceAlignVerses({
     emissions: {
-      logProbs: logSoftmax(output.data as Float32Array, T, V),
-      T,
-      V,
-      frameDur: duration / T,
-      blankId: 1024,
-      vocab,
-      transcription: { ...decoded, wordStarts: [] },
+      ...emissions,
+      transcription: { text: "", charTimes: [], wordStarts: [] },
     },
     surah,
     verseNumbers,
     audioDuration: duration,
-    audioStart: findSpeechSpan(audioBuffer).start,
-    silences: findSilenceCenters(audioBuffer),
+    audioStart: speechSpan.start,
+    silences,
   });
-  if (!aligned) throw new Error("Alignment returned null");
 
   const expectedOnsets = expectedStarts.map(
     (cut, index) => cut + findSpeechSpan(asAudioBuffer(parts[index])).start
   );
   const cutErrors = aligned.map((timing, index) => Math.abs(timing.start - expectedStarts[index]));
   const onsetErrors = aligned.map((timing, index) => Math.abs(timing.start - expectedOnsets[index]));
+  const ctcErrors = ctcOnly?.map(
+    (timing, index) => Math.abs(timing.start - expectedStarts[index])
+  ) ?? [];
   const transcript = decoded.text;
   const normalizedTranscript = normalizeArabic(transcript);
   const reference = normalizeArabic(
     getVersesText(surah, verseNumbers[0], verseNumbers[verseNumbers.length - 1]).text
   );
   const assessment = assessVerseMatch(transcript);
-  const detection = assessment.match;
+  const recovery = assessment.match
+    ? recoverLeadingVerse(assessment.match, decoded.charTimes[0], speechSpan.start)
+    : null;
+  const detection = recovery?.match ?? null;
   const { alignTranscriptVerses } = await import("../src/lib/transcript-align");
   const transcriptResult = alignTranscriptVerses({
     text: transcript,
@@ -276,6 +330,7 @@ async function main() {
   const onsetMae = relevantOnsets.reduce((sum, value) => sum + value, 0) / relevantOnsets.length;
   console.log(JSON.stringify({
     sourceDir,
+    mode: trimSilence ? "run-on (per-verse silence removed)" : "natural pauses",
     durationSeconds: Number(duration.toFixed(3)),
     recognition: {
       transcript,
@@ -288,6 +343,10 @@ async function main() {
       detectionScore: detection ? Number(detection.score.toFixed(3)) : null,
       detectionMargin: Number(assessment.margin.toFixed(3)),
       detectionConfidence: assessment.confidence,
+      recoveredLeadingVerse: recovery?.recovered ?? false,
+      leadingUnrecognizedSeconds: recovery
+        ? Number(recovery.leadingUnrecognizedSeconds.toFixed(3))
+        : 0,
     },
     boundaries: aligned.map((timing, index) => ({
       verse: timing.verseNumber,
@@ -301,6 +360,13 @@ async function main() {
     cutMaxAbsoluteErrorSeconds: Number(Math.max(...relevantCuts).toFixed(3)),
     onsetMeanAbsoluteErrorSeconds: Number(onsetMae.toFixed(3)),
     onsetMaxAbsoluteErrorSeconds: Number(Math.max(...relevantOnsets).toFixed(3)),
+    ctcOnly: ctcOnly ? {
+      cutMeanAbsoluteErrorSeconds: Number(
+        (ctcErrors.slice(1).reduce((sum, value) => sum + value, 0) /
+          (ctcErrors.length - 1)).toFixed(3)
+      ),
+      cutMaxAbsoluteErrorSeconds: Number(Math.max(...ctcErrors.slice(1)).toFixed(3)),
+    } : null,
     transcriptAlignment: transcriptAligned ? {
       onsetMeanAbsoluteErrorSeconds: Number(
         (transcriptErrors.slice(1).reduce((sum, value) => sum + value, 0) /

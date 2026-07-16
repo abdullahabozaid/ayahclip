@@ -255,6 +255,35 @@ export interface VerseMatchAssessment {
   confidence: "high" | "medium" | "low";
 }
 
+export interface LeadingVerseRecovery {
+  match: VerseMatch;
+  recovered: boolean;
+  leadingUnrecognizedSeconds: number;
+}
+
+/**
+ * Recover one likely omitted opening verse when the audio contains sustained
+ * speech well before the first CTC character. This catches reciters whose
+ * basmala is acoustically present but absent from the greedy transcript, while
+ * ignoring ordinary leading silence because `speechStart` is already trimmed.
+ */
+export function recoverLeadingVerse(
+  match: VerseMatch,
+  firstCharacterTime: number | undefined,
+  speechStart: number,
+  thresholdSeconds = 1.8
+): LeadingVerseRecovery {
+  const leadingUnrecognizedSeconds = firstCharacterTime === undefined
+    ? 0
+    : Math.max(0, firstCharacterTime - speechStart);
+  const recovered = match.ayahStart > 1 && leadingUnrecognizedSeconds >= thresholdSeconds;
+  return {
+    match: recovered ? { ...match, ayahStart: match.ayahStart - 1 } : match,
+    recovered,
+    leadingUnrecognizedSeconds,
+  };
+}
+
 function mapAlignmentToVerses(candidate: AlignedSurahCandidate): VerseMatch {
   const { su, start, end, score } = candidate;
   const overlapOf = (range: VerseRange) =>

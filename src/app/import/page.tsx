@@ -13,7 +13,12 @@ import {
   findSpeechSpan,
   type VerseTiming,
 } from "@/lib/audio-import";
-import { assessVerseMatch, loadCorpus, getVerseWeights } from "@/lib/verse-match";
+import {
+  assessVerseMatch,
+  getVerseWeights,
+  loadCorpus,
+  recoverLeadingVerse,
+} from "@/lib/verse-match";
 import { forceAlignVersesDetailed } from "@/lib/forced-align";
 import { Surah } from "@/types";
 import { importSizeError, RECOMMENDED_IMPORT_BYTES } from "@/lib/import-limits";
@@ -79,8 +84,18 @@ export default function ImportPage() {
       const transcript = emissions.transcription.text;
       setDetectMsg("Matching to the Quran…");
       const assessment = assessVerseMatch(transcript);
-      const m = assessment.match;
-      if (m && assessment.confidence !== "low") {
+      const initialMatch = assessment.match;
+      const speechSpan = findSpeechSpan(buffer);
+      const recovery = initialMatch
+        ? recoverLeadingVerse(
+          initialMatch,
+          emissions.transcription.charTimes[0],
+          speechSpan.start
+        )
+        : null;
+      const m = recovery?.match ?? null;
+      const effectiveConfidence = recovery?.recovered ? "medium" : assessment.confidence;
+      if (m && effectiveConfidence !== "low") {
         const s = surahs.find((x) => x.id === m.surah);
         setSurahId(m.surah);
         setFrom(String(m.ayahStart));
@@ -95,7 +110,7 @@ export default function ImportPage() {
           surah: m.surah,
           verseNumbers,
           audioDuration: buffer.duration,
-          audioStart: findSpeechSpan(buffer).start,
+          audioStart: speechSpan.start,
           silences: findSilenceCenters(buffer),
         });
         const timings = alignment?.timings ?? autoSegment(
@@ -111,7 +126,7 @@ export default function ImportPage() {
           ayahEnd: m.ayahEnd,
           timings,
           method: alignment?.method ?? "pause",
-          confidence: assessment.confidence,
+          confidence: effectiveConfidence,
         });
       } else if (m) {
         setError(

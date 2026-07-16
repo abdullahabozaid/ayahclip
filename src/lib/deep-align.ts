@@ -5,7 +5,10 @@ import {
   resampleTo16kMono,
   type VerseTiming,
 } from "./audio-import";
-import { forceAlignVersesDetailed } from "./forced-align";
+import {
+  forceAlignVersesDetailed,
+  type BoundaryDiagnostic,
+} from "./forced-align";
 import { getVerseWeights, loadCorpus } from "./verse-match";
 
 export interface DeepAlignmentResult {
@@ -13,6 +16,7 @@ export interface DeepAlignmentResult {
   method: "transcript" | "ctc" | "pause";
   transcriptSimilarity: number | null;
   methodAgreementSeconds: number | null;
+  boundaryDiagnostics: BoundaryDiagnostic[];
 }
 
 /** One shared deep-alignment pipeline for both timeline editor surfaces. */
@@ -47,5 +51,10 @@ export async function alignImportedAudio(params: {
     method: "pause",
     transcriptSimilarity: null,
     methodAgreementSeconds: null,
+    boundaryDiagnostics: verseNumbers.map((verseNumber) => ({
+      verseNumber,
+      agreementSeconds: null,
+      confidence: "low",
+    })),
   };
 }

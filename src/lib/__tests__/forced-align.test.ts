@@ -4,7 +4,11 @@
 // produces clean onset-to-onset boundaries. The acoustic alignment itself is
 // covered by ctc-align / ctc-vocab.
 import { describe, it, expect } from "vitest";
-import { assembleTimings, refineTranscriptCuts } from "@/lib/forced-align";
+import {
+  assembleTimings,
+  classifyBoundaryConfidence,
+  refineTranscriptCuts,
+} from "@/lib/forced-align";
 
 describe("assembleTimings", () => {
   it("makes contiguous verses from the onsets when there's nothing to snap to", () => {
@@ -68,6 +72,15 @@ describe("assembleTimings", () => {
   });
 });
 
+describe("classifyBoundaryConfidence", () => {
+  it("requires both a strong transcript and close method agreement", () => {
+    expect(classifyBoundaryConfidence(0.94, 0.12)).toBe("high");
+    expect(classifyBoundaryConfidence(0.9, 0.6)).toBe("medium");
+    expect(classifyBoundaryConfidence(0.95, 1.2)).toBe("low");
+    expect(classifyBoundaryConfidence(null, null)).toBe("low");
+  });
+});
+
 describe("refineTranscriptCuts", () => {
   it("keeps the clip opening and moves acoustic onsets back to preceding pauses", () => {
     const timings = refineTranscriptCuts({
@@ -93,5 +106,29 @@ describe("refineTranscriptCuts", () => {
     });
 
     expect(timings[1].start).toBe(5.9);
+  });
+
+  it("does not turn a short intra-verse hesitation into a cut", () => {
+    const timings = refineTranscriptCuts({
+      timings: [
+        { verseNumber: 1, start: 0, end: 5.9 },
+        { verseNumber: 2, start: 5.9, end: 10 },
+      ],
+      silences: [{ time: 5.1, len: 0.14 }],
+    });
+
+    expect(timings[1].start).toBe(5.9);
+  });
+
+  it("requires stronger pause evidence as distance from the onset grows", () => {
+    const timings = refineTranscriptCuts({
+      timings: [
+        { verseNumber: 1, start: 0, end: 6 },
+        { verseNumber: 2, start: 6, end: 10 },
+      ],
+      silences: [{ time: 4.6, len: 0.3 }],
+    });
+
+    expect(timings[1].start).toBe(6);
   });
 });

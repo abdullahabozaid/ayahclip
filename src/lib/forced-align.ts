@@ -40,6 +40,23 @@ export interface AlignmentDiagnostics {
   transcriptSimilarity: number | null;
   /** Mean absolute difference between the two independent boundary methods. */
   methodAgreementSeconds: number | null;
+  boundaryDiagnostics: BoundaryDiagnostic[];
+}
+
+export interface BoundaryDiagnostic {
+  verseNumber: number;
+  agreementSeconds: number | null;
+  confidence: "high" | "medium" | "low";
+}
+
+export function classifyBoundaryConfidence(
+  transcriptSimilarity: number | null,
+  agreementSeconds: number | null
+): BoundaryDiagnostic["confidence"] {
+  if (transcriptSimilarity === null || agreementSeconds === null) return "low";
+  if (transcriptSimilarity >= 0.85 && agreementSeconds <= 0.35) return "high";
+  if (transcriptSimilarity >= 0.65 && agreementSeconds <= 0.8) return "medium";
+  return "low";
 }
 
 export function refineTranscriptCuts(params: {
@@ -63,6 +80,10 @@ export function refineTranscriptCuts(params: {
     for (const silence of silences) {
       if (silence.time >= onset || silence.time <= timings[index - 1].start + MIN_DUR) continue;
       const distance = onset - silence.time;
+      // Short intra-verse hesitations are common in run-on recitation and must
+      // not become verse cuts. The farther a pause is from the recognised onset,
+      // the stronger/longer it must be before it can override that onset.
+      if (silence.len < Math.max(0.22, distance * 0.35)) continue;
       if (distance < bestDistance) {
         best = silence.time;
         bestDistance = distance;
@@ -213,6 +234,16 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
           0
         ) / (comparable - 1)
         : 0;
+      const boundaryDiagnostics = ctcTimings.map((timing, index) => {
+        const boundaryAgreement = alternative.timings[index]
+          ? Math.abs(timing.start - alternative.timings[index].start)
+          : null;
+        return {
+          verseNumber: timing.verseNumber,
+          agreementSeconds: boundaryAgreement,
+          confidence: classifyBoundaryConfidence(alternative.similarity, boundaryAgreement),
+        };
+      });
       if (alternative.similarity >= 0.65) {
         return {
           timings: refineTranscriptCuts({
@@ -223,6 +254,7 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
           method: "transcript",
           transcriptSimilarity: alternative.similarity,
           methodAgreementSeconds: disagreement,
+          boundaryDiagnostics,
         };
       }
       return {
@@ -230,6 +262,7 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
         method: "ctc",
         transcriptSimilarity: alternative.similarity,
         methodAgreementSeconds: disagreement,
+        boundaryDiagnostics,
       };
     }
   }
@@ -238,6 +271,11 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
     method: "ctc",
     transcriptSimilarity: null,
     methodAgreementSeconds: null,
+    boundaryDiagnostics: ctcTimings.map((timing) => ({
+      verseNumber: timing.verseNumber,
+      agreementSeconds: null,
+      confidence: "low",
+    })),
   };
 }
 
