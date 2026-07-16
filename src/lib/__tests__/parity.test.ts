@@ -80,3 +80,39 @@ describe("effectiveAudioBounds is the shared audio-span rule", () => {
     expect(effectiveAudioBounds(tm, 10)).toEqual([5, 5]);
   });
 });
+
+describe("split timing uses the audio-start origin (front-trim + splits)", () => {
+  // The preview (imported-player) times split transitions off the true audio
+  // playhead, which for a front word-trim starts at effectiveAudioBounds().lo,
+  // not tm.start. Export must add its elapsed to lo too, or splits transition at
+  // the wrong moment vs the preview. This pins WHY the origin must be lo: the
+  // two origins pick different segments at the same elapsed time.
+  const tm: VerseTiming = {
+    verseNumber: 1,
+    start: 0,
+    end: 10,
+    splits: [5],
+    wordRange: { from: 2, to: 9 },
+  };
+  const [lo] = effectiveAudioBounds(tm, verseWordCount(TEXT)); // 2
+
+  it("lo is past tm.start when the verse is front-trimmed", () => {
+    expect(lo).toBe(2);
+  });
+
+  it("at the same elapsed the lo-origin and tm.start-origin pick different segments", () => {
+    const elapsed = 3.5; // audio has played 3.5s; true playhead = lo + 3.5 = 5.5
+    const correct = segmentFor(verse, tm, lo + elapsed); // 5.5 → past the split
+    const buggy = segmentFor(verse, tm, tm.start + elapsed); // 3.5 → before the split
+    expect(correct.isLast).toBe(true); // segment after the split
+    expect(buggy.isLast).toBe(false); // segment before it — the old wrong origin
+    expect(correct.ar).not.toBe(buggy.ar);
+  });
+
+  it("the lo-origin matches what the preview computes at the true playhead", () => {
+    const elapsed = 3.5;
+    const preview = verseTextAt(tm, TEXT, lo + elapsed); // imported-player uses true t
+    const exported = segmentFor(verse, tm, lo + elapsed).ar;
+    expect(exported).toBe(preview);
+  });
+});

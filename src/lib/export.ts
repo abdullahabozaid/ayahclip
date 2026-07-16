@@ -459,7 +459,16 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
     // The row's own timing — NOT a lookup by verse number, which cannot
     // distinguish a duplicated verse's two rows. Drives audio slicing AND the
     // intra-verse segment that picks on-screen text.
-    const sourceStart = tm?.start ?? 0;
+    //
+    // Text tracks the same playhead the audio plays from. A front word-trim
+    // (wordRange.from > 0) moves the audio start to effectiveAudioBounds().lo,
+    // and the preview (imported-player) times its split segments off the true
+    // playhead too — so the split-segment time must use lo, not tm.start, or
+    // splits transition at the wrong moment vs the preview. lo === tm.start when
+    // there is no front trim, so this is a no-op for the common case.
+    const sourceStart = tm
+      ? effectiveAudioBounds(tm, verseWordCount(verse.text_uthmani))[0]
+      : 0;
     const vSegs = reciterSegs.get(verse.verse_number);
 
     let segStart = performance.now();
@@ -817,7 +826,14 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       // Real-time offset into the displayed verse (0 during the lead window, so a
       // leading verse shows its first part) — parts never lead, only the verse.
       const localT = Math.max(0, t - cum[vi]);
-      const sourceTime = (tmFast?.start ?? 0) + localT;
+      // Origin is the audio start (effectiveAudioBounds().lo), matching the
+      // realtime path and the preview: a front word-trim moves the audio start
+      // past tm.start, so split timing must use lo. lo === tm.start when there is
+      // no front trim.
+      const audioLo = tmFast
+        ? effectiveAudioBounds(tmFast, verseWordCount(verse.text_uthmani))[0]
+        : 0;
+      const sourceTime = audioLo + localT;
       const segFast = vSegsFast
         ? reciterTextAt(verse, vSegsFast, localT)
         : segmentFor(verse, tmFast, sourceTime);
