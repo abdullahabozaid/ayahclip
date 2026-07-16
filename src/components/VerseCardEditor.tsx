@@ -469,7 +469,7 @@ export function VerseCardEditor() {
             className="rounded-full border border-[var(--hairline-soft)] px-3 py-1.5 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-40"
             title="Re-run speech recognition to align each verse to its audio"
           >
-            {deepMsg ?? "✨ Deep align"}
+            {deepMsg ?? "Deep align"}
           </button>
         </div>
       </div>

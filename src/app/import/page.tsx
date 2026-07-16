@@ -140,6 +140,13 @@ export default function ImportPage() {
     await loadCorpus();
     const weights = getVerseWeights(surah.id, lo, hi);
     const timings = autoSegment(buffer, verseNumbers, weights);
+    // Revoke the previous import's blob URL before minting a new one — it's about
+    // to be replaced wholesale by beginNewProject, so nothing references it. Saved
+    // projects persist the blob to IndexedDB (not the URL), so they're unaffected.
+    const prevSource = store.audioSource;
+    if (prevSource.mode === "imported" && prevSource.url.startsWith("blob:")) {
+      URL.revokeObjectURL(prevSource.url);
+    }
     const url = URL.createObjectURL(sourceAudio);
 
     store.beginNewProject();
@@ -256,7 +263,7 @@ export default function ImportPage() {
                 disabled={detecting || !buffer}
                 className="btn-gold rounded-full px-4 py-2 text-xs disabled:opacity-50"
               >
-                {detecting ? "Detecting…" : "✨ Auto-detect verses"}
+                {detecting ? "Detecting…" : "Auto-detect verses"}
               </button>
             </div>
             {detectMsg && <p className="mt-2 text-xs text-[var(--muted)]">{detectMsg}</p>}

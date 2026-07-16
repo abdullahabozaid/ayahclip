@@ -626,7 +626,11 @@ export default function StudioPage() {
             </div>
           </div>
 
-          {timelineOpen && (
+          {/* Unmount the dock editor while the fullscreen editor is open: two
+              live TimelineEditors would keep divergent undo histories and decode
+              the audio buffer two extra times. The dock is behind the overlay
+              anyway; it remounts (fresh from the store) on close. */}
+          {timelineOpen && !timelineFullscreen && (
             <div className="mt-3 max-h-[42vh] overflow-y-auto pr-0.5">
               {store.audioSource.mode === "imported" ? (
                 editorView === "words" ? <VerseCardEditor /> : <TimelineEditor />
