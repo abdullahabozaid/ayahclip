@@ -187,7 +187,11 @@ export default function ImportPage() {
         )
         : null;
       const m = recovery?.match ?? null;
-      const effectiveConfidence = recovery?.recovered ? "medium" : assessment.confidence;
+      // Recovery is an inference, so a high match is downgraded to medium. It
+      // must never promote an already ambiguous low-confidence transcript.
+      const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
+        ? "medium"
+        : assessment.confidence;
       const buildRecognitionResult = (
         match: VerseMatch,
       ): Omit<RecognitionResult, "confidence"> => {

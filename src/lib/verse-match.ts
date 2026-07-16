@@ -337,7 +337,10 @@ function mapAlignmentToVerses(candidate: AlignedSurahCandidate): VerseMatch {
       0,
       Math.min(firstRange.end, end) - Math.max(contentStart, start)
     );
-    if (contentLength > 0 && (contentLength <= 5 || contentOverlap >= contentLength * 0.4)) {
+    // A short opening verse (for example Al-Baqarah's muqatta'at) is not, by
+    // itself, evidence that it was recited. Include it only when the aligned
+    // transcript actually overlaps its non-basmala content.
+    if (contentLength > 0 && contentOverlap >= contentLength * 0.4) {
       included = [firstRange, ...included];
     }
   }
@@ -378,13 +381,44 @@ export function assessVerseMatch(transcript: string): VerseMatchAssessment {
 
   const mapped = aligned.map(mapAlignmentToVerses);
   const match = mapped[0];
+  // Some ayahs are repeated verbatim within one surah (most visibly the
+  // refrain in Ar-Rahman). The per-surah aligner can return only one location,
+  // so add the other identical verses explicitly. Audio alone cannot decide
+  // which occurrence the creator used, and claiming the first one as high
+  // confidence would silently apply incorrect metadata.
+  const duplicateVerseMatches = match.ayahStart === match.ayahEnd
+    ? (() => {
+      const matchedText = bySurah!.get(match.surah)
+        ?.find((verse) => verse.ayah === match.ayahStart)?.clean;
+      if (!matchedText) return [];
+      return (bySurah!.get(match.surah) ?? [])
+        .filter((verse) => verse.ayah !== match.ayahStart && verse.clean === matchedText)
+        .map((verse) => ({
+          surah: match.surah,
+          ayahStart: verse.ayah,
+          ayahEnd: verse.ayah,
+          score: match.score,
+        }));
+    })()
+    : [];
   // Preserve a deeper private candidate set for evaluation and future recovery.
   // The import UI still deliberately shows only three choices at once.
-  const alternatives = mapped.slice(1, 10);
+  const alternatives = [...duplicateVerseMatches, ...mapped.slice(1)]
+    .filter((candidate, index, candidates) => candidates.findIndex((item) =>
+      item.surah === candidate.surah &&
+      item.ayahStart === candidate.ayahStart &&
+      item.ayahEnd === candidate.ayahEnd
+    ) === index)
+    .slice(0, 9);
   const margin = match.score - (alternatives[0]?.score ?? 0);
+  // Medium confidence is an auto-apply boundary in the editor, so it must be
+  // conservative. A 0.72 score admitted a real Hudhaify ASR error
+  // ("مالك يوم الدينين") as the wrong short verse with medium confidence.
+  // The 0.84 floor keeps verified longer/repeated passages useful while
+  // deferring noisy short clips for creator confirmation.
   const confidence = match.score >= 0.9 && margin >= 0.12
     ? "high"
-    : match.score >= 0.72 && margin >= 0.06
+    : match.score >= 0.84 && margin >= 0.08
       ? "medium"
       : "low";
   return { match, alternatives, margin, confidence };

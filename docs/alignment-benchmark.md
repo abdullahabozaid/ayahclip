@@ -116,6 +116,20 @@ npm run benchmark:recognition-corpus -- scripts/fixtures/recognition-smoke.jsonl
 The recognition evaluator is also the onboarding path for private, licensed
 unseen-handset audio. Its JSONL rows accept `audio`, `surah`, `ayahStart`, and
 `ayahEnd`; audio paths resolve relative to the manifest and remain outside git.
+Directories may use either `surah_ayah_...` filenames or EveryAyah's compact
+six-digit `SSSAAA.mp3` convention.
+
+The isolated-ayah release matrix now runs 73 files across eight voices plus
+opening-letter, long-ayah, mid-surah, and repeated-refrain edge passages. Its
+release boundary is deliberately safety-first: **zero false auto-applies**, at
+least 40 useful auto-applies, and at least 0.84 candidate recall. Repeated text
+such as Ar-Rahman's refrain is offered for creator selection rather than assigned
+to the first identical occurrence. Run it with:
+
+```sh
+npm run benchmark:fixtures
+npm run test:recognition
+```
 
 ## Remaining gates
 

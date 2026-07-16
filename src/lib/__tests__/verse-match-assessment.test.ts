@@ -54,6 +54,14 @@ describe("assessVerseMatch", () => {
     expect(assessment.margin).toBeGreaterThan(0.12);
   });
 
+  it("does not pull a short opening verse into a standalone second ayah", () => {
+    const text = getVersesText(2, 2, 2).text;
+    const assessment = assessVerseMatch(text);
+
+    expect(assessment.match).toMatchObject({ surah: 2, ayahStart: 2, ayahEnd: 2 });
+    expect(assessment.confidence).toBe("high");
+  });
+
   it("flags the widely repeated basmala as ambiguous", () => {
     const assessment = assessVerseMatch("بسم الله الرحمن الرحيم");
 
@@ -73,6 +81,22 @@ describe("assessVerseMatch", () => {
     ).length).toBeGreaterThan(3);
   });
 
+  it("flags a repeated verse within the same surah as ambiguous", () => {
+    const assessment = assessVerseMatch(getVersesText(55, 16, 16).text);
+    const candidates = selectRecognitionCandidates(
+      assessment.match!,
+      assessment.alternatives,
+      10,
+    );
+
+    expect(assessment.confidence).toBe("low");
+    expect(assessment.margin).toBe(0);
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ surah: 55, ayahStart: 13, ayahEnd: 13 }),
+      expect.objectContaining({ surah: 55, ayahStart: 16, ayahEnd: 16 }),
+    ]));
+  });
+
   it("returns no match for unusable input", () => {
     expect(assessVerseMatch("اب").match).toBeNull();
   });
@@ -84,5 +108,13 @@ describe("assessVerseMatch", () => {
     "الله أكبر الله أكبر لا إله إلا الله",
   ])("does not confidently auto-apply non-recitation Arabic: %s", (text) => {
     expect(assessVerseMatch(text).confidence).toBe("low");
+  });
+
+  it("defers a noisy short-verse transcript that previously auto-applied the wrong surah", () => {
+    const assessment = assessVerseMatch("مالك يوم الدينين");
+
+    expect(assessment.match).toMatchObject({ surah: 15, ayahStart: 35, ayahEnd: 35 });
+    expect(assessment.match?.score).toBeLessThan(0.84);
+    expect(assessment.confidence).toBe("low");
   });
 });

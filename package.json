@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test:detection": "tsx scripts/test-detection.ts",
     "test:alignment": "node scripts/test-alignment-matrix.mjs",
+    "test:recognition": "node scripts/test-recognition-matrix.mjs",
     "benchmark:recognition-corpus": "tsx scripts/evaluate-recognition-corpus.ts",
     "benchmark:fixtures": "node scripts/fetch-alignment-fixtures.mjs"
   },

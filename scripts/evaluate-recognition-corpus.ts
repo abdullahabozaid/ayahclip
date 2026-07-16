@@ -1,6 +1,7 @@
 // Manifest-driven recognition evaluator for unseen or real-handset Quran audio.
 // Audio stays outside git. Pass either a JSONL manifest or a directory whose
-// filenames begin `surah_ayah_...`, as in the Quran-Lab tlog hold-out set.
+// filenames begin `surah_ayah_...`, as in the Quran-Lab tlog hold-out set, or
+// use EveryAyah's six-digit `SSSAAA.mp3` convention.
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
@@ -83,7 +84,8 @@ function loadCases(inputPath: string): CorpusCase[] {
       .filter((name) => AUDIO_EXTENSIONS.has(extname(name).toLowerCase()))
       .sort()
       .map((name, index) => {
-        const match = /^(\d{1,3})_(\d{1,3})(?:_|\.)/.exec(name);
+        const match = /^(\d{1,3})_(\d{1,3})(?:_|\.)/.exec(name) ??
+          /^(\d{3})(\d{3})(?:_|\.)/.exec(name);
         if (!match) {
           throw new Error(`Cannot infer surah and ayah from ${name}; use a JSONL manifest`);
         }
@@ -172,7 +174,9 @@ async function main() {
       )
       : null;
     const predicted = recovery?.match ?? assessment.match;
-    const effectiveConfidence = recovery?.recovered ? "medium" : assessment.confidence;
+    const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
+      ? "medium"
+      : assessment.confidence;
     const candidates = predicted
       ? selectRecognitionCandidates(predicted, assessment.alternatives, 3)
       : [];
