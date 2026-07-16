@@ -67,6 +67,7 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Below `lg`, settings is an overlay drawer (88% width); at `lg+` it's an inline 360px sidebar.
 - Verse timeline dock uses the same `panel` background but lives at the bottom, with `border-t hairline-soft`.
 - Recent additions: emerald split markers + emerald segment-preview labels under each region of the active verse card.
+- Split compositions make Solid versus Fade explicit. Media can be dragged directly or positioned with zoom plus horizontal/vertical offsets; Center image preserves the chosen zoom.
 
 ## Recognition and alignment
 
@@ -74,5 +75,6 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Never hide model download or local processing behind a generic “AI analysing” message. Show determinate download progress when bytes are available, an honest current action, cancellation, and the on-device privacy guarantee.
 - Quran range and timing confidence are separate claims. Show the detected range prominently, identify the alignment method, and enumerate only the ayah transitions that need review.
 - A creator must explicitly confirm the Quran range before continuing. Manual surah/from/to controls remain editable whether recognition succeeds, is ambiguous, is cancelled, or fails.
+- When text matching is ambiguous, show up to three distinct likely Quran ranges and preserve prepared cuts for the range the creator selects. Never collapse known alternatives into a generic error.
 - Alignment is transactional: existing timing edits remain unchanged until a complete result is ready. Cancellation and failure preserve the current timeline.
 - Use creator language such as “Align by recitation” and “Rebuild from pauses”; avoid unexplained implementation terms such as “Deep align”.

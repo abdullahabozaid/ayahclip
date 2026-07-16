@@ -6,6 +6,7 @@ import {
   assessVerseMatch,
   getVersesText,
   loadCorpus,
+  selectRecognitionCandidates,
   recoverLeadingVerse,
 } from "@/lib/verse-match";
 
@@ -59,6 +60,11 @@ describe("assessVerseMatch", () => {
     expect(assessment.confidence).toBe("low");
     expect(assessment.margin).toBeLessThan(0.06);
     expect(assessment.alternatives.length).toBeGreaterThan(0);
+    const candidates = selectRecognitionCandidates(assessment.match!, assessment.alternatives);
+    expect(candidates.length).toBeGreaterThan(1);
+    expect(new Set(candidates.map((candidate) =>
+      `${candidate.surah}:${candidate.ayahStart}-${candidate.ayahEnd}`
+    )).size).toBe(candidates.length);
   });
 
   it("returns no match for unusable input", () => {

@@ -17,7 +17,9 @@ import {
   assessVerseMatch,
   getVerseWeights,
   loadCorpus,
+  selectRecognitionCandidates,
   recoverLeadingVerse,
+  type VerseMatch,
 } from "@/lib/verse-match";
 import { forceAlignVersesDetailed } from "@/lib/forced-align";
 import { attachAlignmentDiagnostics } from "@/lib/deep-align";
@@ -56,6 +58,22 @@ interface RecognitionProgress {
   totalBytes?: number;
 }
 
+interface RecognitionResult {
+  transcript: string;
+  ref: string;
+  surah: number;
+  ayahStart: number;
+  ayahEnd: number;
+  timings: VerseTiming[];
+  method: "transcript" | "ctc" | "hybrid" | "pause";
+  confidence: "high" | "medium" | "selected";
+  review: AlignmentReview;
+}
+
+interface RecognitionCandidate extends Omit<RecognitionResult, "confidence"> {
+  key: string;
+}
+
 export default function ImportPage() {
   const router = useRouter();
   const store = useAppStore();
@@ -90,17 +108,8 @@ export default function ImportPage() {
   const [detecting, setDetecting] = useState(false);
   const [detectProgress, setDetectProgress] = useState<RecognitionProgress | null>(null);
   const [rangeConfirmed, setRangeConfirmed] = useState(false);
-  const [detected, setDetected] = useState<{
-    transcript: string;
-    ref: string;
-    surah: number;
-    ayahStart: number;
-    ayahEnd: number;
-    timings: VerseTiming[];
-    method: "transcript" | "ctc" | "hybrid" | "pause";
-    confidence: "high" | "medium";
-    review: AlignmentReview;
-  } | null>(null);
+  const [detected, setDetected] = useState<RecognitionResult | null>(null);
+  const [recognitionCandidates, setRecognitionCandidates] = useState<RecognitionCandidate[]>([]);
 
   const autoDetect = async () => {
     if (!buffer) return;
@@ -113,9 +122,7 @@ export default function ImportPage() {
     const controller = new AbortController();
     detectAbortRef.current = controller;
     setDetecting(true);
-    setDetected(null);
     setDetectError(null);
-    setRangeConfirmed(false);
     try {
       setDetectProgress({ stage: "prepare", detail: "Loading the Quran verse index" });
       await loadCorpus();
@@ -181,19 +188,17 @@ export default function ImportPage() {
         : null;
       const m = recovery?.match ?? null;
       const effectiveConfidence = recovery?.recovered ? "medium" : assessment.confidence;
-      if (m && effectiveConfidence !== "low") {
-        const s = surahs.find((x) => x.id === m.surah);
-        setSurahId(m.surah);
-        setFrom(String(m.ayahStart));
-        setTo(String(m.ayahEnd));
+      const buildRecognitionResult = (
+        match: VerseMatch,
+      ): Omit<RecognitionResult, "confidence"> => {
+        const matchedSurah = surahs.find((item) => item.id === match.surah);
         const verseNumbers = Array.from(
-          { length: m.ayahEnd - m.ayahStart + 1 },
-          (_, index) => m.ayahStart + index
+          { length: match.ayahEnd - match.ayahStart + 1 },
+          (_, index) => match.ayahStart + index,
         );
-        setDetectProgress({ stage: "align", detail: "Aligning each ayah boundary" });
         const alignment = forceAlignVersesDetailed({
           emissions,
-          surah: m.surah,
+          surah: match.surah,
           verseNumbers,
           audioDuration: buffer.duration,
           audioStart: speechSpan.start,
@@ -202,7 +207,7 @@ export default function ImportPage() {
         const rawTimings = alignment?.timings ?? autoSegment(
           buffer,
           verseNumbers,
-          getVerseWeights(m.surah, m.ayahStart, m.ayahEnd)
+          getVerseWeights(match.surah, match.ayahStart, match.ayahEnd),
         );
         const method = alignment?.method ?? "pause";
         const boundaryDiagnostics = alignment?.boundaryDiagnostics ?? verseNumbers.map(
@@ -210,33 +215,52 @@ export default function ImportPage() {
             verseNumber,
             agreementSeconds: null,
             confidence: "low" as const,
-          })
+          }),
         );
-        const timings = attachAlignmentDiagnostics(
-          rawTimings,
-          method,
-          boundaryDiagnostics,
-        );
-        setDetected({
+        return {
           transcript,
-          ref: `${s?.name_simple ?? `Surah ${m.surah}`} · ${m.ayahStart}${m.ayahEnd !== m.ayahStart ? `–${m.ayahEnd}` : ""}`,
-          surah: m.surah,
-          ayahStart: m.ayahStart,
-          ayahEnd: m.ayahEnd,
-          timings,
+          ref: `${matchedSurah?.name_simple ?? `Surah ${match.surah}`} · ${match.ayahStart}${match.ayahEnd !== match.ayahStart ? `–${match.ayahEnd}` : ""}`,
+          surah: match.surah,
+          ayahStart: match.ayahStart,
+          ayahEnd: match.ayahEnd,
+          timings: attachAlignmentDiagnostics(rawTimings, method, boundaryDiagnostics),
           method,
-          confidence: effectiveConfidence,
           review: buildAlignmentReview(method, boundaryDiagnostics),
+        };
+      };
+      if (m && effectiveConfidence !== "low") {
+        setDetectProgress({ stage: "align", detail: "Aligning each ayah boundary" });
+        const result = buildRecognitionResult(m);
+        setSurahId(m.surah);
+        setFrom(String(m.ayahStart));
+        setTo(String(m.ayahEnd));
+        setRecognitionCandidates([]);
+        setRangeConfirmed(false);
+        setDetected({
+          ...result,
+          confidence: effectiveConfidence,
         });
       } else if (m) {
+        const uniqueMatches = selectRecognitionCandidates(m, assessment.alternatives);
+        setDetectProgress({ stage: "align", detail: "Preparing likely Quran ranges" });
+        setRecognitionCandidates(uniqueMatches.map((match) => ({
+          ...buildRecognitionResult(match),
+          key: `${match.surah}:${match.ayahStart}-${match.ayahEnd}`,
+        })));
+        setDetected(null);
+        setRangeConfirmed(false);
         setDetectError(
-          "This recitation matches several similar Quran passages. Confirm the surah and verses manually below."
+          "This recitation matches several similar Quran passages. Choose the range that sounds right, or enter it manually."
         );
       } else {
-        setDetectError("Couldn't confidently match this clip. Pick the verses manually below.");
+        setDetectError(detected
+          ? "Couldn't confidently match this run. Your previous Quran range is still available below."
+          : "Couldn't confidently match this clip. Pick the verses manually below.");
       }
     } catch (error) {
-      setDetectError(`${alignmentFailureMessage(error)} You can still pick the verses manually below.`);
+      setDetectError(`${alignmentFailureMessage(error)} ${detected
+        ? "Your previous Quran range is still available below."
+        : "You can still pick the verses manually below."}`);
     } finally {
       if (detectAbortRef.current === controller) {
         detectAbortRef.current = null;
@@ -244,6 +268,23 @@ export default function ImportPage() {
         setDetectProgress(null);
       }
     }
+  };
+
+  const chooseRecognitionCandidate = (candidate: RecognitionCandidate) => {
+    setSurahId(candidate.surah);
+    setFrom(String(candidate.ayahStart));
+    setTo(String(candidate.ayahEnd));
+    setDetected({ ...candidate, confidence: "selected" });
+    setRecognitionCandidates([]);
+    setDetectError(null);
+    setRangeConfirmed(false);
+  };
+
+  const clearRecognitionChoice = () => {
+    setDetected(null);
+    setRecognitionCandidates([]);
+    setDetectError(null);
+    setRangeConfirmed(false);
   };
 
   const cancelDetection = () => {
@@ -274,6 +315,7 @@ export default function ImportPage() {
     setError(null);
     setDetectError(null);
     setDetected(null);
+    setRecognitionCandidates([]);
     setRangeConfirmed(false);
     if (videoUrl) URL.revokeObjectURL(videoUrl);
     const isVideo = f.type.startsWith("video/");
@@ -506,7 +548,7 @@ export default function ImportPage() {
                   disabled={detecting || !buffer || !!recognitionBlock}
                   className="btn-gold min-h-11 rounded-full px-4 text-xs disabled:opacity-50"
                 >
-                  {detecting ? "Analysing…" : detected ? "Run again" : "Recognise verses"}
+                  {detecting ? "Analysing…" : detected || recognitionCandidates.length ? "Run again" : "Recognise verses"}
                 </button>
                 {detecting && (
                   <button
@@ -529,6 +571,35 @@ export default function ImportPage() {
               </div>
             )}
 
+            {recognitionCandidates.length > 0 && (
+              <div className="border-t border-[var(--hairline-soft)] px-4 py-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100/70">
+                  Possible Quran ranges
+                </p>
+                <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                  Tap a range to keep its prepared ayah cuts. You will still confirm it before opening Studio.
+                </p>
+                <div role="group" aria-label="Possible Quran ranges" className="mt-3 grid gap-2">
+                  {recognitionCandidates.map((candidate, index) => (
+                    <button
+                      key={candidate.key}
+                      type="button"
+                      onClick={() => chooseRecognitionCandidate(candidate)}
+                      className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--hairline-soft)] bg-[var(--surface)] px-3 py-2.5 text-left transition-colors hover:border-gold/45 focus-visible:border-gold"
+                    >
+                      <span>
+                        <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
+                          {index === 0 ? "Closest match" : `Alternative ${index + 1}`}
+                        </span>
+                        <span className="mt-0.5 block text-sm text-parchment">{candidate.ref}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-gold-soft">Choose</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {detected && (
               <div className="border-t border-[var(--hairline-soft)] bg-[rgba(201,162,75,0.035)] px-4 py-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
@@ -537,7 +608,7 @@ export default function ImportPage() {
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <p className="font-display text-xl text-parchment">{detected.ref}</p>
                   <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                    {detected.confidence} match
+                    {detected.confidence === "selected" ? "creator selected" : `${detected.confidence} match`}
                   </span>
                   <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
                     {detected.review.methodLabel}
@@ -586,7 +657,7 @@ export default function ImportPage() {
                   setSurahId(Number(e.target.value));
                   setFrom("1");
                   setTo("1");
-                  setRangeConfirmed(false);
+                  clearRecognitionChoice();
                 }}
                 className="field w-full px-3 py-2.5 text-sm"
               >
@@ -606,7 +677,7 @@ export default function ImportPage() {
                 value={from}
                 onChange={(e) => {
                   setFrom(e.target.value);
-                  setRangeConfirmed(false);
+                  clearRecognitionChoice();
                 }}
                 className="field w-20 px-2 py-2.5 text-center text-sm"
               />
@@ -620,7 +691,7 @@ export default function ImportPage() {
                 value={to}
                 onChange={(e) => {
                   setTo(e.target.value);
-                  setRangeConfirmed(false);
+                  clearRecognitionChoice();
                 }}
                 className="field w-20 px-2 py-2.5 text-center text-sm"
               />

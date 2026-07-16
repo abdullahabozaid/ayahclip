@@ -116,3 +116,9 @@ npm run test:alignment
   unseen-reciter and mixed-audio sets; low-agreement cuts are already saved and
   surfaced as amber review markers in the timeline.
 - Keep manual correction first-class; model output is never Quran text authority.
+- The import flow now exposes distinct top matches for repeated or ambiguous text,
+  prepares editable cuts for each option, and lets the creator choose before the
+  required Quran-range confirmation. A cancelled or failed retry keeps the last
+  usable result instead of clearing it.
+- See [recognition-model-review.md](recognition-model-review.md) for the acoustic
+  model replacement gate and current evidence.

@@ -261,6 +261,21 @@ export interface LeadingVerseRecovery {
   leadingUnrecognizedSeconds: number;
 }
 
+/** Keep the matcher order while removing duplicate ranges before creator review. */
+export function selectRecognitionCandidates(
+  primary: VerseMatch,
+  alternatives: readonly VerseMatch[],
+  limit = 3,
+): VerseMatch[] {
+  return [primary, ...alternatives]
+    .filter((match, index, matches) => matches.findIndex((item) =>
+      item.surah === match.surah &&
+      item.ayahStart === match.ayahStart &&
+      item.ayahEnd === match.ayahEnd
+    ) === index)
+    .slice(0, Math.max(1, limit));
+}
+
 /**
  * Recover one likely omitted opening verse when the audio contains sustained
  * speech well before the first CTC character. This catches reciters whose

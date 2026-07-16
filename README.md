@@ -24,14 +24,14 @@ See [`.env.example`](.env.example). Both are optional for basic use:
 | `NEXT_PUBLIC_SITE_URL` | Canonical production origin for Open Graph, Twitter, and canonical metadata. Defaults to `https://ayahclip.vercel.app`. |
 
 The app runs without either: backgrounds fall back to presets/gradients, and
-the verse auto-detection ("Deep align") is only needed for imported audio.
+local verse recognition is only needed for imported audio.
 
 ## The Arabic ASR model (~131 MB)
 
-Imported-audio verse detection ("Deep align") uses a FastConformer Arabic CTC
+Imported-audio **Recognise verses** and **Align by recitation** use a FastConformer Arabic CTC
 model (ONNX, adapted from [yazinsai/offline-tarteel](https://github.com/yazinsai/offline-tarteel),
 licensed CC-BY-4.0). The `.onnx` file is **gitignored** — it is not in the repo.
-The rest of the app works without it; only "Deep align" needs it.
+The rest of the app works without it; pause-based editable cuts remain available.
 
 **Quickest way to get it (this repo's GitHub Release):**
 

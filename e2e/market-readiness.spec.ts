@@ -203,6 +203,10 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await expect(page.getByLabel("Solid width")).toHaveValue("48");
   await expect(page.getByLabel("Fade width")).toHaveValue("24");
   await expect(page.getByLabel("Panel opacity")).toHaveValue("92");
+  await page.getByRole("button", { name: "Solid", exact: true }).click();
+  await expect(page.getByLabel("Fade width")).toHaveValue("0");
+  await page.getByRole("button", { name: "Fade", exact: true }).click();
+  await expect(page.getByLabel("Fade width")).not.toHaveValue("0");
 
   await page.getByRole("button", { name: "media", exact: true }).click();
   const directMediaPosition = page.getByRole("slider", { name: "Media position" });
@@ -211,11 +215,15 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   const mediaInspector = page.getByTestId("inspector-media");
   await mediaInspector.locator("summary").click();
   await mediaInspector.getByLabel("Zoom").fill("1.75");
-  await mediaInspector.getByLabel("Horizontal position").fill("35");
-  await mediaInspector.getByLabel("Vertical position").fill("-20");
+  await mediaInspector.getByLabel("Horizontal offset").fill("35");
+  await mediaInspector.getByLabel("Vertical offset").fill("-20");
   await expect(mediaInspector.getByLabel("Zoom")).toHaveValue("1.75");
-  await expect(mediaInspector.getByLabel("Horizontal position")).toHaveValue("35");
-  await expect(mediaInspector.getByLabel("Vertical position")).toHaveValue("-20");
+  await expect(mediaInspector.getByLabel("Horizontal offset")).toHaveValue("35");
+  await expect(mediaInspector.getByLabel("Vertical offset")).toHaveValue("-20");
+  await mediaInspector.getByRole("button", { name: "Center image" }).click();
+  await expect(mediaInspector.getByLabel("Horizontal offset")).toHaveValue("0");
+  await expect(mediaInspector.getByLabel("Vertical offset")).toHaveValue("0");
+  await expect(mediaInspector.getByLabel("Zoom")).toHaveValue("1.75");
 
   const backgroundInspector = page.getByTestId("inspector-background");
   await backgroundInspector.locator("summary").click();

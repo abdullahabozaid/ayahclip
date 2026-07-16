@@ -656,6 +656,17 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                       options={[{ value: "left", label: "Text left" }, { value: "right", label: "Text right" }]}
                       onChange={(side) => setStyle("splitMask", { ...mask, side: side as "left" | "right" })}
                     />
+                    <div className="space-y-2">
+                      <p className="text-xs text-[var(--muted)]">Panel edge</p>
+                      <Segmented
+                        value={mask.fadeWidth === 0 ? "solid" : "fade"}
+                        options={[{ value: "solid", label: "Solid" }, { value: "fade", label: "Fade" }]}
+                        onChange={(edge) => setStyle("splitMask", normalizeSplitMask({
+                          ...mask,
+                          fadeWidth: edge === "solid" ? 0 : Math.max(24, mask.fadeWidth),
+                        }))}
+                      />
+                    </div>
                     <RangeField label="Solid width" value={mask.solidWidth} min={0} max={75} suffix="%" onChange={(solidWidth) => setStyle("splitMask", normalizeSplitMask({ ...mask, solidWidth }))} />
                     <RangeField label="Fade width" value={mask.fadeWidth} min={0} max={75} suffix="%" onChange={(fadeWidth) => setStyle("splitMask", normalizeSplitMask({ ...mask, fadeWidth }))} />
                     <ColorField label="Panel color" value={mask.color} onChange={(color) => setStyle("splitMask", { ...mask, color })} />
@@ -841,13 +852,13 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-medium text-parchment">Media position</p>
-                        <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Select Media above the canvas to drag directly.</p>
+                        <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Select Media above the canvas to drag, or use exact offsets below.</p>
                       </div>
-                      <button type="button" onClick={() => setStyle("mediaTransform", { ...DEFAULT_MEDIA_TRANSFORM })} className="min-h-9 rounded-lg border border-[var(--hairline-soft)] px-2.5 text-[10px] text-[var(--muted)] hover:text-parchment">Reset</button>
+                      <button type="button" aria-label="Center image" onClick={() => setStyle("mediaTransform", { ...transform, x: 0, y: 0 })} className="min-h-9 rounded-lg border border-[var(--hairline-soft)] px-2.5 text-[10px] text-[var(--muted)] hover:text-parchment">Center</button>
                     </div>
                     <RangeField label="Zoom" value={transform.scale} min={1} max={3} step={0.05} suffix="×" onChange={(scale) => setStyle("mediaTransform", { ...transform, scale })} />
-                    <RangeField label="Horizontal position" value={Math.round(transform.x * 100)} min={-100} max={100} suffix="%" onChange={(x) => setStyle("mediaTransform", { ...transform, x: x / 100 })} />
-                    <RangeField label="Vertical position" value={Math.round(transform.y * 100)} min={-100} max={100} suffix="%" onChange={(y) => setStyle("mediaTransform", { ...transform, y: y / 100 })} />
+                    <RangeField label="Horizontal offset" value={Math.round(transform.x * 100)} min={-100} max={100} suffix="%" onChange={(x) => setStyle("mediaTransform", { ...transform, x: x / 100 })} />
+                    <RangeField label="Vertical offset" value={Math.round(transform.y * 100)} min={-100} max={100} suffix="%" onChange={(y) => setStyle("mediaTransform", { ...transform, y: y / 100 })} />
                   </div>
                 );
               })()}

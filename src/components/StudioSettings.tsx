@@ -195,6 +195,7 @@ function Slider({
       </div>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
@@ -537,6 +538,36 @@ export function StudioSettings() {
                   onChange={(side) => store.setSplitMask({ ...store.splitMask, side: side as "left" | "right" })}
                   options={[{ value: "left", label: "Left" }, { value: "right", label: "Right" }]}
                 />
+                <div>
+                  <p className="mb-2 text-xs text-[var(--muted)]">Panel edge</p>
+                  <div className="grid grid-cols-2 gap-1 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1">
+                    {([
+                      { id: "solid", label: "Solid" },
+                      { id: "fade", label: "Fade" },
+                    ] as const).map((option) => {
+                      const active = option.id === "solid"
+                        ? store.splitMask.fadeWidth === 0
+                        : store.splitMask.fadeWidth > 0;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => store.setSplitMask(normalizeSplitMask({
+                            ...store.splitMask,
+                            fadeWidth: option.id === "solid" ? 0 : Math.max(24, store.splitMask.fadeWidth),
+                          }))}
+                          className={`min-h-10 rounded-lg px-2 text-xs transition-colors ${active
+                            ? "bg-white/[0.09] text-parchment"
+                            : "text-[var(--muted)] hover:text-parchment"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <Slider
                   label="Solid panel"
                   value={store.splitMask.solidWidth}
@@ -1004,16 +1035,16 @@ export function StudioSettings() {
 
           {(store.background.type === "image" || store.background.type === "video") && store.backgroundFit === "cover" && (
             <div className="mb-4 space-y-3 border-t border-[var(--hairline-soft)] pt-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs text-parchment">Frame the media</p>
-                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">Zoom and choose which part stays visible.</p>
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">Drag the preview or move the image precisely.</p>
                 </div>
                 <button
-                  onClick={() => store.setMediaTransform({ scale: 1, x: 0, y: 0 })}
-                  className="rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 text-[11px] text-[var(--muted)] hover:text-parchment"
+                  onClick={() => store.setMediaTransform({ ...store.mediaTransform, x: 0, y: 0 })}
+                  className="min-h-10 shrink-0 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] hover:text-parchment"
                 >
-                  Reset
+                  Center image
                 </button>
               </div>
               <Slider
@@ -1026,7 +1057,7 @@ export function StudioSettings() {
                 onChange={(scale) => store.setMediaTransform({ ...store.mediaTransform, scale })}
               />
               <Slider
-                label="Horizontal focus"
+                label="Horizontal offset"
                 value={store.mediaTransform.x * 100}
                 min={-100}
                 max={100}
@@ -1035,7 +1066,7 @@ export function StudioSettings() {
                 onChange={(x) => store.setMediaTransform({ ...store.mediaTransform, x: x / 100 })}
               />
               <Slider
-                label="Vertical focus"
+                label="Vertical offset"
                 value={store.mediaTransform.y * 100}
                 min={-100}
                 max={100}

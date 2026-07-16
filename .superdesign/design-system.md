@@ -60,8 +60,8 @@ Editor mode contains:
 ## Precision composition controls
 
 - The canvas is directly manipulable, but every direct gesture has an exact inspector value and reset action.
-- Split compositions expose separate controls for **Text region** and **Media region**. Media has fit, zoom, horizontal focal point, and vertical focal point. The creator must be able to place a face or subject at the center, edge, or any custom focal point without guessing.
-- The split mask is not a fixed preset. Expose the solid-panel width, fade width, fade direction, panel color, and panel opacity. Defaults may be tasteful, but the creator owns the composition.
+- Split compositions expose separate controls for **Text region** and **Media region**. Media has fit, zoom, direct drag, horizontal offset, vertical offset, and a center action that preserves zoom. The creator must be able to place a face or subject at the center, edge, or any custom position without guessing.
+- The split mask is not a fixed preset. Expose an explicit Solid/Fade edge mode plus solid-panel width, fade width, direction, panel color, and panel opacity. Defaults may be tasteful, but the creator owns the composition.
 - Background color is a first-class mode, not a few swatches. Let the creator choose Solid or Gradient, edit colors, control gradient angle, move color stops, reverse them, and reset to the template default.
 - Advanced controls use compact rows with a visible numeric value. Do not hide essential placement behind unlabeled swatches.
 - Canvas gestures must distinguish text movement from media focal-point movement with an explicit canvas-tool selector. Never make the whole canvas ambiguously drag two different things.
