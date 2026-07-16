@@ -14,6 +14,7 @@ import { BackgroundThumb } from "./BackgroundThumb";
 import { sequenceDuration } from "@/lib/background-sequence";
 import type { Background } from "@/types";
 import { DEFAULT_SPLIT_MASK, normalizeSplitMask } from "@/lib/canvas-utils";
+import { formatClipDuration, importedClipDurationSeconds } from "@/lib/clip-duration";
 
 /** Capture the current preview frame as the clip's dashboard cover thumbnail. */
 function SetCoverButton() {
@@ -234,11 +235,12 @@ function Field({
 export function StudioSettings() {
   const store = useAppStore();
   const selectedCount = store.selectedVerseNumbers.length;
-  const estimatedDuration = selectedCount * 5;
-  const durationLabel =
-    estimatedDuration < 60
-      ? `~${estimatedDuration}s`
-      : `~${Math.floor(estimatedDuration / 60)}m ${estimatedDuration % 60}s`;
+  const importedDuration = store.audioSource.mode === "imported"
+    ? importedClipDurationSeconds(store.audioSource.timings, store.verses)
+    : null;
+  const durationLabel = importedDuration == null
+    ? formatClipDuration(selectedCount * 5, true)
+    : formatClipDuration(importedDuration);
 
   const handleBackgroundSelection = (background: Background) => {
     const pendingSlot = store.pendingTemplateMedia?.slots[0];

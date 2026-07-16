@@ -75,6 +75,9 @@ test("a real local audio file survives import, template choice, save, and reopen
 
   await expect(page).toHaveURL(/\/studio/);
   await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
+  // The 100 ms silence at each edge is trimmed by autoSegment, so Studio must
+  // report the one-second exported speech span rather than a per-verse guess.
+  await expect(page.getByText("1s", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Show" }).click();
   await page.getByRole("button", { name: "Timeline" }).click();
   await expect(page.getByText("Loop verse", { exact: true })).toBeVisible();
