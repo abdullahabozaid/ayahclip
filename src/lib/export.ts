@@ -129,18 +129,23 @@ function reciterTextAt(
 }
 
 // Pick the slice of a verse's text + translation to show at `sourceTime` based
-// on its intra-verse splits. No splits → the full verse text passes through.
+// on its intra-verse splits and word trim. No splits and no wordRange → the
+// full verse text passes through.
+//
+// verseTextAt honours BOTH splits and wordRange, so it must be called whenever
+// either is set. Short-circuiting on `splits` alone made a word-trimmed verse
+// export its full text while the preview showed the trim.
 function segmentFor(
   verse: Verse,
   tm: VerseTiming | undefined,
   sourceTime: number
 ): { ar: string; tr: string | null | undefined; isLast: boolean } {
-  if (!tm?.splits?.length) {
+  if (!tm || (!tm.splits?.length && !tm.wordRange)) {
     return { ar: verse.text_uthmani, tr: verse.translation, isLast: true };
   }
   let segIdx = 0;
-  for (const sp of tm.splits) { if (sourceTime >= sp) segIdx++; else break; }
-  const isLast = segIdx === tm.splits.length;
+  for (const sp of tm.splits ?? []) { if (sourceTime >= sp) segIdx++; else break; }
+  const isLast = segIdx === (tm.splits?.length ?? 0);
   return {
     ar: verseTextAt(tm, verse.text_uthmani, sourceTime),
     tr:
@@ -150,6 +155,9 @@ function segmentFor(
     isLast,
   };
 }
+
+/** Test-only export. Not part of the public API. */
+export const __test__segmentFor = segmentFor;
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
