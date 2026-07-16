@@ -537,6 +537,11 @@ export const useAppStore = create<AppState>((set) => ({
     audioSource: { mode: "reciter" },
     verseParts: {},
     activePartIndex: 0,
+    // Per-clip decorations must not bleed into a fresh clip of the same surah:
+    // emphasis is keyed by verse_key, so a stale entry would re-decorate the
+    // same verse. activeWordIndex is transient playback state.
+    emphasis: {},
+    activeWordIndex: null,
     mediaTransform: { scale: 1, x: 0, y: 0 },
     backgroundSequenceEnabled: false,
     backgroundScenes: [],
