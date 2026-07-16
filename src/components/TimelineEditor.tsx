@@ -56,6 +56,7 @@ const TL_ICON = {
   trimEnd: ["M16 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3", "M10 8l4 4-4 4"],
   type: ["M4 7V5h16v2", "M12 5v14", "M9 19h6"],
   x: ["M6 6l12 12", "M18 6 6 18"],
+  trash: ["M3 6h18", "M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2", "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6", "M10 11v6", "M14 11v6"],
 } as const;
 
 function TlIcon({ d, className = "h-3.5 w-3.5" }: { d: readonly string[]; className?: string }) {
@@ -850,6 +851,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     useAppStore.getState().setCurrentVerseIndex(verseIdx + 1);
   };
 
+  // Remove a mis-detected verse from the timeline. deleteImportedVerse also
+  // touches selectedVerseNumbers, so we clear the timings-only undo history — a
+  // later ⌘Z restoring an old snapshot would reintroduce the verse and desync it
+  // from the selection (same guard as VerseCardEditor).
+  const deleteVerse = (verseIdx: number) => {
+    const cur = useAppStore.getState().audioSource;
+    if (cur.mode !== "imported" || cur.timings.length <= 1) return;
+    historyRef.current = [];
+    futureRef.current = [];
+    useAppStore.getState().deleteImportedVerse(verseIdx);
+    bumpHistory();
+  };
+
   // Snap the selected verse's start/end to the current playhead — play, pause at the
   // exact spot, then click: precise matching without fiddly dragging.
   const setBoundaryToHead = (kind: "start" | "end") => {
@@ -1241,6 +1255,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               title="Duplicate this verse so the same ayah appears twice on the timeline"
             >
               <TlIcon d={TL_ICON.copy} /> Duplicate
+            </button>
+
+            <button
+              onClick={() => deleteVerse(activeIdx)}
+              disabled={timings.length <= 1}
+              className="btn-ghost flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] transition-colors hover:border-[var(--gold)] hover:text-gold-soft disabled:opacity-30"
+              title="Remove this verse from the clip"
+            >
+              <TlIcon d={TL_ICON.trash} /> Delete
             </button>
 
             {wordTrimOpen && totalWords >= 2 && (
