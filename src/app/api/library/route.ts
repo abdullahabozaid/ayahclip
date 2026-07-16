@@ -3,6 +3,7 @@ import type { LibraryClip } from "@/lib/clip-library";
 import {
   listMeta,
   listFolders,
+  readMeta,
   writeMeta,
   writeVideo,
   originAllowed,
@@ -62,6 +63,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unsupported video type" }, { status: 415 });
   }
   meta.mimeType = canonType;
+
+  // POST accepts a client-supplied id. Without this check a colliding id
+  // silently destroys an existing clip AND its video.
+  if (await readMeta(meta.id)) {
+    return NextResponse.json({ error: "clip id already exists" }, { status: 409 });
+  }
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());

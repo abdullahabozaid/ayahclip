@@ -74,9 +74,23 @@ export async function readMeta(id: string): Promise<LibraryClip | null> {
   }
 }
 
+/**
+ * Write metadata atomically. A bare writeFile that is interrupted (crash, disk
+ * full) leaves truncated JSON, which listMeta then silently skips — the clip
+ * disappears from the UI while its video leaks on disk forever. rename() within
+ * a filesystem is atomic, so a reader sees either the old file or the new one.
+ */
 export async function writeMeta(meta: LibraryClip): Promise<void> {
   await ensureDirs();
-  await fs.writeFile(join(META, `${safeId(meta.id)}.json`), JSON.stringify(meta));
+  const target = join(META, `${safeId(meta.id)}.json`);
+  const tmp = `${target}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(tmp, JSON.stringify(meta));
+    await fs.rename(tmp, target);
+  } catch (err) {
+    await fs.rm(tmp).catch(() => {});
+    throw err;
+  }
 }
 
 export async function writeVideo(id: string, mimeType: string, data: Buffer): Promise<void> {
@@ -108,7 +122,14 @@ export async function listFolders(): Promise<string[]> {
 
 export async function writeFolders(folders: string[]): Promise<void> {
   await ensureDirs();
-  await fs.writeFile(FOLDERS_FILE, JSON.stringify(folders));
+  const tmp = `${FOLDERS_FILE}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(tmp, JSON.stringify(folders));
+    await fs.rename(tmp, FOLDERS_FILE);
+  } catch (err) {
+    await fs.rm(tmp).catch(() => {});
+    throw err;
+  }
 }
 
 /**

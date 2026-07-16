@@ -11,7 +11,8 @@ import {
   type SceneMedia,
 } from "./render-core";
 import { clipFadeProgress, applyAudioFadeIn } from "./clip-fade";
-import { verseTextAt, type VerseTiming } from "./audio-import";
+import { effectiveAudioBounds, verseTextAt, type VerseTiming } from "./audio-import";
+import { verseWordCount, type ClipRow } from "./clip-rows";
 import { ensureQcfFontsReady } from "./qcf-font-loader";
 import { resolveBackgroundScene, type BackgroundScene } from "./background-sequence";
 import {
@@ -23,6 +24,12 @@ import {
 
 interface ExportOptions {
   verses: Verse[];
+  /**
+   * The authoritative row list. One entry per timing in imported mode (so a
+   * duplicated verse appears twice), one per selected verse in reciter mode.
+   * `verses` is retained for the reciter audio path and styling lookups.
+   */
+  rows: ClipRow[];
   reciterFolder: string;
   surahNumber: number;
   videoFormat: VideoFormat;
@@ -129,18 +136,23 @@ function reciterTextAt(
 }
 
 // Pick the slice of a verse's text + translation to show at `sourceTime` based
-// on its intra-verse splits. No splits → the full verse text passes through.
+// on its intra-verse splits and word trim. No splits and no wordRange → the
+// full verse text passes through.
+//
+// verseTextAt honours BOTH splits and wordRange, so it must be called whenever
+// either is set. Short-circuiting on `splits` alone made a word-trimmed verse
+// export its full text while the preview showed the trim.
 function segmentFor(
   verse: Verse,
   tm: VerseTiming | undefined,
   sourceTime: number
 ): { ar: string; tr: string | null | undefined; isLast: boolean } {
-  if (!tm?.splits?.length) {
+  if (!tm || (!tm.splits?.length && !tm.wordRange)) {
     return { ar: verse.text_uthmani, tr: verse.translation, isLast: true };
   }
   let segIdx = 0;
-  for (const sp of tm.splits) { if (sourceTime >= sp) segIdx++; else break; }
-  const isLast = segIdx === tm.splits.length;
+  for (const sp of tm.splits ?? []) { if (sourceTime >= sp) segIdx++; else break; }
+  const isLast = segIdx === (tm.splits?.length ?? 0);
   return {
     ar: verseTextAt(tm, verse.text_uthmani, sourceTime),
     tr:
@@ -150,6 +162,9 @@ function segmentFor(
     isLast,
   };
 }
+
+/** Test-only export. Not part of the public API. */
+export const __test__segmentFor = segmentFor;
 
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -437,14 +452,23 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
   const clipStartMs = performance.now();
   const clipFadeAt = () => clipFadeProgress(performance.now() - clipStartMs, clipFadeMs);
 
-  for (let i = 0; i < options.verses.length; i++) {
-    const verse = options.verses[i];
-    options.onProgress(i + 1, options.verses.length);
+  for (let i = 0; i < options.rows.length; i++) {
+    const { verse, timing: tm } = options.rows[i];
+    options.onProgress(i + 1, options.rows.length);
 
-    // Looked up once per verse — used both for audio slicing AND for the
-    // intra-verse segment that drives on-screen text.
-    const tm = options.importedAudio?.timings.find((t) => t.verseNumber === verse.verse_number);
-    const sourceStart = tm?.start ?? 0;
+    // The row's own timing — NOT a lookup by verse number, which cannot
+    // distinguish a duplicated verse's two rows. Drives audio slicing AND the
+    // intra-verse segment that picks on-screen text.
+    //
+    // Text tracks the same playhead the audio plays from. A front word-trim
+    // (wordRange.from > 0) moves the audio start to effectiveAudioBounds().lo,
+    // and the preview (imported-player) times its split segments off the true
+    // playhead too — so the split-segment time must use lo, not tm.start, or
+    // splits transition at the wrong moment vs the preview. lo === tm.start when
+    // there is no front trim, so this is a no-op for the common case.
+    const sourceStart = tm
+      ? effectiveAudioBounds(tm, verseWordCount(verse.text_uthmani))[0]
+      : 0;
     const vSegs = reciterSegs.get(verse.verse_number);
 
     let segStart = performance.now();
@@ -467,8 +491,14 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
         !!bgVideo || hasIntro || !!tm?.splits?.length || !!vSegs || (clipFadeMs > 0 && i === 0);
 
       if (importedBuffer && options.importedAudio) {
-        const start = sourceStart;
-        const dur = Math.max(0.05, (tm?.end ?? importedBuffer.duration) - start);
+        // Word-trimmed verses must play only their kept span — the same span
+        // imported-player.ts uses for preview. Slicing start..end here is what
+        // made the export re-include trimmed words.
+        const [lo, hi] = tm
+          ? effectiveAudioBounds(tm, verseWordCount(verse.text_uthmani))
+          : [0, importedBuffer.duration];
+        const start = lo;
+        const dur = Math.max(0.05, hi - lo);
         source.buffer = importedBuffer;
         source.connect(master);
         source.start(0, start, dur);
@@ -570,14 +600,16 @@ async function assembleAudio(
       const full = await ac.decodeAudioData(
         await (await fetch(options.importedAudio.url)).arrayBuffer()
       );
-      for (const verse of options.verses) {
-        const tm = options.importedAudio.timings.find((t) => t.verseNumber === verse.verse_number);
-        const start = Math.max(0, tm?.start ?? 0);
-        const end = Math.min(full.duration, tm?.end ?? full.duration);
+      for (const { verse, timing: tm } of options.rows) {
+        const [lo, hi] = tm
+          ? effectiveAudioBounds(tm, verseWordCount(verse.text_uthmani))
+          : [0, full.duration];
+        const start = Math.max(0, lo);
+        const end = Math.min(full.duration, hi);
         slices.push({ buf: full, offset: start, dur: Math.max(0.05, end - start) });
       }
     } else {
-      for (const verse of options.verses) {
+      for (const { verse } of options.rows) {
         const r = await fetch(getAudioUrl(options.reciterFolder, options.surahNumber, verse.verse_number));
         const b = await ac.decodeAudioData(await r.arrayBuffer());
         slices.push({ buf: b, offset: 0, dur: b.duration });
@@ -742,8 +774,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   const videoLoop = !synced && options.videoLoopMode !== "freeze";
   const verseVideoStart: number[] = [];
   if (synced && options.importedAudio) {
-    for (const verse of options.verses) {
-      const tm = options.importedAudio.timings.find((t) => t.verseNumber === verse.verse_number);
+    for (const { timing: tm } of options.rows) {
       verseVideoStart.push(Math.max(0, tm?.start ?? 0));
     }
   }
@@ -786,15 +817,23 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       while (vi < cum.length - 1 && td >= cum[vi + 1]) vi++; // display verse (leads)
       let audioVi = 0;
       while (audioVi < cum.length - 1 && t >= cum[audioVi + 1]) audioVi++; // audio verse
-      const verse = options.verses[vi];
-      const tmFast = options.importedAudio?.timings.find(
-        (x) => x.verseNumber === verse.verse_number
-      );
+      // Row-indexed: vi indexes cum[], which is now one entry per ROW, so the
+      // row's own timing is the right one even for a duplicated verse.
+      const row = options.rows[vi];
+      const verse = row.verse;
+      const tmFast = row.timing;
       const vSegsFast = reciterSegs.get(verse.verse_number);
       // Real-time offset into the displayed verse (0 during the lead window, so a
       // leading verse shows its first part) — parts never lead, only the verse.
       const localT = Math.max(0, t - cum[vi]);
-      const sourceTime = (tmFast?.start ?? 0) + localT;
+      // Origin is the audio start (effectiveAudioBounds().lo), matching the
+      // realtime path and the preview: a front word-trim moves the audio start
+      // past tm.start, so split timing must use lo. lo === tm.start when there is
+      // no front trim.
+      const audioLo = tmFast
+        ? effectiveAudioBounds(tmFast, verseWordCount(verse.text_uthmani))[0]
+        : 0;
+      const sourceTime = audioLo + localT;
       const segFast = vSegsFast
         ? reciterTextAt(verse, vSegsFast, localT)
         : segmentFor(verse, tmFast, sourceTime);
@@ -829,7 +868,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   while (f < totalFrames) {
     if (encodeError) throw encodeError;
     const p = plan[f];
-    const verse = options.verses[p.vi];
+    const verse = options.rows[p.vi].verse;
     if (bgVideo) await seekVideoFrame(bgVideo, videoTimeFor(p.t, p.audioVi));
     const sequenceMedia = sequenceLoadedFast
       ? sequenceMediaAt(sequenceScenesFast, p.t, sequenceLoadedFast)
@@ -875,7 +914,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     if (videoEncoder.encodeQueueSize > 20) {
       while (videoEncoder.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 4));
     }
-    options.onProgress(Math.min(options.verses.length, p.vi + 1), options.verses.length);
+    options.onProgress(Math.min(options.rows.length, p.vi + 1), options.rows.length);
     await new Promise((r) => setTimeout(r, 0));
   }
 
@@ -921,7 +960,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
   await audioEncoder.flush();
   if (encodeError) throw encodeError;
   muxer.finalize();
-  options.onProgress(options.verses.length, options.verses.length);
+  options.onProgress(options.rows.length, options.rows.length);
   const { buffer } = muxer.target as ArrayBufferTarget;
   return new Blob([buffer], { type: "video/mp4" });
 }

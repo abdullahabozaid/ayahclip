@@ -23,6 +23,7 @@ import { FrameMode } from "./PlatformChrome";
 import { DevicePreview } from "./DevicePreview";
 import { importedPlayer } from "@/lib/imported-player";
 import { verseTextAt, snapToSentenceBoundary } from "@/lib/audio-import";
+import { buildClipRows } from "@/lib/clip-rows";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 import { resolveBackgroundScene } from "@/lib/background-sequence";
 
@@ -49,8 +50,14 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   const selectedVerses = store.verses.filter((v) =>
     store.selectedVerseNumbers.includes(v.verse_number)
   );
-  const currentVerse = selectedVerses[store.currentVerseIndex] ?? selectedVerses[0];
   const importedTimings = store.audioSource.mode === "imported" ? store.audioSource.timings : null;
+  // currentVerseIndex is a ROW index — TimelineEditor sets it from the timings
+  // array, where a verse can appear twice (duplicateVerse). Rows (one per
+  // timing) are therefore authoritative for the current verse, the navigation
+  // bounds and the counter. selectedVerses stays only for the reciter-mode
+  // playback loop below (keyed by verse number, never duplicated).
+  const rows = buildClipRows(store.verses, store.selectedVerseNumbers, importedTimings ?? undefined);
+  const currentVerse = rows[store.currentVerseIndex]?.verse ?? rows[0]?.verse;
   const size = FORMAT_SIZES[store.videoFormat];
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -365,8 +372,15 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     if (canvas.width !== sz.w) canvas.width = sz.w;
     if (canvas.height !== sz.h) canvas.height = sz.h;
 
-    const verses = s.verses.filter((v) => s.selectedVerseNumbers.includes(v.verse_number));
-    const cv = verses[s.currentVerseIndex] ?? verses[0];
+    // Same row model as export: cv and seg MUST come from one row, or a
+    // duplicated verse shows the wrong text against the duplicate's audio.
+    const drawRows = buildClipRows(
+      s.verses,
+      s.selectedVerseNumbers,
+      s.audioSource.mode === "imported" ? s.audioSource.timings : undefined
+    );
+    const drawRow = drawRows[s.currentVerseIndex] ?? drawRows[0];
+    const cv = drawRow?.verse;
     if (!cv) return;
 
     const segments = verseSegmentsRef.current.get(cv.verse_number ?? 0);
@@ -382,7 +396,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     let displayTranslation: string | undefined;
     let isLastPart = true;
     if (s.audioSource.mode === "imported") {
-      const seg = s.audioSource.timings[s.currentVerseIndex];
+      const seg = drawRow?.timing;
       const t = importedPlayer.currentTime();
       displayArabic = seg ? verseTextAt(seg, cv.text_uthmani, t) : cv.text_uthmani;
       displayTranslation =
@@ -713,7 +727,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         </p>
       )}
 
-      {selectedVerses.length > 0 && (
+      {rows.length > 0 && (
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -761,7 +775,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
 
           <button
             onClick={() => {
-              const i = Math.min(selectedVerses.length - 1, store.currentVerseIndex + 1);
+              const i = Math.min(rows.length - 1, store.currentVerseIndex + 1);
               if (isPlaying && store.audioSource.mode === "reciter") {
                 stoppedRef.current = true;
                 currentAudioRef.current?.pause();
@@ -774,7 +788,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
               const src = store.audioSource;
               if (src.mode === "imported" && src.timings[i]) importedPlayer.seek(src.url, src.timings[i].start);
             }}
-            disabled={store.currentVerseIndex === selectedVerses.length - 1}
+            disabled={store.currentVerseIndex === rows.length - 1}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment transition-colors hover:border-gold disabled:opacity-25"
             aria-label="Next verse"
           >
@@ -784,7 +798,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
           </button>
 
           <span className="ml-1 font-display text-sm tabular-nums text-[var(--muted)]">
-            {store.currentVerseIndex + 1} <span className="text-gold/40">/</span> {selectedVerses.length}
+            {store.currentVerseIndex + 1} <span className="text-gold/40">/</span> {rows.length}
           </span>
         </div>
       )}

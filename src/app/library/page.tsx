@@ -132,19 +132,23 @@ export default function LibraryPage() {
     });
 
   const bulkMove = async (folder: string) => {
-    const ids = [...selected];
+    const ids = visibleSelected;
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
     await Promise.all(ids.map((id) => updateClip(id, { folder: folder || undefined })));
     setClips((cs) =>
-      cs.map((c) => (selected.has(c.id) ? { ...c, folder: folder || undefined } : c))
+      cs.map((c) => (idSet.has(c.id) ? { ...c, folder: folder || undefined } : c))
     );
     setSelected(new Set());
   };
 
   const bulkDelete = async () => {
-    if (!confirm(`Delete ${selected.size} clip(s)? Their stored videos are removed too.`)) return;
-    const ids = [...selected];
+    const ids = visibleSelected;
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} clip(s)? Their stored videos are removed too.`)) return;
+    const idSet = new Set(ids);
     await Promise.all(ids.map((id) => deleteClip(id)));
-    setClips((cs) => cs.filter((c) => !selected.has(c.id)));
+    setClips((cs) => cs.filter((c) => !idSet.has(c.id)));
     setSelected(new Set());
   };
 
@@ -157,7 +161,8 @@ export default function LibraryPage() {
     if (sharing) return;
     setSharing(true);
     try {
-      const chosen = clips.filter((c) => selected.has(c.id));
+      const visibleIds = new Set(visibleSelected);
+      const chosen = clips.filter((c) => visibleIds.has(c.id));
       const files: File[] = [];
       for (const c of chosen) {
         const blob = await getClipBlob(c.id);
@@ -221,6 +226,19 @@ export default function LibraryPage() {
       (folderFilter === "all" ||
         (folderFilter === "none" ? !c.folder : c.folder === folderFilter))
   );
+
+  // Bulk actions must only ever touch what the user can SEE. `selected` is keyed
+  // by id and survives filter changes, so a stale id (its clip filtered out of
+  // view) would otherwise be silently deleted/moved by a bulk action. Intersect
+  // with the visible set before any action reads it.
+  const filteredIds = new Set(filtered.map((c) => c.id));
+  const visibleSelected = useMemo(
+    () => [...selected].filter((id) => filteredIds.has(id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selected, filtered]
+  );
+  const allVisibleSelected =
+    filtered.length > 0 && filtered.every((c) => selected.has(c.id));
 
   const counts = {
     draft: clips.filter((c) => c.status === "draft").length,
@@ -400,17 +418,16 @@ export default function LibraryPage() {
         <div className="sticky top-[72px] z-30 mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--gold)]/30 bg-[var(--ink-deep)]/95 px-4 py-2.5 backdrop-blur">
           <button
             onClick={() => {
-              if (selected.size === filtered.length) setSelected(new Set());
-              else setSelected(new Set(filtered.map((c) => c.id)));
+              setSelected(allVisibleSelected ? new Set() : new Set(filtered.map((c) => c.id)));
             }}
             className="rounded-lg border border-[var(--hairline)] px-3 py-1.5 text-xs text-parchment transition-colors hover:border-gold"
           >
-            {selected.size === filtered.length && filtered.length > 0 ? "Deselect All" : "Select All"}
+            {allVisibleSelected ? "Deselect All" : "Select All"}
           </button>
-          {selected.size > 0 && (
-            <span className="text-sm text-gold-soft">{selected.size} selected</span>
+          {visibleSelected.length > 0 && (
+            <span className="text-sm text-gold-soft">{visibleSelected.length} selected</span>
           )}
-          {selected.size > 0 && (
+          {visibleSelected.length > 0 && (
             <>
               <select
                 defaultValue=""

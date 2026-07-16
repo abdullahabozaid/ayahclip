@@ -5,6 +5,7 @@
 import { useAppStore } from "./store";
 import { reciters } from "./reciters";
 import { exportVideoWithInfo } from "./export";
+import { buildClipRows } from "./clip-rows";
 import { getTranslationLanguage } from "./translations";
 import { getBlob } from "./projects";
 import {
@@ -88,11 +89,17 @@ export async function renderClipFile(
   const selectedVerses = s.verses.filter((v) =>
     s.selectedVerseNumbers.includes(v.verse_number)
   );
-  if (selectedVerses.length === 0 || !s.surah) return null;
+  const rows = buildClipRows(
+    s.verses,
+    s.selectedVerseNumbers,
+    s.audioSource.mode === "imported" ? s.audioSource.timings : undefined
+  );
+  if (rows.length === 0 || !s.surah) return null;
   const reciter = reciters.find((r) => r.id === s.reciterId);
 
   const exportOptions = {
     verses: selectedVerses,
+    rows,
     reciterFolder: reciter?.folder ?? "Alafasy_128kbps",
     surahNumber: s.surah.id,
     videoFormat: s.videoFormat,
@@ -173,11 +180,12 @@ export async function renderClipFile(
   return { file, fallbackReason };
 }
 
-/** Keep an encoded clip in the library (IndexedDB) so it can be scheduled
- *  from /library. Best-effort — never blocks delivery. */
-export async function saveRenderedToLibrary(file: File): Promise<void> {
+/** Keep an encoded clip in the library so it can be scheduled from /library.
+ *  Returns false if it was NOT stored — the caller must tell the user, because
+ *  the exported file itself is fine and the failure is otherwise invisible. */
+export async function saveRenderedToLibrary(file: File): Promise<boolean> {
   const s = useAppStore.getState();
-  if (!s.surah) return;
+  if (!s.surah) return false;
   try {
     const reciter = reciters.find((r) => r.id === s.reciterId);
     const nums = s.selectedVerseNumbers;
@@ -198,9 +206,10 @@ export async function saveRenderedToLibrary(file: File): Promise<void> {
       thumbnail: await captureThumbnail(file),
       status: "draft",
     };
-    await saveClip(meta, file);
+    return await saveClip(meta, file);
   } catch (err) {
     console.warn("Could not save clip to library:", err);
+    return false;
   }
 }
 
