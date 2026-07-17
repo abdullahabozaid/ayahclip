@@ -19,6 +19,7 @@ export function ExportButton() {
   // The export itself succeeded but the library save didn't (e.g. disk full).
   // Distinct from `error`: the file is fine, only the library copy is missing.
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
+  const [savedLocation, setSavedLocation] = useState<string | null>(null);
   // On phones, the finished clip is handed to the OS share sheet ("Save Video"
   // → camera roll) instead of a download, which can't reach the gallery. We hold
   // the encoded file here so the user's tap on "Save to Photos" carries the
@@ -35,6 +36,7 @@ export function ExportButton() {
     setExporting(true);
     setError(null);
     setLibraryWarning(null);
+    setSavedLocation(null);
     setPendingFile(null);
     try {
       const rendered = await renderClipFile((current, total) =>
@@ -65,7 +67,8 @@ export function ExportButton() {
       if (isTouch && navigator.canShare?.({ files: [file] })) {
         setPendingFile(file);
       } else {
-        await saveFile(file);
+        const location = await saveFile(file);
+        if (location) setSavedLocation(location);
       }
     });
 
@@ -157,6 +160,11 @@ export function ExportButton() {
       {libraryWarning && (
         <p role="alert" className="rounded-lg border border-[var(--gold)]/30 bg-[var(--gold)]/10 px-3 py-2 text-[11px] leading-relaxed text-gold-soft">
           {libraryWarning}
+        </p>
+      )}
+      {savedLocation && (
+        <p role="status" className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-[11px] leading-relaxed text-emerald-200/90">
+          Saved to {savedLocation}
         </p>
       )}
     </div>

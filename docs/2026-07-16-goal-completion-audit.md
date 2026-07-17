@@ -20,6 +20,7 @@ its saved-project, preview, and export paths agree.
 | Multiple B-roll clips | Ordered background scenes, per-scene fit/position, duration and transition controls, template media slots, and rotating B-roll preset | Implemented and E2E verified |
 | TikTok/account visual research | @ayahclip and reference posts reviewed for dark reciter footage, strong Quran hierarchy, restrained translation, outline/glow separation, and consistent vertical framing | Incorporated into templates and typography controls |
 | Saved-project integrity | Media writes must complete before project metadata is updated; failed first saves remain drafts with inline recovery; imported projects with missing audio are blocked instead of reopening with unrelated reciter audio | Implemented and E2E verified |
+| Destructive-action safety | Project, library clip, folder, and custom-template deletion use contextual inline safeguards; cancellation preserves data; folder creation and operational notices no longer invoke browser-native dialogs | Implemented and E2E verified |
 
 ## Current quantitative gates
 
@@ -31,8 +32,9 @@ its saved-project, preview, and export paths agree.
   recitation, phone-band/background stress, non-recitation intro, long ayah,
   mid-surah start, and repeated refrain.
 - Unit suite: **243/243 passed**.
-- Market-readiness browser suite: **10/10 passed locally**, including truthful
-  recognition stages, storage quota failure, and missing imported-audio recovery.
+- Market-readiness browser suite: **11/11 passed locally**, including truthful
+  recognition stages, storage quota failure, missing imported-audio recovery,
+  and cancel/confirm deletion safety without native dialogs.
 - Lint, TypeScript, production build, Vercel production deployment, and live
   HTTP checks passed.
 

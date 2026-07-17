@@ -9,6 +9,9 @@ import { useAppStore } from "@/lib/store";
 import { fetchSurahs, fetchVerses } from "@/lib/api";
 import { getTranslationLanguage } from "@/lib/translations";
 import { NewClipLink } from "@/components/NewClipLink";
+import { InlineActionPrompt } from "@/components/InlineActionPrompt";
+
+type DeleteRequest = { ids: string[]; title: string; description: string };
 
 export default function Dashboard() {
   const router = useRouter();
@@ -18,6 +21,8 @@ export default function Dashboard() {
   const [openError, setOpenError] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     getAllProjects().then((p) => {
@@ -26,11 +31,13 @@ export default function Dashboard() {
     });
   }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     const project = projects.find((item) => item.id === id);
-    if (!confirm(`Delete ${project?.name ?? "this clip"}? This can't be undone.`)) return;
-    await deleteProject(id);
-    setProjects((prev) => prev.filter((p) => p.id !== id));
+    setDeleteRequest({
+      ids: [id],
+      title: `Delete “${project?.name ?? "this clip"}”?`,
+      description: "The saved project and its imported source media will be permanently removed from this browser.",
+    });
   };
 
   const toggleSelected = (id: string) => {
@@ -47,14 +54,28 @@ export default function Dashboard() {
     setSelectedIds(new Set());
   };
 
-  const deleteSelected = async () => {
+  const deleteSelected = () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} clip${ids.length === 1 ? "" : "s"}? This can't be undone.`)) return;
-    await Promise.all(ids.map((id) => deleteProject(id)));
-    const removed = new Set(ids);
-    setProjects((prev) => prev.filter((p) => !removed.has(p.id)));
-    exitSelectMode();
+    setDeleteRequest({
+      ids,
+      title: `Delete ${ids.length} saved clip${ids.length === 1 ? "" : "s"}?`,
+      description: "Their project settings and imported source media will be permanently removed from this browser.",
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteRequest || deleting) return;
+    setDeleting(true);
+    try {
+      await Promise.all(deleteRequest.ids.map((id) => deleteProject(id)));
+      const removed = new Set(deleteRequest.ids);
+      setProjects((prev) => prev.filter((project) => !removed.has(project.id)));
+      setDeleteRequest(null);
+      exitSelectMode();
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // Restore the saved clip — surah, verses, selection and every style setting —
@@ -127,7 +148,7 @@ export default function Dashboard() {
       if (importedAudio && project.imported?.videoBg) store.setBackgroundVideoSync(true);
       router.push("/studio");
     } catch {
-      router.push(`/surah/${project.surahId}`);
+      setOpenError(`“${project.name}” could not be restored. Check your connection and try again; the saved clip has not been changed.`);
     } finally {
       setOpening(null);
     }
@@ -191,6 +212,18 @@ export default function Dashboard() {
 
       {/* Projects */}
       <section id="projects" className="mx-auto max-w-6xl px-5 py-16">
+        {deleteRequest && (
+          <div className="mb-6">
+            <InlineActionPrompt
+              title={deleteRequest.title}
+              description={deleteRequest.description}
+              confirmLabel={deleteRequest.ids.length === 1 ? "Delete clip" : `Delete ${deleteRequest.ids.length} clips`}
+              onConfirm={confirmDelete}
+              onCancel={() => setDeleteRequest(null)}
+              busy={deleting}
+            />
+          </div>
+        )}
         {openError && (
           <div role="alert" className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-red-500/25 bg-red-500/[0.08] px-4 py-3 text-sm leading-relaxed text-red-100/90">
             <p className="min-w-0 flex-1"><strong className="font-semibold text-red-100">Clip could not open.</strong> {openError}</p>

@@ -223,6 +223,51 @@ test("a saved imported clip with missing audio never reopens as a reciter clip",
   await expect(page.getByRole("link", { name: "Import source" })).toBeVisible();
 });
 
+test("saved clip deletion stays in context and can be cancelled safely", async ({ page }) => {
+  let nativeDialogs = 0;
+  page.on("dialog", async (dialog) => {
+    nativeDialogs += 1;
+    await dialog.dismiss();
+  });
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("keyval-store");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const transaction = request.result.transaction("keyval", "readwrite");
+        transaction.onerror = () => reject(transaction.error);
+        transaction.oncomplete = () => resolve();
+        transaction.objectStore("keyval").put({
+          id: "delete-safeguard",
+          name: "Delete Safeguard",
+          surahId: 1,
+          surahName: "Al-Fatihah",
+          selectedVerseNumbers: [1],
+          settings: {},
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }, "project:delete-safeguard");
+      };
+    });
+  });
+  await page.reload();
+
+  const clip = page.getByRole("heading", { level: 3, name: "Delete Safeguard" });
+  await expect(clip).toBeVisible();
+  await clip.locator("xpath=ancestor::div[contains(@class, 'group')]").hover();
+  await page.getByRole("button", { name: "Delete project" }).click();
+  const safeguard = page.locator('[role="alert"]').filter({ hasText: "Delete “Delete Safeguard”?" });
+  await expect(safeguard).toContainText("permanently removed");
+  await safeguard.getByRole("button", { name: "Keep it" }).click();
+  await expect(clip).toBeVisible();
+
+  await page.getByRole("button", { name: "Delete project" }).click();
+  await safeguard.getByRole("button", { name: "Delete clip" }).click();
+  await expect(clip).toHaveCount(0);
+  expect(nativeDialogs).toBe(0);
+});
+
 test("templates render and open the focused editor", async ({ page }) => {
   const assertNoErrors = failOnPageErrors(page);
   await page.goto("/styles");

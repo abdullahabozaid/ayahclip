@@ -5,6 +5,7 @@
 // browsed by reciter, previewed, downloaded, and marked posted.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NewClipLink } from "@/components/NewClipLink";
+import { InlineActionPrompt } from "@/components/InlineActionPrompt";
 import {
   LibraryClip,
   ClipStatus,
@@ -22,6 +23,10 @@ import {
   generateClipId,
   migrateLegacyClips,
 } from "@/lib/clip-library";
+
+type LibraryDeleteRequest =
+  | { kind: "folder"; name: string }
+  | { kind: "clips"; ids: string[]; title: string };
 
 const PLATFORM_LABELS: Record<ClipPlatform, string> = {
   tiktok: "TikTok",
@@ -63,6 +68,11 @@ export default function LibraryPage() {
   const [folders, setFolders] = useState<string[]>([]);
   const [folderFilter, setFolderFilter] = useState<string>("all");
   const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [folderName, setFolderName] = useState("");
+  const [deleteRequest, setDeleteRequest] = useState<LibraryDeleteRequest | null>(null);
+  const [deleting, setDeleting] = useState(false);
   // iOS WebKit only opens the picker reliably from a real <input> the button forwards to.
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
@@ -99,7 +109,7 @@ export default function LibraryPage() {
         };
         const ok = await saveClip(meta, file);
         if (ok) setClips((cs) => [meta, ...cs]);
-        else alert(`Could not store "${file.name}" — storage may be full.`);
+        else setNotice(`Could not store “${file.name}”. Browser storage may be full; free some space and try again.`);
       }
     } finally {
       setUploading(false);
@@ -108,17 +118,16 @@ export default function LibraryPage() {
   };
 
   const addFolder = async () => {
-    const name = prompt("Folder name");
-    if (!name?.trim()) return;
+    const name = folderName.trim();
+    if (!name) return;
     setFolders(await createFolder(name));
-    setFolderFilter(name.trim());
+    setFolderFilter(name);
+    setFolderName("");
+    setCreatingFolder(false);
   };
 
-  const removeFolder = async (name: string) => {
-    if (!confirm(`Delete folder "${name}"? Clips inside move back to the library.`)) return;
-    setFolders(await deleteFolder(name));
-    setClips((cs) => cs.map((c) => (c.folder === name ? { ...c, folder: undefined } : c)));
-    if (folderFilter === name) setFolderFilter("all");
+  const removeFolder = (name: string) => {
+    setDeleteRequest({ kind: "folder", name });
   };
 
   // Multi-select for bulk move/delete.
@@ -142,14 +151,10 @@ export default function LibraryPage() {
     setSelected(new Set());
   };
 
-  const bulkDelete = async () => {
+  const bulkDelete = () => {
     const ids = visibleSelected;
     if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} clip(s)? Their stored videos are removed too.`)) return;
-    const idSet = new Set(ids);
-    await Promise.all(ids.map((id) => deleteClip(id)));
-    setClips((cs) => cs.filter((c) => !idSet.has(c.id)));
-    setSelected(new Set());
+    setDeleteRequest({ kind: "clips", ids, title: `Delete ${ids.length} selected clip${ids.length === 1 ? "" : "s"}?` });
   };
 
   const [sharing, setSharing] = useState(false);
@@ -175,7 +180,7 @@ export default function LibraryPage() {
         );
       }
       if (files.length === 0) {
-        alert("No video data found for the selected clips.");
+        setNotice("No stored video data was found for the selected clips.");
         return;
       }
       if (typeof navigator.canShare === "function" && navigator.canShare({ files })) {
@@ -188,9 +193,7 @@ export default function LibraryPage() {
           // Otherwise fall through to download.
         }
       } else {
-        alert(
-          "AirDrop/Share needs Safari on Mac or iPhone. Downloading the clips instead — you can AirDrop them from Finder."
-        );
+        setNotice("AirDrop and file sharing need Safari on Mac or iPhone. The clips are being downloaded so you can share them from Finder.");
       }
       // Fallback: download each clip (small stagger so the browser allows them all).
       for (const file of files) {
@@ -251,13 +254,32 @@ export default function LibraryPage() {
     if (next) setClips((cs) => cs.map((c) => (c.id === id ? next : c)));
   };
 
-  const remove = async (clip: LibraryClip) => {
-    if (!confirm(`Delete "${clip.title}"? The stored video is removed too.`)) return;
-    await deleteClip(clip.id);
-    setClips((cs) => cs.filter((c) => c.id !== clip.id));
-    if (playingId === clip.id) {
-      setPlayingId(null);
-      setPlayingUrl(null);
+  const remove = (clip: LibraryClip) => {
+    setDeleteRequest({ kind: "clips", ids: [clip.id], title: `Delete “${clip.title}”?` });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteRequest || deleting) return;
+    setDeleting(true);
+    try {
+      if (deleteRequest.kind === "folder") {
+        const name = deleteRequest.name;
+        setFolders(await deleteFolder(name));
+        setClips((current) => current.map((clip) => clip.folder === name ? { ...clip, folder: undefined } : clip));
+        if (folderFilter === name) setFolderFilter("all");
+      } else {
+        const idSet = new Set(deleteRequest.ids);
+        await Promise.all(deleteRequest.ids.map((id) => deleteClip(id)));
+        setClips((current) => current.filter((clip) => !idSet.has(clip.id)));
+        setSelected((current) => new Set([...current].filter((id) => !idSet.has(id))));
+        if (playingId && idSet.has(playingId)) {
+          setPlayingId(null);
+          setPlayingUrl(null);
+        }
+      }
+      setDeleteRequest(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -268,14 +290,20 @@ export default function LibraryPage() {
       return;
     }
     const blob = await getClipBlob(clip.id);
-    if (!blob) return alert("Video data missing for this clip.");
+    if (!blob) {
+      setNotice("This clip’s video data is missing. Re-export the source project to create a complete copy.");
+      return;
+    }
     setPlayingId(clip.id);
     setPlayingUrl(URL.createObjectURL(blob));
   };
 
   const download = async (clip: LibraryClip) => {
     const blob = await getClipBlob(clip.id);
-    if (!blob) return alert("Video data missing for this clip.");
+    if (!blob) {
+      setNotice("This clip’s video data is missing. Re-export the source project to create a complete copy.");
+      return;
+    }
     const ext = clip.mimeType.includes("mp4") ? "mp4" : "webm";
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -369,6 +397,26 @@ export default function LibraryPage() {
         </div>
       </div>
 
+      {deleteRequest && (
+        <div className="mb-5">
+          <InlineActionPrompt
+            title={deleteRequest.kind === "folder" ? `Delete folder “${deleteRequest.name}”?` : deleteRequest.title}
+            description={deleteRequest.kind === "folder" ? "The clips will stay in your library and move to No folder." : "The stored video files will be permanently removed from this browser."}
+            confirmLabel={deleteRequest.kind === "folder" ? "Delete folder" : deleteRequest.ids.length === 1 ? "Delete clip" : `Delete ${deleteRequest.ids.length} clips`}
+            onConfirm={confirmDelete}
+            onCancel={() => setDeleteRequest(null)}
+            busy={deleting}
+          />
+        </div>
+      )}
+
+      {notice && (
+        <div role="status" className="mb-5 flex items-center gap-3 rounded-2xl border border-[var(--hairline)] bg-white/[0.035] px-4 py-3 text-sm text-parchment/80">
+          <p className="min-w-0 flex-1">{notice}</p>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[var(--muted)] hover:bg-white/[0.04] hover:text-parchment">×</button>
+        </div>
+      )}
+
       {/* Folder chips */}
       <div className="mb-5 flex flex-wrap items-center gap-1.5">
         {[
@@ -407,11 +455,32 @@ export default function LibraryPage() {
           </span>
         ))}
         <button
-          onClick={addFolder}
+          onClick={() => setCreatingFolder(true)}
           className="rounded-full border border-dashed border-[var(--hairline)] px-3 py-1.5 text-xs text-gold-soft/80 transition-colors hover:border-gold hover:text-gold"
         >
           + New folder
         </button>
+        {creatingFolder && (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void addFolder();
+            }}
+            className="flex w-full items-center gap-2 pt-2 sm:w-auto sm:pt-0"
+          >
+            <label className="sr-only" htmlFor="new-folder-name">Folder name</label>
+            <input
+              id="new-folder-name"
+              autoFocus
+              value={folderName}
+              onChange={(event) => setFolderName(event.target.value)}
+              placeholder="Folder name"
+              className="field min-h-11 min-w-0 flex-1 px-3 text-sm sm:w-48"
+            />
+            <button type="submit" disabled={!folderName.trim()} className="btn-gold min-h-11 rounded-full px-4 text-sm disabled:opacity-40">Create</button>
+            <button type="button" onClick={() => { setCreatingFolder(false); setFolderName(""); }} className="min-h-11 rounded-full px-3 text-sm text-[var(--muted)] hover:text-parchment">Cancel</button>
+          </form>
+        )}
       </div>
 
       {filtered.length > 0 && (

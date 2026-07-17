@@ -38,6 +38,7 @@ import {
 import { TemplateIcon, type TemplateIconName } from "./TemplateIcon";
 import { BackgroundEditor } from "@/components/BackgroundEditor";
 import { ArabicFontSpecimen } from "@/components/ArabicFontSpecimen";
+import { InlineActionPrompt } from "@/components/InlineActionPrompt";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 import {
   FALLBACK_SAMPLE,
@@ -180,6 +181,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const [arabicFit, setArabicFit] = useState<ArabicTextFitResult | null>(null);
   const [movingText, setMovingText] = useState(false);
   const [movingMedia, setMovingMedia] = useState(false);
+  const [pendingBase, setPendingBase] = useState<TemplateDefinition | null>(null);
   const movingTextRef = useRef(false);
   const mediaDragRef = useRef<{
     pointerId: number;
@@ -273,11 +275,19 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
       extras: { ...current.extras, [key]: value },
     }));
 
-  const chooseBase = (template: TemplateDefinition) => {
-    if (dirty && !window.confirm("Replace your unsaved changes with this template?")) return;
+  const applyBase = (template: TemplateDefinition) => {
     setDraft(cloneTemplate(template));
     setDirty(false);
     setStatus(`Loaded ${template.name}`);
+    setPendingBase(null);
+  };
+
+  const chooseBase = (template: TemplateDefinition) => {
+    if (dirty) {
+      setPendingBase(template);
+      return;
+    }
+    applyBase(template);
   };
 
   const setTreatment = (treatment: "clean" | "glow" | "outline" | "gold") => {
@@ -515,6 +525,18 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
           </button>
         </div>
       </header>
+
+      {pendingBase && (
+        <div className="border-b border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-4 py-3 sm:px-6">
+          <InlineActionPrompt
+            title={`Load “${pendingBase.name}” instead?`}
+            description="Your unsaved template changes will be replaced. Save a copy first if you want to keep them."
+            confirmLabel="Replace changes"
+            onConfirm={() => applyBase(pendingBase)}
+            onCancel={() => setPendingBase(null)}
+          />
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row lg:overflow-hidden">
         <aside className="hidden w-64 shrink-0 flex-col border-r border-[var(--hairline-soft)] bg-[var(--ink-deep)] lg:flex">

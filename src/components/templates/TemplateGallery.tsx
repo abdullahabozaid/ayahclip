@@ -12,6 +12,7 @@ import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "@/lib/templates";
 import type { SavedTemplate, TemplateDefinition, TemplateFamily } from "@/lib/template-model";
 import { TemplateCard } from "./TemplateCard";
 import { TemplateIcon } from "./TemplateIcon";
+import { InlineActionPrompt } from "@/components/InlineActionPrompt";
 
 type Filter = "featured" | "all" | "mine" | TemplateFamily;
 
@@ -30,6 +31,7 @@ export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }
   const [saved, setSaved] = useState<SavedTemplate[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState<Filter>("featured");
+  const [deleteTarget, setDeleteTarget] = useState<TemplateDefinition | null>(null);
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -107,6 +109,21 @@ export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }
           ))}
         </div>
 
+        {deleteTarget && (
+          <div className="mt-6">
+            <InlineActionPrompt
+              title={`Delete “${deleteTarget.name}”?`}
+              description="This custom template will be permanently removed. Built-in templates and saved clips are not affected."
+              confirmLabel="Delete template"
+              onConfirm={() => {
+                setSaved(deleteSavedTemplate(deleteTarget.id));
+                setDeleteTarget(null);
+              }}
+              onCancel={() => setDeleteTarget(null)}
+            />
+          </div>
+        )}
+
         {loaded && visible.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-[var(--hairline)] px-6 py-20 text-center">
             <TemplateIcon name="layout" className="mx-auto h-8 w-8 text-gold-soft/60" />
@@ -127,11 +144,7 @@ export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }
                 onDuplicate={() => setSaved(duplicateSavedTemplate(template))}
                 onDelete={
                   template.source === "user"
-                    ? () => {
-                        if (window.confirm(`Delete template “${template.name}”?`)) {
-                          setSaved(deleteSavedTemplate(template.id));
-                        }
-                      }
+                    ? () => setDeleteTarget(template)
                     : undefined
                 }
               />

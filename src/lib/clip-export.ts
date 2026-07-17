@@ -218,15 +218,14 @@ export async function saveRenderedToLibrary(file: File): Promise<boolean> {
 }
 
 /** Save to disk: the local save-export API when reachable, else a download. */
-export async function saveFile(file: File): Promise<void> {
+export async function saveFile(file: File): Promise<string | null> {
   try {
     const form = new FormData();
     form.append("file", file);
     const res = await fetch("/api/save-export", { method: "POST", body: form });
     if (res.ok) {
       const { saved } = await res.json();
-      alert(`Saved to ~/Documents/AyahClip/Exports/${saved}`);
-      return;
+      return `~/Documents/AyahClip/Exports/${saved}`;
     }
   } catch (err) {
     console.warn("save-export API unavailable; falling back to download", err);
@@ -237,6 +236,7 @@ export async function saveFile(file: File): Promise<void> {
   a.download = file.name;
   a.click();
   URL.revokeObjectURL(url);
+  return null;
 }
 
 /**
