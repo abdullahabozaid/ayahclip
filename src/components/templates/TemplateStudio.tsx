@@ -447,8 +447,8 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
     const frame = phoneCanvasRef.current;
     if (!start || !frame || start.pointerId !== event.pointerId) return;
     const rect = frame.getBoundingClientRect();
-    const x = Math.max(-1, Math.min(1, start.x + ((event.clientX - start.clientX) / rect.width) * 2));
-    const y = Math.max(-1, Math.min(1, start.y + ((event.clientY - start.clientY) / rect.height) * 2));
+    const x = start.x + (event.clientX - start.clientX) / rect.width;
+    const y = start.y + (event.clientY - start.clientY) / rect.height;
     setStyle("mediaTransform", {
       ...(draft?.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM),
       x,
@@ -657,8 +657,8 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
               role="slider"
               tabIndex={0}
               aria-label={canvasTool === "text" ? "Text vertical position" : "Media position"}
-              aria-valuemin={canvasTool === "text" ? 10 : -100}
-              aria-valuemax={canvasTool === "text" ? 90 : 100}
+              aria-valuemin={canvasTool === "text" ? 10 : -400}
+              aria-valuemax={canvasTool === "text" ? 90 : 400}
               aria-valuenow={canvasTool === "text" ? draft.settings.textPosition : Math.round((draft.settings.mediaTransform?.x ?? 0) * 100)}
               aria-valuetext={canvasTool === "text"
                 ? `${draft.settings.textPosition}% from the top`
@@ -1055,20 +1055,20 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   onChange={(fitBackdrop) => setStyle("fitBackdrop", fitBackdrop as StyleSettings["fitBackdrop"])}
                 />
               )}
-              {(draft.settings.backgroundFit ?? "cover") === "cover" && (() => {
+              {(() => {
                 const transform = draft.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM;
                 return (
                   <div className="space-y-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/55 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-medium text-parchment">Media position</p>
-                        <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Select Media above the canvas to drag, or use exact offsets below.</p>
+                        <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Select Media above the canvas to drag freely—even beyond the frame—or use exact offsets below.</p>
                       </div>
                       <button type="button" aria-label="Center image" onClick={() => setStyle("mediaTransform", { ...transform, x: 0, y: 0 })} className="min-h-9 rounded-lg border border-[var(--hairline-soft)] px-2.5 text-[10px] text-[var(--muted)] hover:text-parchment">Center</button>
                     </div>
-                    <RangeField label="Zoom" value={transform.scale} min={1} max={3} step={0.05} suffix="×" onChange={(scale) => setStyle("mediaTransform", { ...transform, scale })} />
-                    <RangeField label="Horizontal offset" value={Math.round(transform.x * 100)} min={-100} max={100} suffix="%" onChange={(x) => setStyle("mediaTransform", { ...transform, x: x / 100 })} />
-                    <RangeField label="Vertical offset" value={Math.round(transform.y * 100)} min={-100} max={100} suffix="%" onChange={(y) => setStyle("mediaTransform", { ...transform, y: y / 100 })} />
+                    <RangeField label="Zoom" value={transform.scale} min={0.25} max={5} step={0.05} suffix="×" onChange={(scale) => setStyle("mediaTransform", { ...transform, scale })} />
+                    <RangeField label="Horizontal offset" value={Math.round(transform.x * 100)} min={-400} max={400} suffix="%" onChange={(x) => setStyle("mediaTransform", { ...transform, x: x / 100 })} />
+                    <RangeField label="Vertical offset" value={Math.round(transform.y * 100)} min={-400} max={400} suffix="%" onChange={(y) => setStyle("mediaTransform", { ...transform, y: y / 100 })} />
                   </div>
                 );
               })()}

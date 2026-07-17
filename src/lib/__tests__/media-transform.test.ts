@@ -48,13 +48,13 @@ describe("media transform rendering", () => {
 
     const call = vi.mocked(context.drawImage).mock.calls.at(-1)!;
     expect(call[0]).toBe(landscape);
-    expect(call[1]).toBeCloseTo(0);
-    expect(call[2]).toBeCloseTo(0);
+    expect(call[1]).toBeCloseTo(810);
+    expect(call[2]).toBeCloseTo(-1415.625);
     expect(call[3]).toBeCloseTo(1620);
     expect(call[4]).toBeCloseTo(911.25);
   });
 
-  it("clamps persisted offsets before drawing", () => {
+  it("honours offsets beyond the frame instead of clamping them", () => {
     const context = contextStub();
     drawBgImage(context, landscape, 1080, 1920, "contain", "black", {
       scale: 1,
@@ -64,8 +64,8 @@ describe("media transform rendering", () => {
 
     expect(context.drawImage).toHaveBeenLastCalledWith(
       landscape,
-      0,
-      0,
+      9720,
+      -16623.75,
       1080,
       607.5,
     );
@@ -82,12 +82,12 @@ describe("media framing helpers", () => {
     );
   });
 
-  it("nudges precisely, supports coarse movement, and clamps the range", () => {
+  it("nudges precisely, supports coarse movement, and keeps the range unrestricted", () => {
     expect(nudgeMediaTransform(centered, "right")).toEqual({ scale: 1, x: 0.03, y: 0 });
     expect(nudgeMediaTransform(centered, "up", true)).toEqual({ scale: 1, x: 0, y: -0.1 });
     expect(nudgeMediaTransform({ scale: 2, x: 0.99, y: -0.99 }, "right", true)).toEqual({
       scale: 2,
-      x: 1,
+      x: 1.09,
       y: -0.99,
     });
   });

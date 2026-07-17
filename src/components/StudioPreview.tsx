@@ -705,8 +705,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
 
   const framed = frameMode !== "studio";
   const displayWidth = framed ? 348 : size.w >= size.h ? 460 : 360;
-  const canReframe = store.backgroundFit === "cover" &&
-    (store.background.type === "image" || store.background.type === "video");
+  const canReframe = store.background.type === "image" || store.background.type === "video";
 
   const startReframe = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!canReframe) return;
@@ -723,11 +722,10 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     const start = reframeDragRef.current;
     if (!start || !canReframe) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
     store.setMediaTransform({
       ...store.mediaTransform,
-      x: clamp(start.mediaX + ((event.clientX - start.x) / rect.width) * 2),
-      y: clamp(start.mediaY + ((event.clientY - start.y) / rect.height) * 2),
+      x: start.mediaX + (event.clientX - start.x) / rect.width,
+      y: start.mediaY + (event.clientY - start.y) / rect.height,
     });
   };
 

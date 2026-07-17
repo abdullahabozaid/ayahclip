@@ -35,6 +35,9 @@ const ZOOM_STEP = 0.1;
 const clampZoom = (z: number) =>
   Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 100) / 100;
 
+const isDesktopWorkspace = () =>
+  typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+
 type SaveFailureReason = "invalid" | "media" | "project";
 type SaveResult =
   | { ok: true }
@@ -65,7 +68,9 @@ export default function StudioPage() {
   const [mp4Error, setMp4Error] = useState<string | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("studio");
   const [showSafeZones, setShowSafeZones] = useState(false);
-  const [timelineOpen, setTimelineOpen] = useState(true);
+  // Keep the phone canvas fully visible on first load. Wide workspaces open the
+  // dock automatically because they have room for canvas + inspector + editor.
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineFullscreen, setTimelineFullscreen] = useState(false);
   // Two ways to edit imported verses: "words" (per-verse cards: split text,
   // trim words, duplicate) and "timeline" (waveform with draggable verse
@@ -81,24 +86,26 @@ export default function StudioPage() {
 
   useEffect(() => {
     trackOncePerJourney("studio_opened");
+    if (isDesktopWorkspace()) setTimelineOpen(true);
   }, []);
 
-  // The bottom timeline dock and the right settings drawer both eat into the
-  // preview's space, so they're mutually exclusive: opening one closes the other.
+  // Phones keep one editing surface open at a time. Desktop has enough room for
+  // the approved three-part workspace, so the inspector and timeline may stay
+  // visible together while the creator tunes a clip.
   const openSettings = (next: boolean) => {
     setSettingsOpen(next);
-    if (next) setTimelineOpen(false);
+    if (next && !isDesktopWorkspace()) setTimelineOpen(false);
   };
   const openTimeline = (next: boolean) => {
     setTimelineOpen(next);
-    if (next) setSettingsOpen(false);
+    if (next && !isDesktopWorkspace()) setSettingsOpen(false);
   };
 
   const pendingTemplateName = store.pendingTemplateMedia?.templateName;
   useEffect(() => {
     if (!pendingTemplateName) return;
     setSettingsOpen(true);
-    setTimelineOpen(false);
+    if (!isDesktopWorkspace()) setTimelineOpen(false);
   }, [pendingTemplateName]);
 
   // Whole-editor zoom: a header control plus Cmd/Ctrl + scroll (or trackpad
@@ -612,7 +619,7 @@ export default function StudioPage() {
 
       <div className="relative flex min-h-0 flex-1">
         {/* Preview stage */}
-        <section className="bg-mihrab-still relative flex flex-1 flex-col items-center justify-center overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <section className="bg-mihrab-still relative flex flex-1 flex-col items-center justify-start overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:justify-center">
           <StudioPreview frameMode={frameMode} showSafeZones={showSafeZones} />
 
           {/* Mobile frame selector */}
@@ -739,7 +746,7 @@ export default function StudioPage() {
               the audio buffer two extra times. The dock is behind the overlay
               anyway; it remounts (fresh from the store) on close. */}
           {timelineOpen && !timelineFullscreen && (
-            <div className="mt-3 max-h-[42vh] overflow-y-auto pr-0.5">
+            <div className="mt-3 max-h-[28vh] overflow-y-auto pr-0.5 lg:max-h-[30vh]">
               {store.audioSource.mode === "imported" ? (
                 editorView === "words" ? <VerseCardEditor /> : <TimelineEditor />
               ) : (

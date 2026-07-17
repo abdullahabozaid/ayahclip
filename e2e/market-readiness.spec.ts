@@ -132,7 +132,8 @@ test("a real local audio file survives import, template choice, save, and reopen
   // The 100 ms silence at each edge is trimmed by autoSegment, so Studio must
   // report the one-second exported speech span rather than a per-verse guess.
   await expect(page.getByText("1s", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Show" }).click();
+  const showVerseEditor = page.getByRole("button", { name: "Show" });
+  if (await showVerseEditor.isVisible()) await showVerseEditor.click();
   await page.getByRole("button", { name: "Timeline" }).click();
   await expect(page.getByText("Loop verse", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Timeline legend")).toContainText("Needs review");
@@ -455,7 +456,7 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await expect(
     arabicInspector.getByRole("button", { name: /Traditional bold/ }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(arabicInspector.getByLabel("Size")).toHaveValue("34");
+  await expect(arabicInspector.getByLabel("Size")).toHaveValue("30");
   await expect(arabicInspector.getByText("Split text needs room", { exact: true })).toHaveCount(0);
   await arabicInspector.getByRole("button", { name: "Compare all five fonts" }).click();
   await expect(
@@ -518,6 +519,8 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await expect(mediaInspector.getByLabel("Zoom")).toHaveValue("1.75");
   await expect(mediaInspector.getByLabel("Horizontal offset")).toHaveValue("35");
   await expect(mediaInspector.getByLabel("Vertical offset")).toHaveValue("-20");
+  await mediaInspector.getByLabel("Horizontal offset").fill("150");
+  await expect(mediaInspector.getByLabel("Horizontal offset")).toHaveValue("150");
   await mediaInspector.getByRole("button", { name: "Center image" }).click();
   await expect(mediaInspector.getByLabel("Horizontal offset")).toHaveValue("0");
   await expect(mediaInspector.getByLabel("Vertical offset")).toHaveValue("0");

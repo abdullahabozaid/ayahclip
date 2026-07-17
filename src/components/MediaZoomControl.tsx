@@ -19,8 +19,8 @@ export function MediaZoomControl({ value, onChange, className = "" }: MediaZoomC
       <span className="shrink-0 font-medium text-parchment">Zoom</span>
       <input
         type="range"
-        min={1}
-        max={3}
+        min={0.25}
+        max={5}
         step={0.05}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}

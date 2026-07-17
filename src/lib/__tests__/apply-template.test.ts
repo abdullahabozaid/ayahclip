@@ -22,7 +22,7 @@ describe("template application media handoff", () => {
   it("ships the split preset with a real bold Naskh face fitted to its reading panel", () => {
     expect(split.settings.arabicFont).toBe("scheherazade-new");
     expect(split.settings.arabicFontWeight).toBe(700);
-    expect(split.settings.arabicFontSize).toBe(34);
+    expect(split.settings.arabicFontSize).toBe(30);
   });
 
   it("creates an ordered media request for every reusable slot", () => {

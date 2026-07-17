@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { applyTemplate } from "@/lib/apply-template";
 import { useAppStore } from "@/lib/store";
 import { extractStyle } from "@/lib/style";
@@ -11,11 +12,22 @@ import {
   saveTemplate,
 } from "@/lib/saved-templates";
 import type { SavedTemplate } from "@/lib/template-model";
+import { TemplatePreview } from "./templates/TemplatePreview";
+
+const PRESET_GUIDANCE: Record<string, { eyebrow: string; result: string }> = {
+  "ayahclip-gold-line": { eyebrow: "Signature", result: "Centered · gold line · dark media" },
+  "reciter-split-fade": { eyebrow: "Reciter", result: "Text left · reciter right · soft fade" },
+  "nature-reflection": { eyebrow: "B-roll", result: "Centered · white glow · nature media" },
+  "clean-ink": { eyebrow: "Minimal", result: "Black canvas · crisp white text" },
+  "translation-led": { eyebrow: "English first", result: "Large translation · Arabic context" },
+  "broll-rotation": { eyebrow: "Sequence", result: "Three scenes · steady captions" },
+};
 
 export function StylePanel() {
   const [saved, setSaved] = useState<SavedTemplate[]>([]);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
+  const [appliedId, setAppliedId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.resolve().then(() => setSaved(getSavedTemplates(DEFAULT_TEMPLATE_STYLE)));
@@ -56,25 +68,56 @@ export function StylePanel() {
       <div>
         <div className="mb-2 flex items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-medium text-parchment">Composition presets</p>
-            <p className="mt-0.5 text-[11px] text-[var(--muted)]">A starting point, every detail stays editable.</p>
+            <p className="text-xs font-medium text-parchment">Choose a composition</p>
+            <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">Each card changes layout, type treatment, and media behaviour. You can edit everything after.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {TEMPLATES.slice(0, 4).map((template) => (
+          {TEMPLATES.map((template) => {
+            const guidance = PRESET_GUIDANCE[template.id];
+            const selected = appliedId === template.id;
+            return (
             <button
               key={template.id}
-              onClick={() => applyTemplate(template)}
-              className="group overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] text-left transition-colors hover:border-[var(--hairline)] focus-visible:border-[var(--gold)]"
+              type="button"
+              aria-pressed={selected}
+              onClick={() => {
+                applyTemplate(template);
+                setAppliedId(template.id);
+              }}
+              className={`group overflow-hidden rounded-xl border bg-[var(--ink-deep)] text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${selected ? "border-gold" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
               title={`Apply ${template.name}`}
             >
-              <span className="block aspect-[16/7]" style={{ background: template.swatch }} />
-              <span className="block px-2.5 py-2 text-[11px] font-medium text-[var(--muted)] group-hover:text-parchment">
-                {template.name}
+              <span className="relative block aspect-[9/16] overflow-hidden bg-black">
+                <TemplatePreview
+                  style={template.settings}
+                  extras={template.extras}
+                  previewMedia={template.mediaSlots.length > 0}
+                  renderWidth={180}
+                  className="h-full w-full object-cover"
+                />
+                <span className="absolute left-2 top-2 rounded-full border border-white/10 bg-black/70 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-white/70 backdrop-blur-sm">
+                  {guidance?.eyebrow ?? template.family}
+                </span>
+                {selected && (
+                  <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-xs font-bold text-[var(--ink-deep)]" aria-hidden="true">✓</span>
+                )}
+              </span>
+              <span className="block px-2.5 py-2.5">
+                <span className={`block text-[11px] font-medium ${selected ? "text-gold-soft" : "text-parchment"}`}>
+                  {template.name}
+                </span>
+                <span className="mt-1 block text-[9px] leading-3 text-[var(--muted)]">
+                  {guidance?.result ?? template.description}
+                </span>
               </span>
             </button>
-          ))}
+            );
+          })}
         </div>
+        <Link href="/styles" className="mt-3 flex min-h-10 items-center justify-center rounded-lg border border-[var(--hairline-soft)] text-[11px] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment">
+          Open Template Studio to edit presets
+        </Link>
       </div>
 
       {/* Saved full templates — composition, typography, treatment and media structure. */}

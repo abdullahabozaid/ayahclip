@@ -1211,26 +1211,26 @@ export const DEFAULT_MEDIA_TRANSFORM: MediaTransform = { scale: 1, x: 0, y: 0 };
 
 export type MediaNudgeDirection = "left" | "right" | "up" | "down";
 
-/** Move a media focal point by a predictable keyboard step without allowing it
- * to disappear beyond the supported framing range. */
+/** Move media by a predictable viewport-relative keyboard step. Position is
+ * intentionally unbounded: creators may push media partly or entirely outside
+ * the frame when building split compositions and deliberate crops. */
 export function nudgeMediaTransform(
   transform: MediaTransform,
   direction: MediaNudgeDirection,
   coarse = false,
 ): MediaTransform {
   const step = coarse ? 0.1 : 0.03;
-  const clamp = (value: number) => Math.max(-1, Math.min(1, value));
   return {
     ...transform,
     x: direction === "left"
-      ? clamp(transform.x - step)
+      ? transform.x - step
       : direction === "right"
-        ? clamp(transform.x + step)
+        ? transform.x + step
         : transform.x,
     y: direction === "up"
-      ? clamp(transform.y - step)
+      ? transform.y - step
       : direction === "down"
-        ? clamp(transform.y + step)
+        ? transform.y + step
         : transform.y,
   };
 }
@@ -1280,16 +1280,14 @@ function drawMedia(
       ctx.restore();
     }
     // Start from a whole-media contain fit, then apply the same creator zoom and
-    // normalized positioning contract as cover. At scale=1 and x/y=0 this is
-    // the original centered result; offsets can align the media within spare
-    // space, while zoomed media can be panned across its overflow.
-    const contain = Math.min(w / mw, h / mh) * Math.max(1, transform.scale);
+    // viewport-relative positioning contract as cover. At scale=1 and x/y=0
+    // this is the original centered result; offsets remain free even when the
+    // media has no natural overflow on that axis.
+    const contain = Math.min(w / mw, h / mh) * Math.max(0.1, transform.scale);
     const sw = mw * contain;
     const sh = mh * contain;
-    const tx = Math.max(-1, Math.min(1, transform.x));
-    const ty = Math.max(-1, Math.min(1, transform.y));
-    const x = (w - sw) / 2 + (tx * Math.abs(w - sw)) / 2;
-    const y = (h - sh) / 2 + (ty * Math.abs(h - sh)) / 2;
+    const x = (w - sw) / 2 + transform.x * w;
+    const y = (h - sh) / 2 + transform.y * h;
     const r = Math.min(sw, sh) * 0.06;
     ctx.save();
     ctx.beginPath();
@@ -1300,14 +1298,16 @@ function drawMedia(
     ctx.restore();
     return;
   }
-  const scale = Math.max(w / mw, h / mh) * Math.max(1, transform.scale);
+  const scale = Math.max(w / mw, h / mh) * Math.max(0.1, transform.scale);
   const sw = mw * scale;
   const sh = mh * scale;
-  const overflowX = Math.max(0, sw - w);
-  const overflowY = Math.max(0, sh - h);
-  const tx = Math.max(-1, Math.min(1, transform.x));
-  const ty = Math.max(-1, Math.min(1, transform.y));
-  ctx.drawImage(media, -overflowX / 2 + (tx * overflowX) / 2, -overflowY / 2 + (ty * overflowY) / 2, sw, sh);
+  ctx.drawImage(
+    media,
+    (w - sw) / 2 + transform.x * w,
+    (h - sh) / 2 + transform.y * h,
+    sw,
+    sh,
+  );
 }
 
 export function drawVideoFrame(

@@ -78,6 +78,7 @@ export function TemplatePreview({
   replayToken = 0,
   animateIntro = false,
   previewMedia = false,
+  renderWidth,
   className = "block h-full w-full",
 }: {
   style: StyleSettings;
@@ -88,6 +89,10 @@ export function TemplatePreview({
   animateIntro?: boolean;
   /** Show a representative landscape source so crop/zoom/position controls are visible. */
   previewMedia?: boolean;
+  /** Downsample settled gallery/inspector thumbnails after drawing with the
+   * real export renderer. This preserves parity without retaining several
+   * full 1080×1920 canvases in memory. */
+  renderWidth?: number;
   className?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -100,12 +105,19 @@ export function TemplatePreview({
       const canvas = canvasRef.current;
       if (!canvas || cancelled) return;
       const size = FORMAT_SIZES["9:16"];
-      if (canvas.width !== size.w) canvas.width = size.w;
-      if (canvas.height !== size.h) canvas.height = size.h;
+      const targetWidth = renderWidth ? Math.max(90, Math.round(renderWidth)) : size.w;
+      const targetHeight = renderWidth ? Math.round(targetWidth * (size.h / size.w)) : size.h;
+      if (canvas.width !== targetWidth) canvas.width = targetWidth;
+      if (canvas.height !== targetHeight) canvas.height = targetHeight;
       const context = canvas.getContext("2d");
       if (!context) return;
+      const renderCanvas = renderWidth ? document.createElement("canvas") : canvas;
+      renderCanvas.width = size.w;
+      renderCanvas.height = size.h;
+      const renderContext = renderWidth ? renderCanvas.getContext("2d") : context;
+      if (!renderContext) return;
       drawScene(
-        context,
+        renderContext,
         toScene(style, extras),
         {
           arabicText: sample.arabicText,
@@ -117,6 +129,10 @@ export function TemplatePreview({
         },
         mediaPreview ? { image: mediaPreview } : undefined,
       );
+      if (renderWidth) {
+        context.clearRect(0, 0, targetWidth, targetHeight);
+        context.drawImage(renderCanvas, 0, 0, targetWidth, targetHeight);
+      }
     };
     const start = () => {
       cancelAnimationFrame(animationFrame);
@@ -163,7 +179,7 @@ export function TemplatePreview({
       cancelled = true;
       cancelAnimationFrame(animationFrame);
     };
-  }, [animateIntro, extras, previewMedia, replayToken, sample, style]);
+  }, [animateIntro, extras, previewMedia, renderWidth, replayToken, sample, style]);
 
   return <canvas ref={canvasRef} className={className} aria-label="Template preview" />;
 }

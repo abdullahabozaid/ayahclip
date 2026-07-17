@@ -39,8 +39,12 @@ function SetCoverButton() {
     setTimeout(() => setLabel("Set as cover"), 1600);
   };
   return (
-    <button onClick={onClick} className="btn-ghost mb-2 w-full rounded-xl py-2.5 text-xs">
-      📸 {label}
+    <button onClick={onClick} className="btn-ghost mb-1.5 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl px-3 text-xs">
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7.5h3l1.2-2h7.6l1.2 2h3v11H4z" />
+        <circle cx="12" cy="13" r="3.2" />
+      </svg>
+      {label}
     </button>
   );
 }
@@ -307,18 +311,46 @@ export function StudioSettings() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto px-5">
+        <div className="sticky top-0 z-20 -mx-5 border-b border-[var(--hairline-soft)] bg-[var(--ink)]/95 px-5 py-3 backdrop-blur-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <p className="font-display text-sm text-parchment">Inspector</p>
+              <p className="text-[10px] text-[var(--muted)]">Choose a starting look, then adjust only what you need.</p>
+            </div>
+          </div>
+          <nav className="grid grid-cols-4 gap-1 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1" aria-label="Editor settings sections">
+            {([
+              { id: "studio-presets-section", label: "Looks" },
+              { id: "studio-typography-section", label: "Text" },
+              { id: "studio-background-section", label: "Media" },
+              { id: "studio-audio-section", label: "Clip" },
+            ] as const).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="min-h-10 rounded-lg px-1 text-[11px] font-medium text-[var(--muted)] transition-colors hover:bg-white/[0.05] hover:text-parchment focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
         {/* Clip summary */}
-        <div className="border-b border-[var(--hairline-soft)] py-5">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--hairline-soft)] py-4">
+          <div className="min-w-0">
           <p className="text-xs uppercase tracking-[0.2em] text-gold-soft/70">
             Surah {store.surah?.id}
           </p>
-          <h2 className="mt-1 font-display text-2xl tracking-wide text-parchment">
+          <h2 className="mt-0.5 truncate font-display text-lg tracking-wide text-parchment">
             {store.surah?.name_simple ?? "—"}
           </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
+          </div>
+          <p className="shrink-0 text-right text-xs text-[var(--muted)]">
             {selectedCount} verse{selectedCount !== 1 ? "s" : ""}
             {selectedCount > 0 && (
-              <span className="ml-2 text-gold-soft">{durationLabel}</span>
+              <span className="mt-0.5 block text-gold-soft">{durationLabel}</span>
             )}
           </p>
         </div>
@@ -360,12 +392,12 @@ export function StudioSettings() {
         )}
 
         {/* Saved layout presets (font size, position, line height — no colors) */}
-        <Section title="Presets">
+        <Section title="Presets" id="studio-presets-section">
           <StylePanel />
         </Section>
 
         {/* Audio */}
-        <Section title="Audio">
+        <Section title="Audio" id="studio-audio-section">
           {store.audioSource.mode === "imported" ? (
             <div className="rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-3">
               <p className="text-xs text-gold-soft/80">Imported audio</p>
@@ -478,7 +510,7 @@ export function StudioSettings() {
         </Section>
 
         {/* Typography */}
-        <Section title="Typography">
+        <Section title="Typography" id="studio-typography-section">
           <div>
             <p className="mb-2 text-xs text-[var(--muted)]">Caption content</p>
             <div className="grid grid-cols-3 gap-2">
@@ -1128,12 +1160,12 @@ export function StudioSettings() {
             </div>
           )}
 
-          {(store.background.type === "image" || store.background.type === "video") && store.backgroundFit === "cover" && (
+          {(store.background.type === "image" || store.background.type === "video") && (
             <div className="mb-4 space-y-3 border-t border-[var(--hairline-soft)] pt-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs text-parchment">Frame the media</p>
-                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">Drag the preview or move the image precisely.</p>
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">Drag freely—even beyond the frame—or enter a precise offset.</p>
                 </div>
                 <button
                   onClick={() => store.setMediaTransform({ ...store.mediaTransform, x: 0, y: 0 })}
@@ -1145,8 +1177,8 @@ export function StudioSettings() {
               <Slider
                 label="Zoom"
                 value={store.mediaTransform.scale}
-                min={1}
-                max={3}
+                min={0.25}
+                max={5}
                 step={0.05}
                 display={(v) => `${v.toFixed(2)}×`}
                 onChange={(scale) => store.setMediaTransform({ ...store.mediaTransform, scale })}
@@ -1154,8 +1186,8 @@ export function StudioSettings() {
               <Slider
                 label="Horizontal offset"
                 value={store.mediaTransform.x * 100}
-                min={-100}
-                max={100}
+                min={-400}
+                max={400}
                 step={1}
                 display={(v) => v === 0 ? "Center" : v < 0 ? `${Math.abs(v)}% left` : `${v}% right`}
                 onChange={(x) => store.setMediaTransform({ ...store.mediaTransform, x: x / 100 })}
@@ -1163,8 +1195,8 @@ export function StudioSettings() {
               <Slider
                 label="Vertical offset"
                 value={store.mediaTransform.y * 100}
-                min={-100}
-                max={100}
+                min={-400}
+                max={400}
                 step={1}
                 display={(v) => v === 0 ? "Center" : v < 0 ? `${Math.abs(v)}% up` : `${v}% down`}
                 onChange={(y) => store.setMediaTransform({ ...store.mediaTransform, y: y / 100 })}
@@ -1232,7 +1264,7 @@ export function StudioSettings() {
       </div>
 
       {/* Export — pinned */}
-      <div className="border-t border-[var(--hairline-soft)] bg-[var(--ink)] p-5">
+      <div className="border-t border-[var(--hairline-soft)] bg-[var(--ink)] p-3.5">
         <SetCoverButton />
         <ExportButton />
       </div>
