@@ -73,7 +73,11 @@ test("a real local audio file survives import, template choice, save, and reopen
   await expect(page).toHaveURL(/\/styles\?from=import/);
   await expect(page.getByText("Your recitation audio is ready")).toBeVisible();
   const templateCard = page.locator("article").filter({
-    has: page.getByRole("heading", { level: 2, name: "AyahClip Gold Line" }),
+    // Use a bundled Quran face here. QCF page glyphs intentionally fail export
+    // rather than capture a fallback when quran.com's font CDN is unavailable,
+    // and GitHub's isolated runner must not make this workflow test depend on
+    // that third-party network.
+    has: page.getByRole("heading", { level: 2, name: "Reciter Split Fade" }),
   });
   await templateCard.getByRole("button", { name: "Use template" }).click();
 
