@@ -150,6 +150,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const deepAbortRef = useRef<AbortController | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [alignmentReview, setAlignmentReview] = useState<AlignmentReview | null>(null);
+  const [reviewCursorVerse, setReviewCursorVerse] = useState<number | null>(null);
   const [looping, setLooping] = useState(false);
   const [viewportW, setViewportW] = useState(0);
   // True while WE set scrollLeft (playback follow / zoom recenter), so the scroll
@@ -1073,7 +1074,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       );
       commit(applyAlignedTimingsToRows(cur.timings, aligned));
       setDeepErr(null);
-      setAlignmentReview(buildAlignmentReview("pause", diagnostics));
+      const review = buildAlignmentReview("pause", diagnostics);
+      setAlignmentReview(review);
+      setReviewCursorVerse(review.reviewVerseNumbers[0] ?? null);
     } finally {
       setRedetecting(false);
     }
@@ -1113,7 +1116,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       });
       setDeepProgress({ stage: "align", detail: "Placing and checking ayah boundaries" });
       commit(applyAlignedTimingsToRows(cur.timings, result.timings));
-      setAlignmentReview(buildAlignmentReview(result.method, result.boundaryDiagnostics));
+      const review = buildAlignmentReview(result.method, result.boundaryDiagnostics);
+      setAlignmentReview(review);
+      setReviewCursorVerse(review.reviewVerseNumbers[0] ?? null);
       setDeepErr(null);
     } catch (error) {
       setDeepErr(alignmentFailureMessage(error));
@@ -1141,6 +1146,57 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const visibleAlignmentReview = alignmentReview
     ? alignmentReviewProgress(alignmentReview, timings)
     : null;
+  const reviewVerses = visibleAlignmentReview?.reviewVerseNumbers ?? [];
+  const requestedReviewIndex = reviewCursorVerse == null
+    ? -1
+    : reviewVerses.indexOf(reviewCursorVerse);
+  const reviewIndex = reviewVerses.length === 0
+    ? -1
+    : requestedReviewIndex >= 0 ? requestedReviewIndex : 0;
+  const reviewVerse = reviewIndex >= 0 ? reviewVerses[reviewIndex] : null;
+  const reviewRowIndex = reviewVerse == null
+    ? -1
+    : timings.findIndex((timing) =>
+        timing.verseNumber === reviewVerse &&
+        timing.alignmentReviewed !== true &&
+        (timing.alignmentConfidence === "medium" || timing.alignmentConfidence === "low"));
+  const reviewTiming = reviewRowIndex >= 0 ? timings[reviewRowIndex] : null;
+
+  const focusReviewBoundary = (verseNumber: number, listen = false) => {
+    const rowIndex = timings.findIndex((timing) =>
+      timing.verseNumber === verseNumber &&
+      timing.alignmentReviewed !== true &&
+      (timing.alignmentConfidence === "medium" || timing.alignmentConfidence === "low"));
+    const timing = rowIndex >= 0 ? timings[rowIndex] : null;
+    if (!timing) return;
+    setReviewCursorVerse(verseNumber);
+    store.setCurrentVerseIndex(rowIndex);
+    const leadIn = Math.max(0, timing.start - (listen ? 1.15 : 0));
+    seek(leadIn);
+    if (listen && url && !importedPlayer.isPlaying()) importedPlayer.play(url);
+  };
+
+  const moveReviewCursor = (direction: -1 | 1) => {
+    if (reviewVerses.length === 0) return;
+    const nextIndex = (Math.max(0, reviewIndex) + direction + reviewVerses.length) % reviewVerses.length;
+    focusReviewBoundary(reviewVerses[nextIndex]);
+  };
+
+  const markCurrentReviewChecked = () => {
+    if (reviewRowIndex < 0) return;
+    const nextVerse = reviewVerses.length > 1
+      ? reviewVerses[(reviewIndex + 1) % reviewVerses.length]
+      : null;
+    commit(markAlignmentBoundaryReviewed(timings, reviewRowIndex));
+    setReviewCursorVerse(nextVerse);
+    if (nextVerse != null) {
+      const nextRowIndex = timings.findIndex((timing) => timing.verseNumber === nextVerse);
+      if (nextRowIndex >= 0) {
+        store.setCurrentVerseIndex(nextRowIndex);
+        seek(timings[nextRowIndex].start);
+      }
+    }
+  };
   const pct = (t: number) => (duration > 0 ? (t / duration) * 100 : 0);
 
   // Fixed-center geometry: an explicit-pixel track (viewport × zoom) padded by
@@ -1366,25 +1422,44 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         </div>
       )}
 
-      {visibleAlignmentReview && (
-        <div
-          role="status"
-          className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] ${
-            visibleAlignmentReview.reviewVerseNumbers.length
-              ? "border-amber-400/30 bg-amber-400/10 text-amber-100/90"
-              : "border-emerald-soft/25 bg-emerald-soft/10 text-emerald-soft"
-          }`}
+      {visibleAlignmentReview && reviewTiming ? (
+        <section
+          aria-label="Alignment boundary review"
+          className="rounded-xl border border-amber-400/30 bg-amber-400/[0.08] p-3"
         >
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200/80">
+                Boundary review · {reviewIndex + 1} of {reviewVerses.length}
+              </p>
+              <p className="mt-1 text-xs font-medium text-amber-50">
+                Before ayah {reviewTiming.verseNumber} at {fmt(reviewTiming.start)}
+              </p>
+              <p className="mt-1 text-[10px] leading-4 text-amber-100/65">
+                {visibleAlignmentReview.methodLabel} marked this cut {reviewTiming.alignmentConfidence}. Listen across the transition, drag the amber edge if needed, then mark it checked.
+              </p>
+            </div>
+            <button
+              onClick={() => setAlignmentReview(null)}
+              aria-label="Dismiss alignment review"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-amber-100/50 hover:bg-white/[0.05] hover:text-amber-100"
+            >
+              <TlIcon d={TL_ICON.x} />
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:flex">
+            <button type="button" onClick={() => moveReviewCursor(-1)} className="btn-ghost min-h-10 rounded-lg px-3 text-[11px] disabled:opacity-40" disabled={reviewVerses.length < 2}>Previous</button>
+            <button type="button" onClick={() => focusReviewBoundary(reviewTiming.verseNumber, true)} className="btn-ghost min-h-10 rounded-lg px-3 text-[11px]">Listen across cut</button>
+            <button type="button" onClick={markCurrentReviewChecked} className="min-h-10 rounded-lg bg-amber-300 px-3 text-[11px] font-semibold text-[var(--ink-deep)] hover:bg-amber-200">Mark checked</button>
+            <button type="button" onClick={() => moveReviewCursor(1)} className="btn-ghost min-h-10 rounded-lg px-3 text-[11px] disabled:opacity-40" disabled={reviewVerses.length < 2}>Next</button>
+          </div>
+        </section>
+      ) : visibleAlignmentReview ? (
+        <div role="status" className="flex items-center gap-2 rounded-lg border border-emerald-soft/25 bg-emerald-soft/10 px-3 py-2 text-[11px] text-emerald-soft">
           <span className="leading-relaxed">{visibleAlignmentReview.message}</span>
-          <button
-            onClick={() => setAlignmentReview(null)}
-            aria-label="Dismiss alignment report"
-            className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-full opacity-60 hover:bg-white/[0.04] hover:opacity-100 sm:h-9 sm:w-9"
-          >
-            ✕
-          </button>
+          <button onClick={() => setAlignmentReview(null)} aria-label="Dismiss alignment report" className="ml-auto flex h-9 w-9 items-center justify-center rounded-full opacity-60 hover:bg-white/[0.04] hover:opacity-100"><TlIcon d={TL_ICON.x} /></button>
         </div>
-      )}
+      ) : null}
 
       {/* Selected-verse inspector — one quiet strip with breathing room.
           Each time is its own button: click to snap that boundary to the

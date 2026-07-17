@@ -194,6 +194,7 @@ export default function StudioPage() {
         arabicFontSize: state.arabicFontSize,
         arabicFont: state.arabicFont,
         arabicFontWeight: state.arabicFontWeight,
+        arabicInkThickness: state.arabicInkThickness,
         arabicVerseNumber: state.arabicVerseNumber,
         translationVerseNumber: state.translationVerseNumber,
         translationEnabled: state.translationEnabled,
@@ -273,7 +274,7 @@ export default function StudioPage() {
     };
   }, [
     saveNow,
-    store.projectId, store.reciterId, store.videoFormat, store.arabicFontSize,
+    store.projectId, store.reciterId, store.videoFormat, store.arabicFontSize, store.arabicInkThickness,
     store.arabicFont, store.arabicVerseNumber, store.arabicEnabled, store.translationEnabled, store.translationFontSize,
     store.translationFont, store.translationLanguage, store.textColor, store.translationColor,
     store.lineHeight, store.translationLineHeight, store.arabicTranslationGap, store.textPosition, store.textLayout, store.splitMask, store.overlayOpacity, store.overlayColor,

@@ -767,6 +767,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                         <ArabicFontSpecimen
                           font={mode.font}
                           weight={mode.weight}
+                          inkThickness={selected ? (draft.settings.arabicInkThickness ?? 0) : 0}
                           qcfWords={mode.font === "qcf" ? sample.qcfWords?.slice(0, 1) : undefined}
                           fallback={mode.sample}
                           className="mt-1 text-right text-[22px] leading-[1.7] text-parchment"
@@ -806,6 +807,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                       <ArabicFontSpecimen
                         font={font.value}
                         weight={selected ? draft.settings.arabicFontWeight : font.defaultWeight}
+                        inkThickness={selected ? (draft.settings.arabicInkThickness ?? 0) : 0}
                         qcfWords={sample.qcfWords}
                         fallback={sample.arabicText}
                         className="mt-2 text-right text-[22px] leading-[1.9] text-parchment"
@@ -827,6 +829,16 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   onChange={(value) => setStyle("arabicFontWeight", Number(value))}
                 />
               )}
+              <RangeField
+                label="Quran ink thickness"
+                value={draft.settings.arabicInkThickness ?? 0}
+                min={0}
+                max={2.5}
+                step={0.25}
+                suffix="px"
+                onChange={(value) => setStyle("arabicInkThickness", value)}
+              />
+              <p className="text-[10px] leading-4 text-[var(--muted)]">Adds real ink to fixed-weight Mushaf glyphs while keeping the outline and glow independent.</p>
               <p className="text-[10px] leading-4 text-[var(--muted)]">Use Short, Medium, and Long above the canvas to compare real Quran marks and line fit. QCF uses the actual page glyphs; Scheherazade and Noto Naskh use genuine heavier faces.</p>
               <RangeField label="Size" value={draft.settings.arabicFontSize} min={18} max={72} suffix="px" onChange={(value) => setStyle("arabicFontSize", value)} />
               {draft.settings.textLayout === "left-panel" && arabicFit?.cramped && (

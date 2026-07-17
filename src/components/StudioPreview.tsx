@@ -613,6 +613,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   }, [
     store.arabicFont,
     store.arabicFontWeight,
+    store.arabicInkThickness,
     store.translationFont,
     store.translationFontWeight,
     store.verses,
@@ -654,6 +655,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.lineHeight,
     store.textPosition,
     store.arabicFontWeight,
+    store.arabicInkThickness,
     store.arabicVerseNumber,
     store.translationVerseNumber,
     store.translationFontWeight,

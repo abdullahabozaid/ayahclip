@@ -3,7 +3,7 @@
 // their own wrap unit (a mark wrapping onto a new line corrupts the text),
 // and sanitization must strip exactly the unsupported mark and nothing else.
 import { describe, it, expect, vi } from "vitest";
-import { arabicTextForFont, splitWords, strokeTextWithOutline } from "@/lib/canvas-utils";
+import { arabicTextForFont, splitWords, strokeTextWithInk, strokeTextWithOutline } from "@/lib/canvas-utils";
 
 describe("splitWords (wrap units)", () => {
   it("splits plain words on spaces", () => {
@@ -91,5 +91,50 @@ describe("strokeTextWithOutline", () => {
       width: 1.25,
     });
     expect(ctx.strokeText).not.toHaveBeenCalled();
+  });
+
+  it("keeps the crisp edge outside a thicker Arabic ink stroke", () => {
+    const ctx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      strokeText: vi.fn(),
+      shadowColor: "white",
+      shadowBlur: 8,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      strokeStyle: "",
+      lineWidth: 0,
+      lineJoin: "miter",
+      miterLimit: 10,
+    } as unknown as CanvasRenderingContext2D;
+
+    strokeTextWithOutline(ctx, "ٱلْحَمْدُ", 0, 0, {
+      enabled: true,
+      color: "#050507",
+      width: 1.25,
+    }, 2, 0.75);
+
+    expect(ctx.lineWidth).toBe(4);
+  });
+});
+
+describe("strokeTextWithInk", () => {
+  it("uses the Quran fill color and a real scaled stroke", () => {
+    const ctx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      strokeText: vi.fn(),
+      fillStyle: "#f5f2e9",
+      strokeStyle: "",
+      lineWidth: 0,
+      lineJoin: "miter",
+      miterLimit: 10,
+    } as unknown as CanvasRenderingContext2D;
+
+    strokeTextWithInk(ctx, "ٱلْحَمْدُ", 12, 24, 0.75, 2);
+
+    expect(ctx.strokeStyle).toBe("#f5f2e9");
+    expect(ctx.lineWidth).toBe(1.5);
+    expect(ctx.strokeText).toHaveBeenCalledWith("ٱلْحَمْدُ", 12, 24);
   });
 });

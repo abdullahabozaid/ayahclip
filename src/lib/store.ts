@@ -35,6 +35,7 @@ interface AppState {
   arabicFontSize: number;
   arabicFont: string;
   arabicFontWeight: number;
+  arabicInkThickness: number;
   arabicVerseNumber: boolean;
   translationVerseNumber: boolean;
   translationEnabled: boolean;
@@ -112,6 +113,7 @@ interface AppState {
   setArabicFontSize: (size: number) => void;
   setArabicFont: (font: string) => void;
   setArabicFontWeight: (weight: number) => void;
+  setArabicInkThickness: (thickness: number) => void;
   setArabicVerseNumber: (on: boolean) => void;
   setTranslationVerseNumber: (on: boolean) => void;
   setTranslationEnabled: (enabled: boolean) => void;
@@ -196,6 +198,7 @@ export const useAppStore = create<AppState>((set) => ({
   arabicFontSize: 42,
   arabicFont: "qcf",
   arabicFontWeight: 400,
+  arabicInkThickness: 0.75,
   arabicVerseNumber: false,
   translationVerseNumber: true,
   translationEnabled: true,
@@ -287,6 +290,7 @@ export const useAppStore = create<AppState>((set) => ({
   setArabicFontSize: (size) => set({ arabicFontSize: size }),
   setArabicFont: (font) => set({ arabicFont: font }),
   setArabicFontWeight: (weight) => set({ arabicFontWeight: weight }),
+  setArabicInkThickness: (arabicInkThickness) => set({ arabicInkThickness }),
   setArabicVerseNumber: (on) => set({ arabicVerseNumber: on }),
   setTranslationVerseNumber: (on) => set({ translationVerseNumber: on }),
   setTranslationEnabled: (enabled) => set({ translationEnabled: enabled }),
@@ -490,6 +494,7 @@ export const useAppStore = create<AppState>((set) => ({
       splitMask: settings.splitMask ?? { ...DEFAULT_SPLIT_MASK },
       arabicEnabled: settings.arabicEnabled ?? true,
       translationColor: settings.translationColor ?? "#d8d3c7",
+      arabicInkThickness: settings.arabicInkThickness ?? 0,
       textOutline: settings.textOutline ?? { enabled: false, color: "#050507", width: 1.25 },
       mediaTransform: settings.mediaTransform ?? { scale: 1, x: 0, y: 0 },
       backgroundSequenceEnabled: settings.backgroundSequenceEnabled ?? false,

@@ -106,6 +106,7 @@ export async function renderClipFile(
     arabicFontSize: s.arabicFontSize,
     arabicFont: s.arabicFont,
     arabicFontWeight: s.arabicFontWeight,
+    arabicInkThickness: s.arabicInkThickness,
     arabicVerseNumber: s.arabicVerseNumber,
     translationVerseNumber: s.translationVerseNumber,
     translationEnabled: s.translationEnabled,

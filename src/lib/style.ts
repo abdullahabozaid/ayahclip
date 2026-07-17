@@ -7,6 +7,8 @@ export interface StyleSettings {
   arabicFont: string;
   arabicFontSize: number;
   arabicFontWeight: number;
+  /** Adds controlled ink to Quran glyphs without synthesizing a fake font weight. */
+  arabicInkThickness?: number;
   arabicVerseNumber?: boolean;
   translationVerseNumber?: boolean;
   lineHeight: number;
@@ -50,6 +52,7 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "arabicFont",
   "arabicFontSize",
   "arabicFontWeight",
+  "arabicInkThickness",
   "arabicVerseNumber",
   "translationVerseNumber",
   "lineHeight",
@@ -90,6 +93,7 @@ export const PRESET_KEYS: (keyof StyleSettings)[] = [
   "arabicFont",
   "arabicFontSize",
   "arabicFontWeight",
+  "arabicInkThickness",
   "arabicVerseNumber",
   "translationVerseNumber",
   "lineHeight",

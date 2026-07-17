@@ -45,6 +45,7 @@ export interface SceneStyleSource {
   arabicFont: string;
   arabicFontSize: number;
   arabicFontWeight: number;
+  arabicInkThickness?: number;
   arabicVerseNumber: boolean;
   translationVerseNumber: boolean;
   translationEnabled: boolean;
@@ -184,6 +185,7 @@ export function drawScene(
     splitMask: style.splitMask,
     safeInset: safeInsetFor(style.safeAreaTarget, style.safePadding / 100),
     arabicFontWeight: style.arabicFontWeight,
+    arabicInkThickness: style.arabicInkThickness,
     arabicVerseNumber: style.arabicVerseNumber && content.isLastPart,
     translationVerseNumber: style.translationVerseNumber,
     translationFontWeight: style.translationFontWeight,

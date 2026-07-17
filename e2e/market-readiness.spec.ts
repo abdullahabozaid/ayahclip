@@ -83,6 +83,8 @@ test("a real local audio file survives import, template choice, save, and reopen
 
   await expect(page).toHaveURL(/\/studio/);
   await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Compare all five on this ayah" })).toBeVisible();
+  await expect(page.getByRole("slider", { name: "Quran Ink Thickness" })).toHaveValue("0");
   // The 100 ms silence at each edge is trimmed by autoSegment, so Studio must
   // report the one-second exported speech span rather than a per-verse guess.
   await expect(page.getByText("1s", { exact: true })).toBeVisible();
@@ -262,6 +264,7 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await expect(
     arabicInspector.getByRole("button", { name: "Bold", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  await expect(arabicInspector.getByLabel("Quran ink thickness")).toHaveValue("0");
 
   const translationInspector = page.getByTestId("inspector-translation");
   await translationInspector.locator("summary").click();

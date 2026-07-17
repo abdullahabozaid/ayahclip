@@ -336,6 +336,8 @@ interface EmphasisOpts {
   fontSize: number;
   rtl: boolean;
   outline?: TextOutline;
+  /** Arabic-only ink added beneath the fill; omitted for translations. */
+  inkThickness?: number;
   scale?: number;
 }
 
@@ -348,12 +350,35 @@ export function strokeTextWithOutline(
   y: number,
   outline: TextOutline | undefined,
   scale = 1,
+  innerInkWidth = 0,
 ) {
   if (!outline?.enabled || outline.width <= 0) return;
   ctx.save();
   clearShadow(ctx);
   ctx.strokeStyle = outline.color;
-  ctx.lineWidth = Math.max(0.5, outline.width * scale);
+  // Keep the visible edge outside any same-color ink stroke. Without adding
+  // the inner ink width here, thicker Quran ink would consume the crisp edge.
+  ctx.lineWidth = Math.max(0.5, (outline.width + innerInkWidth) * scale);
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.strokeText(text, x, y);
+  ctx.restore();
+}
+
+/** Thicken the actual Quran ink without asking the browser to synthesize a
+ * bold face. This preserves the selected font's shaping and Quranic marks. */
+export function strokeTextWithInk(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  thickness = 0,
+  scale = 1,
+) {
+  if (thickness <= 0) return;
+  ctx.save();
+  ctx.strokeStyle = String(ctx.fillStyle);
+  ctx.lineWidth = Math.max(0.25, thickness * scale);
   ctx.lineJoin = "round";
   ctx.miterLimit = 2;
   ctx.strokeText(text, x, y);
@@ -379,7 +404,8 @@ function drawEmphasizedBlock(
   const drawUnit = (u: WrapUnit, x: number, y: number, width: number) => {
     const emph = opts.indices.has(u.index - opts.indexOffset);
     ctx.fillStyle = emph && opts.style === "color" ? opts.color : opts.baseColor;
-    strokeTextWithOutline(ctx, u.text, x, y, opts.outline, opts.scale);
+    strokeTextWithOutline(ctx, u.text, x, y, opts.outline, opts.scale, opts.inkThickness);
+    strokeTextWithInk(ctx, u.text, x, y, opts.inkThickness, opts.scale);
     ctx.fillText(u.text, x, y);
     if (emph && opts.style === "underline") {
       // Underline only the base letters, not trailing standalone marks (e.g. waqf ۛ)
@@ -433,11 +459,13 @@ export function wrapText(
   lineHeight: number,
   outline?: TextOutline,
   scale = 1,
+  inkThickness = 0,
 ) {
   const lines = measureLines(ctx, text, maxWidth);
   const startY = y - ((lines.length - 1) * lineHeight) / 2;
   for (let i = 0; i < lines.length; i++) {
-    strokeTextWithOutline(ctx, lines[i], x, startY + i * lineHeight, outline, scale);
+    strokeTextWithOutline(ctx, lines[i], x, startY + i * lineHeight, outline, scale, inkThickness);
+    strokeTextWithInk(ctx, lines[i], x, startY + i * lineHeight, inkThickness, scale);
     ctx.fillText(lines[i], x, startY + i * lineHeight);
   }
 }
@@ -581,6 +609,8 @@ export interface DrawVerseOptions {
   safeInset?: SafeInset;
   /** CSS font-weight for the Arabic text (default 400). */
   arabicFontWeight?: number;
+  /** Arabic-only ink thickness in style pixels. Works with fixed-weight Mushaf faces. */
+  arabicInkThickness?: number;
   /** CSS font-weight for the translation text (default 400). */
   translationFontWeight?: number;
   /** Word indices (into the Arabic verse words) to emphasise. */
@@ -778,6 +808,7 @@ function drawQcfBlock(
   emphasis?: EmphasisOpts,
   outline?: TextOutline,
   scale = 1,
+  inkThickness = 0,
 ) {
   const lines = wrapQcfWords(ctx, words, fontSize, maxWidth);
   const gap = fontSize * 0.15;
@@ -803,7 +834,8 @@ function drawQcfBlock(
         ctx.fillStyle = emphasis?.baseColor ?? ctx.fillStyle;
       }
 
-      strokeTextWithOutline(ctx, u.word.code_v2, x, y, outline, scale);
+      strokeTextWithOutline(ctx, u.word.code_v2, x, y, outline, scale, inkThickness);
+      strokeTextWithInk(ctx, u.word.code_v2, x, y, inkThickness, scale);
       ctx.fillText(u.word.code_v2, x, y);
 
       if (emph && emphasis!.style === "underline") {
@@ -1014,7 +1046,7 @@ export function drawVerseText(
           : undefined;
       drawQcfBlock(
         tctx, qcfRenderWords, centerX, arabicFirstLineY(startY), maxWidth, arabicLineH,
-        arabicSize, qcfEmph, options.textOutline, scale
+        arabicSize, qcfEmph, options.textOutline, scale, options.arabicInkThickness
       );
     } else if (options.arabicEmphasis && options.arabicEmphasis.length > 0) {
       drawEmphasizedBlock(tctx, arabicDisplay, centerX, arabicFirstLineY(startY), maxWidth, arabicLineH, {
@@ -1026,10 +1058,11 @@ export function drawVerseText(
         fontSize: arabicSize,
         rtl: true,
         outline: options.textOutline,
+        inkThickness: options.arabicInkThickness,
         scale,
       });
     } else {
-      wrapText(tctx, arabicDisplay, centerX, startY, maxWidth, arabicLineH, options.textOutline, scale);
+      wrapText(tctx, arabicDisplay, centerX, startY, maxWidth, arabicLineH, options.textOutline, scale, options.arabicInkThickness);
     }
     tctx.direction = "ltr";
 

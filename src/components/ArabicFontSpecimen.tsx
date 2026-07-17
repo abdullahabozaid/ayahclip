@@ -18,12 +18,14 @@ export function ArabicFontSpecimen({
   qcfWords,
   fallback,
   className = "",
+  inkThickness = 0,
 }: {
   font: string;
   weight: number;
   qcfWords?: QcfWord[];
   fallback: string;
   className?: string;
+  inkThickness?: number;
 }) {
   if (font === "qcf") {
     return (
@@ -31,6 +33,7 @@ export function ArabicFontSpecimen({
         qcfWords={qcfWords}
         fallback={fallback}
         className={className}
+        inkThickness={inkThickness}
       />
     );
   }
@@ -40,6 +43,9 @@ export function ArabicFontSpecimen({
     // Match canvas/export exactly and never synthesize a heavy Quran face from
     // stale saved settings.
     fontWeight: supportedArabicFontWeight(font, weight),
+    ...(inkThickness > 0
+      ? { WebkitTextStroke: `${inkThickness}px currentColor`, paintOrder: "stroke fill" }
+      : {}),
   };
   return (
     <p dir="rtl" lang="ar" className={className} style={style}>

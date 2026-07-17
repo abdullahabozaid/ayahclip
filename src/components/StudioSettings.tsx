@@ -94,11 +94,11 @@ const TRANSLATION_FONT_OPTIONS = [
 ];
 
 const ARABIC_FONT_OPTIONS = [
-  { value: "qcf", label: "Mushaf QCF (page-faithful)" },
-  { value: "uthmanic-hafs", label: "Uthmanic Hafs" },
-  { value: "amiri-quran", label: "Amiri Quran" },
-  { value: "scheherazade-new", label: "Scheherazade New (true bold)" },
-  { value: "noto-naskh-arabic", label: "Noto Naskh Arabic (caption bold)" },
+  { value: "qcf", label: "Mushaf page", defaultWeight: 400, note: "Exact page glyphs and authentic ayah mark." },
+  { value: "uthmanic-hafs", label: "Madinah Uthmani", defaultWeight: 400, note: "Official-style Unicode Hafs with complete marks." },
+  { value: "amiri-quran", label: "Amiri Quran", defaultWeight: 400, note: "Open, literary Naskh for cinematic treatments." },
+  { value: "scheherazade-new", label: "Scheherazade", defaultWeight: 600, note: "Traditional Naskh with genuine heavier faces." },
+  { value: "noto-naskh-arabic", label: "Noto Naskh", defaultWeight: 700, note: "Compact, bold Arabic for social captions." },
 ];
 
 function Section({
@@ -239,6 +239,7 @@ function Field({
 
 export function StudioSettings() {
   const store = useAppStore();
+  const [showAllArabicFonts, setShowAllArabicFonts] = useState(false);
   const selectedCount = store.selectedVerseNumbers.length;
   const currentVerse = store.verses[store.currentVerseIndex] ?? store.verses[0];
   const importedDuration = store.audioSource.mode === "imported"
@@ -605,26 +606,83 @@ export function StudioSettings() {
               </div>
             )}
           </div>
-          <Field
-            label="Arabic Rendering"
-            value={store.arabicFont}
-            onChange={(font) => {
-              store.setArabicFont(font);
-              store.setArabicFontWeight(
-                font === "scheherazade-new" || font === "noto-naskh-arabic" ? 600 : 400,
-              );
-            }}
-            options={ARABIC_FONT_OPTIONS}
-          />
-          <div className="rounded-xl border border-[var(--hairline-soft)] bg-white/[0.025] p-3">
-            <ArabicFontSpecimen
-              font={store.arabicFont}
-              weight={store.arabicFontWeight}
-              qcfWords={currentVerse?.qcfWords}
-              fallback={currentVerse?.text_uthmani ?? "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"}
-              className="text-right text-2xl leading-[1.9] text-parchment"
-            />
-            <p className="mt-1 text-[10px] leading-4 text-[var(--muted)]">The specimen uses the current ayah. Mushaf QCF displays its actual page glyphs; weighted caption modes use real font faces without synthetic thickening.</p>
+          <div className="space-y-2">
+            <div>
+              <p className="text-xs text-[var(--muted)]">Arabic rendering</p>
+              <p className="mt-1 text-[10px] leading-4 text-[var(--muted-deep)]">Choose by purpose, then judge the actual ayah—not a font name.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {ARABIC_FONT_OPTIONS.filter((font) => font.value === "qcf" || font.value === "noto-naskh-arabic").map((font) => {
+                const selected = store.arabicFont === font.value;
+                return (
+                  <button
+                    type="button"
+                    key={font.value}
+                    aria-pressed={selected}
+                    onClick={() => {
+                      store.setArabicFont(font.value);
+                      store.setArabicFontWeight(font.defaultWeight);
+                      if (font.value === "noto-naskh-arabic") store.setArabicInkThickness(0);
+                    }}
+                    className={`min-h-24 rounded-xl border p-3 text-left transition-colors ${selected ? "border-gold bg-gold/[0.06]" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
+                  >
+                    <span className={`block text-[10px] font-semibold ${selected ? "text-gold-soft" : "text-[var(--muted)]"}`}>
+                      {font.value === "qcf" ? "Mushaf faithful" : "Bold social"}
+                    </span>
+                    <ArabicFontSpecimen
+                      font={font.value}
+                      weight={font.defaultWeight}
+                      inkThickness={selected ? store.arabicInkThickness : 0}
+                      qcfWords={font.value === "qcf" ? currentVerse?.qcfWords?.slice(0, 2) : undefined}
+                      fallback={(currentVerse?.text_uthmani ?? "ٱلْحَمْدُ لِلَّهِ").split(/\s+/).slice(0, 2).join(" ")}
+                      className="mt-1 text-right text-[22px] leading-[1.8] text-parchment"
+                    />
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              aria-expanded={showAllArabicFonts}
+              onClick={() => setShowAllArabicFonts((shown) => !shown)}
+              className="flex min-h-10 w-full items-center justify-between rounded-lg px-1 text-[11px] text-[var(--muted)] hover:text-parchment"
+            >
+              Compare all five on this ayah
+              <span aria-hidden="true" className={`text-base transition-transform ${showAllArabicFonts ? "rotate-45" : ""}`}>+</span>
+            </button>
+            {showAllArabicFonts && (
+              <div className="space-y-2">
+                {ARABIC_FONT_OPTIONS.map((font) => {
+                  const selected = store.arabicFont === font.value;
+                  return (
+                    <button
+                      type="button"
+                      key={font.value}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        store.setArabicFont(font.value);
+                        store.setArabicFontWeight(font.defaultWeight);
+                      }}
+                      className={`w-full rounded-xl border p-3 text-left transition-colors ${selected ? "border-gold bg-gold/[0.06]" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${selected ? "text-gold-soft" : "text-[var(--muted)]"}`}>{font.label}</span>
+                        {selected && <span className="text-xs text-gold" aria-hidden="true">✓</span>}
+                      </span>
+                      <ArabicFontSpecimen
+                        font={font.value}
+                        weight={selected ? store.arabicFontWeight : font.defaultWeight}
+                        inkThickness={selected ? store.arabicInkThickness : 0}
+                        qcfWords={currentVerse?.qcfWords}
+                        fallback={currentVerse?.text_uthmani ?? "بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ"}
+                        className="mt-1 text-right text-2xl leading-[1.9] text-parchment"
+                      />
+                      <span className="mt-1 block text-[10px] leading-4 text-[var(--muted)]">{font.note}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           {(store.arabicFont === "scheherazade-new" || store.arabicFont === "noto-naskh-arabic") && (
             <WeightControl
@@ -633,6 +691,17 @@ export function StudioSettings() {
               onChange={store.setArabicFontWeight}
             />
           )}
+          <Slider
+            label="Quran Ink Thickness"
+            value={store.arabicInkThickness}
+            min={0}
+            max={2.5}
+            step={0.25}
+            suffix="px"
+            display={(value) => value === 0 ? "Natural" : `+${value}px`}
+            onChange={store.setArabicInkThickness}
+          />
+          <p className="-mt-2 text-[10px] leading-4 text-[var(--muted)]">Strengthens the selected Quran glyphs without faking a bold font. The crisp edge and glow remain separate.</p>
           <Slider
             label="Arabic Size"
             value={store.arabicFontSize}

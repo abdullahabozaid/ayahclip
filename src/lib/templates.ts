@@ -12,6 +12,7 @@ const base: StyleSettings = {
   arabicFont: "qcf",
   arabicFontSize: 44,
   arabicFontWeight: 400,
+  arabicInkThickness: 0.75,
   arabicEnabled: true,
   arabicVerseNumber: false,
   translationVerseNumber: false,
@@ -120,6 +121,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       ...base,
       arabicFont: "noto-naskh-arabic",
       arabicFontWeight: 700,
+      arabicInkThickness: 0,
       // The Short sample fits the 50% reading panel in two lines at this size;
       // the former 42px default shipped in the editor's own cramped warning.
       arabicFontSize: 36,

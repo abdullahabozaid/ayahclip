@@ -9,9 +9,10 @@ interface QcfVerseProps {
   qcfWords?: QcfWord[];
   fallback: string;
   className?: string;
+  inkThickness?: number;
 }
 
-export function QcfVerse({ qcfWords, fallback, className = "" }: QcfVerseProps) {
+export function QcfVerse({ qcfWords, fallback, className = "", inkThickness = 0 }: QcfVerseProps) {
   const [fontsReady, setFontsReady] = useState(false);
 
   useEffect(() => {
@@ -31,14 +32,22 @@ export function QcfVerse({ qcfWords, fallback, className = "" }: QcfVerseProps) 
 
   if (!qcfWords || qcfWords.length === 0 || !fontsReady) {
     return (
-      <p dir="rtl" className={`font-arabic text-[22px] leading-loose ${className}`}>
+      <p
+        dir="rtl"
+        className={`font-arabic text-[22px] leading-loose ${className}`}
+        style={inkThickness > 0 ? { WebkitTextStroke: `${inkThickness}px currentColor`, paintOrder: "stroke fill" } : undefined}
+      >
         {arabicTextForFont(fallback, "uthmanic-hafs")}
       </p>
     );
   }
 
   return (
-    <p dir="rtl" className={`text-[22px] leading-loose ${className}`}>
+    <p
+      dir="rtl"
+      className={`text-[22px] leading-loose ${className}`}
+      style={inkThickness > 0 ? { WebkitTextStroke: `${inkThickness}px currentColor`, paintOrder: "stroke fill" } : undefined}
+    >
       {qcfWords.map((w, i) => (
         <span key={i} style={{ fontFamily: qcfFontFamily(w.page_number) }}>
           {w.code_v2}

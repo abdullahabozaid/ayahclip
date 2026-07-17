@@ -99,6 +99,7 @@ export interface Project {
     arabicFontSize: number;
     arabicFont: string;
     arabicFontWeight?: number;
+    arabicInkThickness?: number;
     arabicVerseNumber?: boolean;
     translationVerseNumber?: boolean;
     translationEnabled: boolean;
