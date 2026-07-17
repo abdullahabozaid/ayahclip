@@ -1163,12 +1163,17 @@ function drawMedia(
       ctx.drawImage(media, (w - bw) / 2, (h - bh) / 2, bw, bh);
       ctx.restore();
     }
-    // The whole media, contained and centered, with rounded corners.
-    const contain = Math.min(w / mw, h / mh);
+    // Start from a whole-media contain fit, then apply the same creator zoom and
+    // normalized positioning contract as cover. At scale=1 and x/y=0 this is
+    // the original centered result; offsets can align the media within spare
+    // space, while zoomed media can be panned across its overflow.
+    const contain = Math.min(w / mw, h / mh) * Math.max(1, transform.scale);
     const sw = mw * contain;
     const sh = mh * contain;
-    const x = (w - sw) / 2;
-    const y = (h - sh) / 2;
+    const tx = Math.max(-1, Math.min(1, transform.x));
+    const ty = Math.max(-1, Math.min(1, transform.y));
+    const x = (w - sw) / 2 + (tx * Math.abs(w - sw)) / 2;
+    const y = (h - sh) / 2 + (ty * Math.abs(h - sh)) / 2;
     const r = Math.min(sw, sh) * 0.06;
     ctx.save();
     ctx.beginPath();
