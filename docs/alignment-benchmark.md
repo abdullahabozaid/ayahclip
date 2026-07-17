@@ -119,6 +119,33 @@ unseen-handset audio. Its JSONL rows accept `audio`, `surah`, `ayahStart`, and
 Directories may use either `surah_ayah_...` filenames or EveryAyah's compact
 six-digit `SSSAAA.mp3` convention.
 
+For a release corpus, also record the conditions that make each case useful:
+
+```json
+{"id":"phone-room-001","audio":"./private/phone-room-001.wav","surah":55,"ayahStart":13,"ayahEnd":16,"tags":["phone","room-echo","compression","background-speech","unseen-reciter"],"license":"Upstream dataset terms and version","reciter":"holdout-reciter-id","device":"captured handset model"}
+```
+
+The evaluator prints metrics for every tag instead of allowing one aggregate
+number to hide a missing or weak stress condition. A strict private-corpus gate
+can require both coverage and provenance:
+
+```sh
+npm run benchmark:recognition-corpus -- /absolute/private/path/manifest.jsonl \
+  --min-cases 30 \
+  --min-candidate-recall 0.95 \
+  --min-auto-applies 10 \
+  --min-auto-precision 1 \
+  --max-false-auto 0 \
+  --require-tags phone,room-echo,compression,background-speech,unseen-reciter \
+  --min-cases-per-tag 5 \
+  --min-tag-candidate-recall 0.90 \
+  --max-tag-false-auto 0 \
+  --require-license-metadata
+```
+
+`--require-license-metadata` proves only that provenance was recorded; the
+person running the corpus must still verify and accept the upstream terms.
+
 The isolated-ayah release matrix now runs 73 files across eight voices plus
 opening-letter, long-ayah, mid-surah, and repeated-refrain edge passages. Its
 release boundary is deliberately safety-first: **zero false auto-applies**, at
@@ -137,7 +164,8 @@ npm run test:recognition
   phone-band and synthetic background-audio stress modes. These are regression
   stressors, not a substitute for the remaining real handset/mixed-speech corpus.
 - Add real clips containing mixed non-recitation Arabic speech and real handset
-  recordings using a leakage-free licensed set.
+  recordings using a leakage-free licensed set. Gate each required condition
+  explicitly rather than relying on the aggregate score.
 - Calibrate the persisted per-boundary confidence thresholds against the future
   unseen-reciter and mixed-audio sets; low-agreement cuts are already saved and
   surfaced as amber review markers in the timeline.

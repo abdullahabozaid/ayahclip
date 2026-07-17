@@ -69,11 +69,22 @@ and run either the directory convention (`surah_ayah_...`) or a JSONL manifest:
 
 ```sh
 npm run benchmark:recognition-corpus -- /absolute/private/path/tlog_holdout \
-  --min-candidate-recall 0.95 --max-false-auto 0
+  --min-cases 30 \
+  --min-candidate-recall 0.95 \
+  --min-auto-precision 1 \
+  --max-false-auto 0 \
+  --require-tags phone,room-echo,compression,background-speech,unseen-reciter \
+  --min-cases-per-tag 5 \
+  --min-tag-candidate-recall 0.90 \
+  --max-tag-false-auto 0 \
+  --require-license-metadata
 ```
 
 The evaluator reports exact-range accuracy, creator-visible top-three recall,
 deeper candidate-set recall, auto-apply precision, false auto-applies, and
-character error rate. Repeated short verses are genuinely underdetermined from
-isolated audio, so the release gate prioritizes zero false auto-applies and safe
-creator review over forcing an exact first guess.
+character error rate, both overall and for each required stressor tag. Manifest
+rows can record `tags`, `license`, `reciter`, and `device`; these fields keep a
+good aggregate score from disguising missing handset or mixed-speech coverage.
+Repeated short verses are genuinely underdetermined from isolated audio, so the
+release gate prioritizes zero false auto-applies and safe creator review over
+forcing an exact first guess.

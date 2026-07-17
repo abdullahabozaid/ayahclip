@@ -30,7 +30,7 @@ its saved-project, preview, and export paths agree.
 - Real-audio alignment: **13/13 passed**, including hold-out reciters, run-on
   recitation, phone-band/background stress, non-recitation intro, long ayah,
   mid-surah start, and repeated refrain.
-- Unit suite: **239/239 passed**.
+- Unit suite: **243/243 passed**.
 - Market-readiness browser suite: **10/10 passed locally**, including truthful
   recognition stages, storage quota failure, and missing imported-audio recovery.
 - Lint, TypeScript, production build, Vercel production deployment, and live
@@ -43,8 +43,9 @@ its saved-project, preview, and export paths agree.
    introducing false auto-applies.
 2. Add a licensed leakage-free real-handset corpus containing room echo,
    compression, background speech, and reciters absent from model training.
-   The repository evaluator is ready, but the audio may not be redistributed in
-   this repository.
+   The repository evaluator now gates those stressor tags separately, minimum
+   case/auto-apply coverage, precision, false auto-applies, and recorded license
+   provenance, but the audio may not be redistributed in this repository.
 3. GitHub's isolated Linux E2E runner rejects `document.fonts.load()` with a
    network error even though Next self-hosts the faces and all other gates pass.
    The test-only correction is to wait for `document.fonts.ready`, use
