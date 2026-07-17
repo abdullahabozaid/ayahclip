@@ -98,6 +98,12 @@ reports a substantial unrecognised opening span. It keeps 350ms of pre-roll and
 maps the cropped pass back to original-file time. The same fixture then returns
 1:1–7 at high confidence with **0.167s mean / 0.336s max** cut error.
 
+Retry comparison deliberately excludes diagnostic 0, which represents the clip
+trim rather than an internal ayah cut. This prevents a cropped second pass from
+winning or losing because of start-trim confidence while its creator-visible
+internal boundaries are worse. The full 13-case matrix was rerun after this
+correction with no regression.
+
 Run the complete slow gate with:
 
 ```sh

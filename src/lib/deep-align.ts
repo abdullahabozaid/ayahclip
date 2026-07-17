@@ -42,9 +42,13 @@ export function attachAlignmentDiagnostics(
   });
 }
 
-function alignmentQuality(result: ReturnType<typeof forceAlignVersesDetailed>): number {
+export function alignmentAttemptQuality(
+  result: Pick<DeepAlignmentResult, "boundaryDiagnostics" | "transcriptSimilarity" | "methodAgreementSeconds"> | null,
+): number {
   if (!result) return -Infinity;
-  const confidence = result.boundaryDiagnostics.reduce(
+  // Diagnostic 0 is the clip trim, not an internal ayah cut. Retry selection
+  // must judge the boundaries creators will actually review and export.
+  const confidence = result.boundaryDiagnostics.slice(1).reduce(
     (total, diagnostic) => total + (diagnostic.confidence === "high" ? 3 : diagnostic.confidence === "medium" ? 1 : -2),
     0,
   );
@@ -96,7 +100,7 @@ export async function alignImportedAudio(params: {
   const needsRetry = retryOffset !== null && (
     !detailed ||
     (detailed.transcriptSimilarity ?? 0) < 0.7 ||
-    detailed.boundaryDiagnostics.some((diagnostic) => diagnostic.confidence === "low")
+    detailed.boundaryDiagnostics.slice(1).some((diagnostic) => diagnostic.confidence === "low")
   );
   if (needsRetry && retryOffset !== null) {
     const retrySamples = Math.round(retryOffset * 16_000);
@@ -107,7 +111,7 @@ export async function alignImportedAudio(params: {
     const initial = detailed;
     emissions = retryEmissions;
     const retried = forceAlignVersesDetailed(alignmentInput());
-    if (alignmentQuality(retried) > alignmentQuality(initial)) detailed = retried;
+    if (alignmentAttemptQuality(retried) > alignmentAttemptQuality(initial)) detailed = retried;
   }
   if (detailed) {
     return {

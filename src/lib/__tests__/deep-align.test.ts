@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachAlignmentDiagnostics } from "../deep-align";
+import { alignmentAttemptQuality, attachAlignmentDiagnostics } from "../deep-align";
 
 describe("attachAlignmentDiagnostics", () => {
   it("persists method, confidence, and agreement on each ayah timing", () => {
@@ -39,5 +39,28 @@ describe("attachAlignmentDiagnostics", () => {
       alignmentConfidence: "low",
       alignmentAgreementSeconds: null,
     });
+  });
+});
+
+describe("alignment retry quality", () => {
+  const result = (first: "high" | "low", internal: "high" | "low") => ({
+    transcriptSimilarity: 0.8,
+    methodAgreementSeconds: 0.2,
+    boundaryDiagnostics: [
+      { verseNumber: 1, confidence: first, agreementSeconds: null },
+      { verseNumber: 2, confidence: internal, agreementSeconds: 0.2 },
+    ],
+  });
+
+  it("ignores clip-start confidence when comparing retry passes", () => {
+    expect(alignmentAttemptQuality(result("high", "high"))).toBe(
+      alignmentAttemptQuality(result("low", "high")),
+    );
+  });
+
+  it("still strongly prefers a reliable internal ayah boundary", () => {
+    expect(alignmentAttemptQuality(result("low", "high"))).toBeGreaterThan(
+      alignmentAttemptQuality(result("high", "low")),
+    );
   });
 });
