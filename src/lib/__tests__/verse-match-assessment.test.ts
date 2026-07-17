@@ -81,6 +81,33 @@ describe("assessVerseMatch", () => {
     ).length).toBeGreaterThan(3);
   });
 
+  it("offers the canonical basmala for a corrupted short opening without auto-applying it", () => {
+    const assessment = assessVerseMatch("بسوسوعسلامية");
+    const candidates = selectRecognitionCandidates(
+      assessment.match!,
+      assessment.alternatives,
+      3,
+    );
+
+    expect(assessment.confidence).toBe("low");
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ surah: 1, ayahStart: 1, ayahEnd: 1 }),
+    ]));
+  });
+
+  it("does not inject the canonical basmala without the opening cue", () => {
+    const assessment = assessVerseMatch("فوسوس اليه الشيطان");
+    const candidates = selectRecognitionCandidates(
+      assessment.match!,
+      assessment.alternatives,
+      3,
+    );
+
+    expect(candidates).not.toContainEqual(
+      expect.objectContaining({ surah: 1, ayahStart: 1, ayahEnd: 1 }),
+    );
+  });
+
   it("flags a repeated verse within the same surah as ambiguous", () => {
     const assessment = assessVerseMatch(getVersesText(55, 16, 16).text);
     const candidates = selectRecognitionCandidates(

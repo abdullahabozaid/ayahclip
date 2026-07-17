@@ -308,6 +308,26 @@ function shortVerseMatches(query: string): VerseMatch[] {
   return matches;
 }
 
+/**
+ * Greedy CTC occasionally preserves only the opening "بس" of a standalone
+ * basmala and corrupts the rest of the phrase. Al-Fatiha 1:1 is the canonical
+ * numbered basmala, so keep it available for creator review when a short decode
+ * starts with that strong cue. This candidate is never allowed to influence the
+ * primary score, margin, confidence, or automatic range application.
+ */
+function canonicalBasmalaReviewMatch(query: string): VerseMatch | null {
+  const compact = query.replace(/ /g, "");
+  if (!basmala || compact.length < 6 || compact.length > 24 || !compact.startsWith("بس")) {
+    return null;
+  }
+  return {
+    surah: 1,
+    ayahStart: 1,
+    ayahEnd: 1,
+    score: alignToRef(query, basmala).score,
+  };
+}
+
 function referenceCoverage(match: VerseMatch, query: string): number {
   const reference = getVersesText(match.surah, match.ayahStart, match.ayahEnd).text;
   const referenceLength = reference.replace(/ /g, "").length;
@@ -524,8 +544,10 @@ export function assessVerseMatch(transcript: string): VerseMatchAssessment {
   // Preserve a deeper private candidate set for evaluation and future recovery.
   // The import UI still deliberately shows only three choices at once.
   const reviewCandidates = mergeReviewCandidates(match, ranked, mapped);
+  const basmalaReview = canonicalBasmalaReviewMatch(q);
   const alternatives = dedupeVerseMatches([
     ...duplicateVerseMatches,
+    ...(basmalaReview ? [basmalaReview] : []),
     ...reviewCandidates.slice(1),
   ]).slice(0, 9);
   const nearestRankedAlternative = ranked.find((candidate) =>
