@@ -439,6 +439,10 @@ test("split compositions expose precise media, panel, solid, and gradient contro
 
   await page.getByRole("button", { name: "media", exact: true }).click();
   const directMediaPosition = page.getByRole("slider", { name: "Media position" });
+  const directMediaZoom = page.getByRole("slider", { name: "Media zoom" });
+  await expect(directMediaZoom).toHaveValue("1");
+  await directMediaZoom.fill("1.5");
+  await expect(directMediaZoom).toHaveValue("1.5");
   await directMediaPosition.press("ArrowRight");
   await expect(directMediaPosition).toHaveAttribute("aria-valuetext", /horizontal/);
   await expect(page.getByRole("status", { name: "Media framing position" })).toContainText("3% right");
@@ -447,6 +451,7 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await directMediaPosition.press("ArrowRight");
   const mediaInspector = page.getByTestId("inspector-media");
   await mediaInspector.locator("summary").click();
+  await expect(mediaInspector.getByLabel("Zoom")).toHaveValue("1.5");
   await mediaInspector.getByLabel("Zoom").fill("1.75");
   await mediaInspector.getByLabel("Horizontal offset").fill("35");
   await mediaInspector.getByLabel("Vertical offset").fill("-20");

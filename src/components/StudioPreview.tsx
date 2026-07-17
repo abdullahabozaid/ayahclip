@@ -31,6 +31,7 @@ import { verseTextAt, snapToSentenceBoundary } from "@/lib/audio-import";
 import { buildClipRows } from "@/lib/clip-rows";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 import { resolveBackgroundScene } from "@/lib/background-sequence";
+import { MediaZoomControl } from "./MediaZoomControl";
 
 // One segment spanning a whole verse — used when a reciter verse has no manual
 // word-parts, so playback simply shows the full verse.
@@ -773,6 +774,10 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
           <span role="status" aria-label="Current media framing" className="text-[var(--muted)]">
             {mediaTransformPositionLabel(store.mediaTransform)}
           </span>
+          <MediaZoomControl
+            value={store.mediaTransform.scale}
+            onChange={(scale) => store.setMediaTransform({ ...store.mediaTransform, scale })}
+          />
           <button
             type="button"
             onClick={() => store.setMediaTransform({ ...store.mediaTransform, x: 0, y: 0 })}
@@ -780,7 +785,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
           >
             Center media
           </button>
-          <span className="text-[var(--muted-deep)]">Drag or use arrow keys · Style controls zoom</span>
+          <span className="text-[var(--muted-deep)]">Drag or use arrow keys</span>
         </div>
       )}
 

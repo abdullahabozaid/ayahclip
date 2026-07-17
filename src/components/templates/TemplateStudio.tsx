@@ -43,6 +43,7 @@ import { ArabicFontSpecimen } from "@/components/ArabicFontSpecimen";
 import { InlineActionPrompt } from "@/components/InlineActionPrompt";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 import { canvasBackgroundForMode } from "@/lib/canvas-background";
+import { MediaZoomControl } from "@/components/MediaZoomControl";
 import {
   FALLBACK_SAMPLE,
   loadTemplateSamples,
@@ -727,6 +728,10 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   <span role="status" aria-label="Media framing position" className="rounded-full bg-white/[0.035] px-3 py-2 text-[10px] text-[var(--muted)]">
                     {mediaTransformPositionLabel(transform)}
                   </span>
+                  <MediaZoomControl
+                    value={transform.scale}
+                    onChange={(scale) => setStyle("mediaTransform", { ...transform, scale })}
+                  />
                   <button
                     type="button"
                     onClick={() => setStyle("mediaTransform", { ...transform, x: 0, y: 0 })}

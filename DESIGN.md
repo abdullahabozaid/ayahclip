@@ -69,7 +69,7 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Below `lg`, settings is an overlay drawer (88% width); at `lg+` it's an inline 360px sidebar.
 - Verse timeline dock uses the same `panel` background but lives at the bottom, with `border-t hairline-soft`.
 - Recent additions: emerald split markers + emerald segment-preview labels under each region of the active verse card.
-- Split compositions make Solid versus Fade explicit. Media can be dragged directly or positioned with zoom plus horizontal/vertical offsets; Center image preserves the chosen zoom.
+- Split compositions make Solid versus Fade explicit. Media can be dragged directly, centered, and zoomed beside the preview; the inspector mirrors the same zoom plus horizontal/vertical offsets, and Center image preserves the chosen zoom.
 
 ## Recognition and alignment
 
