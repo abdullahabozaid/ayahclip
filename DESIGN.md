@@ -81,5 +81,6 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Recognition releases require zero false automatic ranges and at least 97% expected-range recall in the maintained real-audio candidate set; boundary alignment remains a separate real-audio gate.
 - When text matching is ambiguous, show up to three distinct likely Quran ranges and preserve prepared cuts for the range the creator selects. Never collapse known alternatives into a generic error.
 - If spoken audio before or after the recitation contaminates the whole transcript, use strong pause-bounded windows only to recover review candidates. Never promote a window-only match to an automatic range; explain that speech was separated and require the creator to choose by ear.
+- A medium whole-clip match must also fall back to review when a stronger pause-bounded window points to a competing range. Rank longer reliable evidence ahead of short perfect fragments so the complete likely passage remains visible in the three-choice UI.
 - Alignment is transactional: existing timing edits remain unchanged until a complete result is ready. Cancellation and failure preserve the current timeline.
 - Use creator language such as “Align by recitation” and “Rebuild from pauses”; avoid unexplained implementation terms such as “Deep align”.

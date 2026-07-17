@@ -592,8 +592,8 @@ export function recoverRecognitionWindowCandidates(
     }];
   }).sort((left, right) =>
     (right.confidence === "high" ? 2 : 1) - (left.confidence === "high" ? 2 : 1) ||
-    right.match.score - left.match.score ||
-    right.evidenceLength - left.evidenceLength
+    right.evidenceLength - left.evidenceLength ||
+    right.match.score - left.match.score
   );
 
   return ranked
@@ -604,6 +604,26 @@ export function recoverRecognitionWindowCandidates(
       item.ayahEnd === match.ayahEnd
     ) === index)
     .slice(0, Math.max(1, limit));
+}
+
+/** A medium whole-clip match is not safe to auto-apply when a strong
+ * pause-bounded window points to a different passage. Same-surah overlapping
+ * subranges are expected around ordinary ayah pauses and do not conflict. */
+export function hasCompetingRecognitionWindow(
+  primary: VerseMatch,
+  windows: readonly VerseMatch[],
+): boolean {
+  const strongest = windows[0];
+  const strongestDisagrees = Boolean(strongest && (
+    strongest.surah !== primary.surah ||
+    strongest.ayahStart !== primary.ayahStart ||
+    strongest.ayahEnd !== primary.ayahEnd
+  ) && strongest.score >= primary.score + 0.02);
+  return strongestDisagrees || windows.some((candidate) =>
+    candidate.surah !== primary.surah ||
+    candidate.ayahEnd < primary.ayahStart ||
+    candidate.ayahStart > primary.ayahEnd
+  );
 }
 
 /**

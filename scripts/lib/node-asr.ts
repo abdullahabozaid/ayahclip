@@ -115,7 +115,7 @@ function logSoftmax(data: Float32Array, timeSteps: number, vocabSize: number): F
   return output;
 }
 
-function greedyDecode(
+export function greedyDecode(
   data: Float32Array,
   timeSteps: number,
   vocabSize: number,
@@ -124,7 +124,9 @@ function greedyDecode(
   blankId: number,
 ) {
   const entries: { char: string; time: number }[] = [];
+  const wordStarts: number[] = [];
   let previous = -1;
+  let started = false;
   for (let time = 0; time < timeSteps; time++) {
     const base = time * vocabSize;
     let best = 0;
@@ -132,12 +134,16 @@ function greedyDecode(
       if (data[base + token] > data[base + best]) best = token;
     }
     if (best !== previous && best !== blankId) {
-      for (const char of vocab[String(best)] ?? "") {
+      const token = vocab[String(best)] ?? "";
+      const tokenTime = time * frameDuration;
+      if (token.startsWith("▁") || !started) wordStarts.push(tokenTime);
+      for (const char of token) {
         const rendered = char === "▁" ? " " : char;
         if (rendered === " " &&
           (entries.length === 0 || entries[entries.length - 1].char === " ")) continue;
-        entries.push({ char: rendered, time: time * frameDuration });
+        entries.push({ char: rendered, time: tokenTime });
       }
+      started = true;
     }
     previous = best;
   }
@@ -145,6 +151,7 @@ function greedyDecode(
   return {
     text: entries.map((entry) => entry.char).join(""),
     charTimes: entries.map((entry) => entry.time),
+    wordStarts,
   };
 }
 
@@ -203,7 +210,7 @@ export async function createNodeAsrRunner(projectRoot = resolve(".")) {
         vocab,
         transcription: {
           text: decoded.text,
-          wordStarts: [],
+          wordStarts: decoded.wordStarts.map((time) => time + timeOffset),
           charTimes: decoded.charTimes.map((time) => time + timeOffset),
         },
       };

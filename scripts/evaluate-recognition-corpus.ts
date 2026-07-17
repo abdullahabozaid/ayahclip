@@ -190,6 +190,7 @@ async function main() {
   const {
     assessVerseMatch,
     getVersesText,
+    hasCompetingRecognitionWindow,
     loadCorpus,
     normalizeArabic,
     recoverLeadingVerse,
@@ -219,13 +220,16 @@ async function main() {
     const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
       ? "medium"
       : assessment.confidence;
-    const windowCandidates = effectiveConfidence === "low"
+    const windowCandidates = effectiveConfidence !== "high"
       ? recoverRecognitionWindowCandidates(recognitionTranscriptWindows(
         emissions.transcription,
         findSilenceCenters(audioBuffer),
         audioBuffer.duration,
       ))
       : [];
+    const competingWindow = Boolean(
+      predicted && hasCompetingRecognitionWindow(predicted, windowCandidates)
+    );
     const reviewPrimary = windowCandidates[0] ?? predicted;
     const reviewAlternatives = [
       ...windowCandidates.slice(1),
@@ -245,7 +249,7 @@ async function main() {
     const exact = sameRange(predicted, item);
     const top3 = candidates.some((candidate) => sameRange(candidate, item));
     const candidateRecall = allCandidates.some((candidate) => sameRange(candidate, item));
-    const autoApplied = effectiveConfidence !== "low";
+    const autoApplied = effectiveConfidence !== "low" && !competingWindow;
     results.push({
       id: item.id,
       audio: item.audioPath,

@@ -16,6 +16,7 @@ import {
 import {
   assessVerseMatch,
   getVerseWeights,
+  hasCompetingRecognitionWindow,
   loadCorpus,
   recoverRecognitionWindowCandidates,
   selectRecognitionCandidates,
@@ -186,13 +187,14 @@ export default function ImportPage() {
       const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
         ? "medium"
         : assessment.confidence;
-      const windowCandidates = effectiveConfidence === "low"
+      const windowCandidates = effectiveConfidence !== "high"
         ? recoverRecognitionWindowCandidates(recognitionTranscriptWindows(
           emissions.transcription,
           findSilenceCenters(buffer),
           buffer.duration,
         ))
         : [];
+      const competingWindow = Boolean(m && hasCompetingRecognitionWindow(m, windowCandidates));
       const buildRecognitionResult = (
         match: VerseMatch,
       ): Omit<RecognitionResult, "confidence"> => {
@@ -233,7 +235,7 @@ export default function ImportPage() {
           review: buildAlignmentReview(method, boundaryDiagnostics),
         };
       };
-      if (m && effectiveConfidence !== "low") {
+      if (m && effectiveConfidence !== "low" && !competingWindow) {
         setDetectProgress({ stage: "align", detail: "Aligning each ayah boundary" });
         const result = buildRecognitionResult(m);
         setSurahId(m.surah);

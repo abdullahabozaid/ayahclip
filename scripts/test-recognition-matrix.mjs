@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 const ROOT = resolve(import.meta.dirname, "..");
 const TSX = join(ROOT, "node_modules/.bin/tsx");
 const EVALUATOR = join(ROOT, "scripts/evaluate-recognition-corpus.ts");
+const MIXED_SPEECH_EVALUATOR = join(ROOT, "scripts/evaluate-mixed-speech-recognition.ts");
 const FIXTURES = join(ROOT, "tmp/alignment-benchmark");
 
 const fixtures = [
@@ -60,6 +61,25 @@ for (const fixture of fixtures) {
   );
 }
 
+const mixedSpeech = JSON.parse(execFileSync(TSX, [MIXED_SPEECH_EVALUATOR], {
+  cwd: ROOT,
+  encoding: "utf8",
+  maxBuffer: 8 * 1024 * 1024,
+}));
+totals.cases += 1;
+totals.exact += mixedSpeech.exact ? 1 : 0;
+totals.top3 += mixedSpeech.expectedInCandidateSet ? 1 : 0;
+totals.candidates += mixedSpeech.expectedInCandidateSet ? 1 : 0;
+totals.autoApplied += mixedSpeech.autoApplied ? 1 : 0;
+totals.falseAuto += mixedSpeech.falseAutoApply ? 1 : 0;
+console.log(
+  `${!mixedSpeech.falseAutoApply && mixedSpeech.expectedInCandidateSet ? "✓" : "✗"} ` +
+  "mixed spoken intro: " +
+  `${mixedSpeech.autoApplied ? "auto-applied" : "held for review"}, ` +
+  `${mixedSpeech.falseAutoApply ? "false range" : "no false range"}, ` +
+  `${mixedSpeech.expectedInCandidateSet ? "target recovered" : "target missing"}`,
+);
+
 const aggregate = {
   cases: totals.cases,
   exactRangeAccuracy: totals.exact / totals.cases,
@@ -71,7 +91,7 @@ const aggregate = {
 };
 
 console.log(
-  `\n${aggregate.cases} isolated-ayah cases: ` +
+  `\n${aggregate.cases} real-audio recognition cases: ` +
   `${aggregate.autoAppliedCases} safe auto-applies, ` +
   `${aggregate.autoApplyPrecision.toFixed(3)} precision, ` +
   `${aggregate.candidateRangeRecall.toFixed(3)} candidate recall.`,
@@ -86,6 +106,9 @@ const failures = [
     : null,
   aggregate.candidateRangeRecall < 0.97
     ? `candidate recall fell below 0.970 (${aggregate.candidateRangeRecall.toFixed(3)})`
+    : null,
+  !mixedSpeech.expectedInCandidateSet
+    ? "mixed spoken-intro target was not recovered for review"
     : null,
 ].filter(Boolean);
 

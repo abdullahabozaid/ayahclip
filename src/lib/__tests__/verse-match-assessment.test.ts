@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   assessVerseMatch,
   getVersesText,
+  hasCompetingRecognitionWindow,
   loadCorpus,
   recoverRecognitionWindowCandidates,
   selectRecognitionCandidates,
@@ -42,6 +43,29 @@ describe("recoverLeadingVerse", () => {
 
     expect(result.recovered).toBe(false);
     expect(result.match.ayahStart).toBe(255);
+  });
+});
+
+describe("pause-bounded recognition conflicts", () => {
+  const primary = { surah: 89, ayahStart: 5, ayahEnd: 10, score: 0.88 };
+
+  it("flags a different strong passage before medium-confidence auto-apply", () => {
+    expect(hasCompetingRecognitionWindow(primary, [
+      { surah: 89, ayahStart: 6, ayahEnd: 10, score: 1 },
+      { surah: 1, ayahStart: 2, ayahEnd: 2, score: 1 },
+    ])).toBe(true);
+  });
+
+  it("allows a weaker overlapping same-surah fragment created by an ordinary ayah pause", () => {
+    expect(hasCompetingRecognitionWindow(primary, [
+      { surah: 89, ayahStart: 6, ayahEnd: 8, score: 0.89 },
+    ])).toBe(false);
+  });
+
+  it("flags a stronger overlapping window that corrects an expanded medium range", () => {
+    expect(hasCompetingRecognitionWindow(primary, [
+      { surah: 89, ayahStart: 6, ayahEnd: 10, score: 0.96 },
+    ])).toBe(true);
   });
 });
 
