@@ -43,6 +43,18 @@ function fmt(s: number): string {
   return `${m}:${sec.padStart(4, "0")}`;
 }
 
+function timingMethodLabel(method?: VerseTiming["alignmentMethod"]): string {
+  return method === "transcript"
+    ? "Transcript"
+    : method === "hybrid"
+      ? "Hybrid"
+      : method === "ctc"
+        ? "Acoustic"
+        : method === "pause"
+          ? "Pauses"
+          : "Manual";
+}
+
 const MIN_DUR = 0.12;
 const MAX_CANVAS_W = 16000;
 
@@ -1292,9 +1304,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               toolsOpen ? "border border-gold/40 bg-[var(--gold)]/[0.08] text-parchment" : "btn-ghost"
             }`}
             aria-expanded={toolsOpen}
-            title="Open detect / trim tools"
+            title="Open automatic timing and trim tools"
           >
-            Tools
+            Timing tools
             <svg
               viewBox="0 0 24 24"
               className={`h-3 w-3 transition-transform ${toolsOpen ? "rotate-180" : ""}`}
@@ -1364,47 +1376,56 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         </div>
       </div>
 
-      {/* Tools cluster — only when you need it. Quieter chrome than the
-          primary row; the actions inside are intentionally less frequent. */}
+      {/* The algorithms are named by the evidence they use. "Pauses" is fast
+          and transparent; "recited words" is the heavier local model path. */}
       {toolsOpen && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/60 px-4 py-2.5">
-          <button
-            onClick={redetect}
-            disabled={busy || loading}
-            className="btn-gold flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] disabled:opacity-40 sm:min-h-9"
-            title="Rebuild every verse boundary from the recitation's pauses"
-          >
-            {redetecting ? "Rebuilding…" : <><TlIcon d={TL_ICON.refresh} /> Rebuild from pauses</>}
-          </button>
-          <button
-            onClick={deepAlign}
-            disabled={busy || loading}
-            className="btn-ghost min-h-11 rounded-full px-3 text-[11px] disabled:opacity-40 sm:min-h-9"
-            title="Re-run speech recognition to align each verse's words to the audio (best for run-on recitation)"
-          >
-            Align by recitation
-          </button>
-          <span className="mx-1 h-4 w-px bg-[var(--hairline)]" />
-          <button
-            onClick={() => trimTo("start")}
-            disabled={loading || duration === 0}
-            className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] disabled:opacity-40 sm:min-h-9"
-            title="Delete everything before the playhead"
-          >
-            <TlIcon d={TL_ICON.trimStart} /> Trim start
-          </button>
-          <button
-            onClick={() => trimTo("end")}
-            disabled={loading || duration === 0}
-            className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] disabled:opacity-40 sm:min-h-9"
-            title="Delete everything after the playhead"
-          >
-            Trim end <TlIcon d={TL_ICON.trimEnd} />
-          </button>
-          <span className="ml-auto hidden text-[10px] text-[var(--muted-deep)] sm:inline">
-            Rebuild from pauses or align to the recited words
-          </span>
-        </div>
+        <section aria-label="Timing tools" className="rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/60 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-parchment">Automatic timing</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">
+                Use pauses for separated recitation. Use recited words when ayat run together.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <button
+                onClick={redetect}
+                disabled={busy || loading}
+                className="btn-ghost flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-[11px] disabled:opacity-40 sm:min-h-10"
+                title="Rebuild every verse boundary from audible pauses"
+              >
+                <TlIcon d={TL_ICON.refresh} /> {redetecting ? "Finding pauses…" : "Use pauses"}
+              </button>
+              <button
+                onClick={deepAlign}
+                disabled={busy || loading}
+                className="btn-gold min-h-11 rounded-xl px-3 text-[11px] disabled:opacity-40 sm:min-h-10"
+                title="Listen locally and align each ayah to its recited words"
+              >
+                Use recited words
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--hairline-soft)] pt-3">
+            <span className="mr-1 text-[10px] font-medium text-[var(--muted-deep)]">Clip edges</span>
+            <button
+              onClick={() => trimTo("start")}
+              disabled={loading || duration === 0}
+              className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] disabled:opacity-40 sm:min-h-9"
+              title="Remove everything before the playhead"
+            >
+              <TlIcon d={TL_ICON.trimStart} /> Set clip start
+            </button>
+            <button
+              onClick={() => trimTo("end")}
+              disabled={loading || duration === 0}
+              className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] disabled:opacity-40 sm:min-h-9"
+              title="Remove everything after the playhead"
+            >
+              Set clip end <TlIcon d={TL_ICON.trimEnd} />
+            </button>
+          </div>
+        </section>
       )}
 
       {deepProgress && (
@@ -1516,6 +1537,22 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               </button>
               <span className="text-[var(--muted-deep)]">({fmt(len)})</span>
             </div>
+
+            {activeIdx > 0 && v.alignmentConfidence && (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] ring-1 ring-inset ${
+                  v.alignmentReviewed
+                    ? "bg-emerald-soft/10 text-emerald-soft ring-emerald-soft/25"
+                    : v.alignmentConfidence === "high"
+                      ? "bg-white/[0.04] text-parchment/70 ring-[var(--hairline)]"
+                      : "bg-amber-400/10 text-amber-200 ring-amber-400/30"
+                }`}
+                title={`${timingMethodLabel(v.alignmentMethod)} timing for the boundary before ayah ${v.verseNumber}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${v.alignmentReviewed ? "bg-emerald-soft" : v.alignmentConfidence === "high" ? "bg-parchment/50" : "bg-amber-300"}`} />
+                {v.alignmentReviewed ? "Boundary checked" : `${timingMethodLabel(v.alignmentMethod)} · ${v.alignmentConfidence} confidence`}
+              </span>
+            )}
 
             <button
               onClick={addSplit}
@@ -1913,9 +1950,14 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         </div>
       </div>
 
-      {/* Discoverable shortcuts — replaces the dense help paragraph that used
-          to live here. Tucked at the right so the timeline itself can breathe. */}
-      <div className="relative flex items-center justify-end">
+      {/* A compact legend makes the waveform states readable without opening
+          help; keyboard detail stays progressive on the right. */}
+      <div className="relative flex flex-wrap items-center justify-between gap-2">
+        <div aria-label="Timeline legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--muted-deep)]">
+          <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-gold" />Selected ayah</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-0.5 bg-gold/35" />Detected pause</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-0.5 bg-amber-400" />Needs review</span>
+        </div>
         <button
           onClick={() => setShortcutsOpen((v) => !v)}
           className="flex min-h-11 items-center gap-1.5 rounded-full px-2.5 text-[11px] text-[var(--muted-deep)] transition-colors hover:bg-[var(--ink-deep)] hover:text-parchment sm:min-h-8"

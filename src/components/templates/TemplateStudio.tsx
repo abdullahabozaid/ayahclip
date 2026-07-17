@@ -771,7 +771,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { font: "qcf", weight: 400, label: "Mushaf faithful", sample: "ٱلۡحَمۡدُ" },
-                    { font: "noto-naskh-arabic", weight: 700, label: "Bold social", sample: "ٱلۡحَمۡدُ" },
+                    { font: "scheherazade-new", weight: 700, label: "Traditional bold", sample: "ٱلۡحَمۡدُ" },
                   ].map((mode) => {
                     const selected = draft.settings.arabicFont === mode.font && draft.settings.arabicFontWeight === mode.weight;
                     return (

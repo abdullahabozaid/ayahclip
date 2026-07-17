@@ -108,6 +108,11 @@ test("a real local audio file survives import, template choice, save, and reopen
   await page.getByRole("button", { name: "Show" }).click();
   await page.getByRole("button", { name: "Timeline" }).click();
   await expect(page.getByText("Loop verse", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Timeline legend")).toContainText("Needs review");
+  await page.getByRole("button", { name: "Timing tools" }).click();
+  await expect(page.getByText("Automatic timing", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use pauses" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use recited words" })).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: "Saved", exact: true })).toBeVisible();
 
@@ -388,13 +393,13 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   const arabicInspector = page.getByTestId("inspector-arabic");
   await arabicInspector.locator("summary").click();
   await expect(
-    arabicInspector.getByRole("button", { name: /Bold social/ }),
+    arabicInspector.getByRole("button", { name: /Traditional bold/ }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(arabicInspector.getByLabel("Size")).toHaveValue("36");
+  await expect(arabicInspector.getByLabel("Size")).toHaveValue("34");
   await expect(arabicInspector.getByText("Split text needs room", { exact: true })).toHaveCount(0);
   await arabicInspector.getByRole("button", { name: "Compare all five fonts" }).click();
   await expect(
-    arabicInspector.getByRole("button", { name: /Noto Naskh Arabic/ }),
+    arabicInspector.getByRole("button", { name: /Scheherazade New/ }),
   ).toHaveAttribute("aria-pressed", "true");
   await expect(
     arabicInspector.getByRole("button", { name: "Bold", exact: true }),

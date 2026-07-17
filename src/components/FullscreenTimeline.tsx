@@ -74,6 +74,7 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
     <div
       className="fixed inset-0 z-50 flex flex-col bg-[var(--ink)]"
       role="dialog"
+      aria-modal="true"
       aria-label="Verse timeline editor"
     >
       {/* Header — quiet, identifies the verses being edited. */}

@@ -119,12 +119,14 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFont: "noto-naskh-arabic",
+      // A real Bold Naskh face keeps the traditional Quranic silhouette while
+      // remaining legible over short-form video.
+      arabicFont: "scheherazade-new",
       arabicFontWeight: 700,
       arabicInkThickness: 0,
-      // The Short sample fits the 50% reading panel in two lines at this size;
-      // the former 42px default shipped in the editor's own cramped warning.
-      arabicFontSize: 36,
+      // Scheherazade is wider than Noto Naskh; 34px keeps the real Short sample
+      // to two lines in the 50% reading panel without thinning the face.
+      arabicFontSize: 34,
       lineHeight: 1.08,
       textPosition: 49,
       textLayout: "left-panel",
