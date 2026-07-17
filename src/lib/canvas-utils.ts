@@ -1209,6 +1209,81 @@ export interface MediaTransform {
 
 export const DEFAULT_MEDIA_TRANSFORM: MediaTransform = { scale: 1, x: 0, y: 0 };
 
+export type MediaFrameShape = "full" | "square" | "portrait" | "circle" | "rounded";
+
+/** The container the uploaded image/video is painted into. x/y are the
+ * container centre and width/height are percentages of the output frame.
+ * MediaTransform remains independent so creators can pan and zoom the subject
+ * inside this container without moving the container itself. */
+export interface MediaFrame {
+  shape: MediaFrameShape;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
+}
+
+export const DEFAULT_MEDIA_FRAME: MediaFrame = {
+  shape: "full",
+  x: 50,
+  y: 50,
+  width: 100,
+  height: 100,
+  radius: 6,
+};
+
+export function normalizeMediaFrame(frame?: Partial<MediaFrame>): MediaFrame {
+  const source = { ...DEFAULT_MEDIA_FRAME, ...frame };
+  const shape: MediaFrameShape = ["full", "square", "portrait", "circle", "rounded"].includes(source.shape)
+    ? source.shape
+    : "full";
+  if (shape === "full") return { ...DEFAULT_MEDIA_FRAME };
+  return {
+    shape,
+    x: Math.max(-50, Math.min(150, source.x)),
+    y: Math.max(-50, Math.min(150, source.y)),
+    width: Math.max(10, Math.min(100, source.width)),
+    height: Math.max(10, Math.min(100, source.height)),
+    radius: Math.max(0, Math.min(50, source.radius)),
+  };
+}
+
+export function mediaFrameRect(w: number, h: number, frame?: Partial<MediaFrame>) {
+  const value = normalizeMediaFrame(frame);
+  if (value.shape === "full") return { x: 0, y: 0, w, h, radius: 0, shape: value.shape };
+  let fw = w * value.width / 100;
+  let fh = h * value.height / 100;
+  if (value.shape === "square" || value.shape === "circle") {
+    const side = Math.min(fw, fh);
+    fw = side;
+    fh = side;
+  }
+  return {
+    x: w * value.x / 100 - fw / 2,
+    y: h * value.y / 100 - fh / 2,
+    w: fw,
+    h: fh,
+    radius: Math.min(fw, fh) * value.radius / 100,
+    shape: value.shape,
+  };
+}
+
+function clipMediaFrame(
+  ctx: CanvasRenderingContext2D,
+  rect: ReturnType<typeof mediaFrameRect>,
+) {
+  ctx.beginPath();
+  if (rect.shape === "circle") {
+    ctx.ellipse(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w / 2, rect.h / 2, 0, 0, Math.PI * 2);
+  } else if ((rect.shape === "rounded" || rect.shape === "portrait") && typeof ctx.roundRect === "function") {
+    ctx.roundRect(rect.x, rect.y, rect.w, rect.h, rect.radius);
+  } else {
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+  }
+  ctx.clip();
+}
+
 export type MediaNudgeDirection = "left" | "right" | "up" | "down";
 
 /** Move media by a predictable viewport-relative keyboard step. Position is
@@ -1260,34 +1335,49 @@ function drawMedia(
   h: number,
   fit: MediaFit,
   backdrop: FitBackdrop = "blur",
-  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM
+  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM,
+  frame: MediaFrame = DEFAULT_MEDIA_FRAME,
 ) {
   if (mw <= 0 || mh <= 0) return;
+  const frameValue = normalizeMediaFrame(frame);
+  const rect = mediaFrameRect(w, h, frameValue);
+  const framed = frameValue.shape !== "full";
+  if (framed) {
+    ctx.save();
+    ctx.fillStyle = "#050507";
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+  ctx.save();
+  clipMediaFrame(ctx, rect);
+  ctx.translate(rect.x, rect.y);
+  const regionW = rect.w;
+  const regionH = rect.h;
   if (fit === "contain") {
     // Backdrop so the frame isn't empty: blurred+darkened cover, or solid black.
     if (backdrop === "black") {
       ctx.save();
       ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, regionW, regionH);
       ctx.restore();
     } else {
-      const cover = Math.max(w / mw, h / mh);
+      const cover = Math.max(regionW / mw, regionH / mh);
       const bw = mw * cover;
       const bh = mh * cover;
       ctx.save();
-      ctx.filter = `blur(${Math.max(8, Math.round(w * 0.05))}px) brightness(0.5)`;
-      ctx.drawImage(media, (w - bw) / 2, (h - bh) / 2, bw, bh);
+      ctx.filter = `blur(${Math.max(8, Math.round(regionW * 0.05))}px) brightness(0.5)`;
+      ctx.drawImage(media, (regionW - bw) / 2, (regionH - bh) / 2, bw, bh);
       ctx.restore();
     }
     // Start from a whole-media contain fit, then apply the same creator zoom and
     // viewport-relative positioning contract as cover. At scale=1 and x/y=0
     // this is the original centered result; offsets remain free even when the
     // media has no natural overflow on that axis.
-    const contain = Math.min(w / mw, h / mh) * Math.max(0.1, transform.scale);
+    const contain = Math.min(regionW / mw, regionH / mh) * Math.max(0.1, transform.scale);
     const sw = mw * contain;
     const sh = mh * contain;
-    const x = (w - sw) / 2 + transform.x * w;
-    const y = (h - sh) / 2 + transform.y * h;
+    const x = (regionW - sw) / 2 + transform.x * regionW;
+    const y = (regionH - sh) / 2 + transform.y * regionH;
     const r = Math.min(sw, sh) * 0.06;
     ctx.save();
     ctx.beginPath();
@@ -1296,18 +1386,20 @@ function drawMedia(
     ctx.clip();
     ctx.drawImage(media, x, y, sw, sh);
     ctx.restore();
+    ctx.restore();
     return;
   }
-  const scale = Math.max(w / mw, h / mh) * Math.max(0.1, transform.scale);
+  const scale = Math.max(regionW / mw, regionH / mh) * Math.max(0.1, transform.scale);
   const sw = mw * scale;
   const sh = mh * scale;
   ctx.drawImage(
     media,
-    (w - sw) / 2 + transform.x * w,
-    (h - sh) / 2 + transform.y * h,
+    (regionW - sw) / 2 + transform.x * regionW,
+    (regionH - sh) / 2 + transform.y * regionH,
     sw,
     sh,
   );
+  ctx.restore();
 }
 
 export function drawVideoFrame(
@@ -1317,9 +1409,10 @@ export function drawVideoFrame(
   h: number,
   fit: MediaFit = "cover",
   backdrop: FitBackdrop = "blur",
-  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM
+  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM,
+  frame: MediaFrame = DEFAULT_MEDIA_FRAME,
 ) {
-  drawMedia(ctx, video, video.videoWidth, video.videoHeight, w, h, fit, backdrop, transform);
+  drawMedia(ctx, video, video.videoWidth, video.videoHeight, w, h, fit, backdrop, transform, frame);
 }
 
 export function drawBgImage(
@@ -1329,9 +1422,10 @@ export function drawBgImage(
   h: number,
   fit: MediaFit = "cover",
   backdrop: FitBackdrop = "blur",
-  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM
+  transform: MediaTransform = DEFAULT_MEDIA_TRANSFORM,
+  frame: MediaFrame = DEFAULT_MEDIA_FRAME,
 ) {
-  drawMedia(ctx, img, img.width, img.height, w, h, fit, backdrop, transform);
+  drawMedia(ctx, img, img.width, img.height, w, h, fit, backdrop, transform, frame);
 }
 
 export function drawLetterboxBars(

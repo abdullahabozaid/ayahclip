@@ -6,12 +6,14 @@ import { useRouter } from "next/navigation";
 import { applyTemplate } from "@/lib/apply-template";
 import {
   analyzeArabicTextFit,
+  DEFAULT_MEDIA_FRAME,
   DEFAULT_MEDIA_TRANSFORM,
   DEFAULT_SPLIT_MASK,
   TRANSLATION_FONTS,
   ensureFontsReady,
   mediaTransformPositionLabel,
   nudgeMediaTransform,
+  normalizeMediaFrame,
   normalizeSplitMask,
   type ArabicTextFitResult,
 } from "@/lib/canvas-utils";
@@ -128,6 +130,9 @@ function cloneTemplate(template: TemplateDefinition): TemplateDefinition {
       mediaTransform: template.settings.mediaTransform
         ? { ...template.settings.mediaTransform }
         : undefined,
+      mediaFrame: template.settings.mediaFrame
+        ? { ...template.settings.mediaFrame }
+        : undefined,
       splitMask: template.settings.splitMask
         ? { ...template.settings.splitMask }
         : undefined,
@@ -162,6 +167,9 @@ function blankTemplate(): TemplateDefinition {
       letterbox: { ...DEFAULT_TEMPLATE_STYLE.letterbox },
       mediaTransform: DEFAULT_TEMPLATE_STYLE.mediaTransform
         ? { ...DEFAULT_TEMPLATE_STYLE.mediaTransform }
+        : undefined,
+      mediaFrame: DEFAULT_TEMPLATE_STYLE.mediaFrame
+        ? { ...DEFAULT_TEMPLATE_STYLE.mediaFrame }
         : undefined,
       splitMask: DEFAULT_TEMPLATE_STYLE.splitMask
         ? { ...DEFAULT_TEMPLATE_STYLE.splitMask }
@@ -1043,6 +1051,42 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             </InspectorSection>
 
             <InspectorSection title="Media" icon="image">
+              {(() => {
+                const frame = draft.settings.mediaFrame ?? DEFAULT_MEDIA_FRAME;
+                return (
+                  <div className="space-y-3 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/55 p-4">
+                    <div>
+                      <p className="text-xs font-medium text-parchment">Media container</p>
+                      <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">The container moves independently from the image or video inside it.</p>
+                    </div>
+                    <Segmented
+                      value={frame.shape}
+                      options={[
+                        { value: "full", label: "Full" },
+                        { value: "square", label: "Square" },
+                        { value: "portrait", label: "Portrait" },
+                        { value: "circle", label: "Circle" },
+                        { value: "rounded", label: "Rounded" },
+                      ]}
+                      onChange={(shape) => setStyle("mediaFrame", normalizeMediaFrame({
+                        ...frame,
+                        shape: shape as typeof frame.shape,
+                        ...(shape === "full" ? DEFAULT_MEDIA_FRAME : {}),
+                      }))}
+                    />
+                    {frame.shape !== "full" && (
+                      <div className="space-y-3 border-t border-[var(--hairline-soft)] pt-3">
+                        <RangeField label="Container width" value={frame.width} min={10} max={100} suffix="%" onChange={(width) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, width }))} />
+                        {(frame.shape === "portrait" || frame.shape === "rounded") && (
+                          <RangeField label="Container height" value={frame.height} min={10} max={100} suffix="%" onChange={(height) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, height }))} />
+                        )}
+                        <RangeField label="Container horizontal" value={frame.x} min={-50} max={150} suffix="%" onChange={(x) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, x }))} />
+                        <RangeField label="Container vertical" value={frame.y} min={-50} max={150} suffix="%" onChange={(y) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, y }))} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <Segmented
                 value={draft.settings.backgroundFit ?? "cover"}
                 options={[{ value: "cover", label: "Fill frame" }, { value: "contain", label: "Show whole" }]}

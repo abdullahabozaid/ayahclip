@@ -117,6 +117,7 @@ describe("template application media handoff", () => {
       backgroundFit: "contain",
       fitBackdrop: "blur",
       mediaTransform: { scale: 1.8, x: -0.4, y: 0.25 },
+      mediaFrame: { shape: "full", x: 50, y: 50, width: 100, height: 100, radius: 6 },
       videoLoopMode: "freeze",
     });
 
@@ -127,6 +128,7 @@ describe("template application media handoff", () => {
         backgroundFit: "cover",
         fitBackdrop: "black",
         mediaTransform: { scale: 1.35, x: 0.3, y: -0.1 },
+        mediaFrame: { shape: "square", x: 62, y: 48, width: 74, height: 44, radius: 0 },
         videoLoopMode: "loop",
       },
     });
@@ -140,6 +142,7 @@ describe("template application media handoff", () => {
     expect(state.backgroundFit).toBe("cover");
     expect(state.fitBackdrop).toBe("black");
     expect(state.mediaTransform).toEqual({ scale: 1.35, x: 0.3, y: -0.1 });
+    expect(state.mediaFrame).toEqual({ shape: "square", x: 62, y: 48, width: 74, height: 44, radius: 0 });
     expect(state.videoLoopMode).toBe("loop");
   });
 });

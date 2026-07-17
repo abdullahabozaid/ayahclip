@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { Surah, Verse, VideoFormat, Background, TextShadow, TextOutline, LetterboxConfig, Project, SplitMaskConfig } from "@/types";
-import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, MediaTransform, DEFAULT_SPLIT_MASK } from "./canvas-utils";
+import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, MediaTransform, MediaFrame, DEFAULT_MEDIA_FRAME, DEFAULT_SPLIT_MASK } from "./canvas-utils";
 import { StyleSettings } from "./style";
 import { VerseTiming } from "./audio-import";
 import { normalizeTimings } from "./timing-ops";
@@ -59,6 +59,7 @@ interface AppState {
   background: Background;
   backgroundFit: MediaFit;
   mediaTransform: MediaTransform;
+  mediaFrame: MediaFrame;
   backgroundSequenceEnabled: boolean;
   backgroundScenes: BackgroundScene[];
   activeBackgroundSceneId: string | null;
@@ -137,6 +138,7 @@ interface AppState {
   setBackground: (bg: Background) => void;
   setBackgroundFit: (fit: MediaFit) => void;
   setMediaTransform: (transform: MediaTransform) => void;
+  setMediaFrame: (frame: MediaFrame) => void;
   setBackgroundSequenceEnabled: (enabled: boolean) => void;
   addBackgroundScene: (background: Background) => void;
   selectBackgroundScene: (id: string) => void;
@@ -195,7 +197,7 @@ export const useAppStore = create<AppState>((set) => ({
   selectedVerseNumbers: [],
   reciterId: "alafasy",
   videoFormat: "9:16",
-  arabicFontSize: 36,
+  arabicFontSize: 30,
   arabicFont: "qcf",
   arabicFontWeight: 400,
   arabicInkThickness: 0.75,
@@ -203,7 +205,7 @@ export const useAppStore = create<AppState>((set) => ({
   translationVerseNumber: true,
   translationEnabled: true,
   arabicEnabled: true,
-  translationFontSize: 16,
+  translationFontSize: 14,
   translationFont: "sans-serif",
   translationFontWeight: 400,
   translationLanguage: "en",
@@ -222,6 +224,7 @@ export const useAppStore = create<AppState>((set) => ({
   background: backgroundPresets[0],
   backgroundFit: "cover",
   mediaTransform: { scale: 1, x: 0, y: 0 },
+  mediaFrame: { ...DEFAULT_MEDIA_FRAME },
   backgroundSequenceEnabled: false,
   backgroundScenes: [],
   activeBackgroundSceneId: null,
@@ -332,6 +335,7 @@ export const useAppStore = create<AppState>((set) => ({
       ? state.backgroundScenes.map((scene) => scene.id === state.activeBackgroundSceneId ? { ...scene, transform: mediaTransform } : scene)
       : state.backgroundScenes,
   })),
+  setMediaFrame: (mediaFrame) => set({ mediaFrame }),
   setFitBackdrop: (b) => set((state) => ({
     fitBackdrop: b,
     backgroundScenes: state.backgroundSequenceEnabled && state.activeBackgroundSceneId
@@ -497,6 +501,7 @@ export const useAppStore = create<AppState>((set) => ({
       arabicInkThickness: settings.arabicInkThickness ?? 0,
       textOutline: settings.textOutline ?? { enabled: false, color: "#050507", width: 1.25 },
       mediaTransform: settings.mediaTransform ?? { scale: 1, x: 0, y: 0 },
+      mediaFrame: settings.mediaFrame ?? { ...DEFAULT_MEDIA_FRAME },
       backgroundSequenceEnabled: settings.backgroundSequenceEnabled ?? false,
       backgroundScenes: settings.backgroundScenes ?? [],
       activeBackgroundSceneId: settings.activeBackgroundSceneId ?? settings.backgroundScenes?.[0]?.id ?? null,
@@ -589,6 +594,7 @@ export const useAppStore = create<AppState>((set) => ({
     emphasis: {},
     activeWordIndex: null,
     mediaTransform: { scale: 1, x: 0, y: 0 },
+    mediaFrame: { ...DEFAULT_MEDIA_FRAME },
     backgroundSequenceEnabled: false,
     backgroundScenes: [],
     activeBackgroundSceneId: null,

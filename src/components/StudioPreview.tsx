@@ -13,8 +13,10 @@ import {
 } from "@/lib/playback-engine";
 import {
   ensureFontsReady,
+  mediaFrameRect,
   mediaTransformPositionLabel,
   nudgeMediaTransform,
+  normalizeMediaFrame,
   splitWords,
 } from "@/lib/canvas-utils";
 import {
@@ -78,7 +80,15 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sceneImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const sceneVideosRef = useRef<Map<string, HTMLVideoElement>>(new Map());
-  const reframeDragRef = useRef<{ x: number; y: number; mediaX: number; mediaY: number } | null>(null);
+  const [canvasTool, setCanvasTool] = useState<"media" | "frame">("media");
+  const reframeDragRef = useRef<{
+    x: number;
+    y: number;
+    mediaX: number;
+    mediaY: number;
+    frameX: number;
+    frameY: number;
+  } | null>(null);
 
   const sequenceMediaKey = store.backgroundScenes
     .map((scene) => `${scene.id}:${scene.background.type}:${scene.background.value}`)
@@ -651,6 +661,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     store.activeBackgroundSceneId,
     store.backgroundFit,
     store.mediaTransform,
+    store.mediaFrame,
     store.fitBackdrop,
     store.overlayOpacity,
     store.overlayColor,
@@ -706,6 +717,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   const framed = frameMode !== "studio";
   const displayWidth = framed ? 348 : size.w >= size.h ? 460 : 360;
   const canReframe = store.background.type === "image" || store.background.type === "video";
+  const frameGuide = mediaFrameRect(size.w, size.h, store.mediaFrame);
 
   const startReframe = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!canReframe) return;
@@ -715,6 +727,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       y: event.clientY,
       mediaX: store.mediaTransform.x,
       mediaY: store.mediaTransform.y,
+      frameX: store.mediaFrame.x,
+      frameY: store.mediaFrame.y,
     };
   };
 
@@ -722,11 +736,19 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     const start = reframeDragRef.current;
     if (!start || !canReframe) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    store.setMediaTransform({
-      ...store.mediaTransform,
-      x: start.mediaX + (event.clientX - start.x) / rect.width,
-      y: start.mediaY + (event.clientY - start.y) / rect.height,
-    });
+    if (canvasTool === "frame" && store.mediaFrame.shape !== "full") {
+      store.setMediaFrame(normalizeMediaFrame({
+        ...store.mediaFrame,
+        x: start.frameX + (event.clientX - start.x) / rect.width * 100,
+        y: start.frameY + (event.clientY - start.y) / rect.height * 100,
+      }));
+    } else {
+      store.setMediaTransform({
+        ...store.mediaTransform,
+        x: start.mediaX + (event.clientX - start.x) / rect.width,
+        y: start.mediaY + (event.clientY - start.y) / rect.height,
+      });
+    }
   };
 
   const nudgeReframe = (event: ReactKeyboardEvent<HTMLCanvasElement>) => {
@@ -742,7 +764,16 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
             : null;
     if (!direction) return;
     event.preventDefault();
-    store.setMediaTransform(nudgeMediaTransform(store.mediaTransform, direction, event.shiftKey));
+    if (canvasTool === "frame" && store.mediaFrame.shape !== "full") {
+      const step = event.shiftKey ? 5 : 1;
+      store.setMediaFrame(normalizeMediaFrame({
+        ...store.mediaFrame,
+        x: store.mediaFrame.x + (direction === "left" ? -step : direction === "right" ? step : 0),
+        y: store.mediaFrame.y + (direction === "up" ? -step : direction === "down" ? step : 0),
+      }));
+    } else {
+      store.setMediaTransform(nudgeMediaTransform(store.mediaTransform, direction, event.shiftKey));
+    }
   };
 
   return (
@@ -757,7 +788,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         <canvas
           ref={canvasRef}
           tabIndex={canReframe ? 0 : -1}
-          aria-label={canReframe ? "Media preview. Drag to reframe or use the arrow keys." : "Clip preview"}
+          aria-label={canReframe ? `${canvasTool === "media" ? "Media" : "Frame"} preview. Drag to move or use the arrow keys.` : "Clip preview"}
           className={`h-full w-full ${canReframe ? "cursor-grab touch-none active:cursor-grabbing" : ""}`}
           onPointerDown={startReframe}
           onPointerMove={moveReframe}
@@ -765,12 +796,49 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
           onPointerCancel={() => { reframeDragRef.current = null; }}
           onKeyDown={nudgeReframe}
         />
+        {canReframe && canvasTool === "frame" && store.mediaFrame.shape !== "full" && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute z-10 border border-gold shadow-[0_0_0_1px_rgba(5,5,7,0.75),0_0_12px_rgba(201,162,75,0.35)]"
+            style={{
+              left: `${frameGuide.x / size.w * 100}%`,
+              top: `${frameGuide.y / size.h * 100}%`,
+              width: `${frameGuide.w / size.w * 100}%`,
+              height: `${frameGuide.h / size.h * 100}%`,
+              borderRadius: store.mediaFrame.shape === "circle"
+                ? "50%"
+                : `${frameGuide.radius / Math.max(1, Math.min(frameGuide.w, frameGuide.h)) * 100}%`,
+            }}
+          >
+            <span className="absolute left-1 top-1 rounded bg-[var(--ink-deep)]/85 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-gold-soft">Frame</span>
+          </div>
+        )}
       </DevicePreview>
 
       {canReframe && (
-        <div className="-mt-4 flex max-w-full flex-wrap items-center justify-center gap-2 text-[11px]">
+        <div className="-mt-4 flex max-w-full flex-col items-center gap-2 text-[11px]">
+          <div className="flex rounded-full border border-[var(--hairline)] bg-[var(--ink-deep)] p-1" aria-label="Canvas drag tool">
+            <button
+              type="button"
+              onClick={() => setCanvasTool("media")}
+              className={`min-h-9 rounded-full px-3 transition-colors ${canvasTool === "media" ? "bg-[var(--gold)] text-[var(--ink-deep)]" : "text-[var(--muted)] hover:text-parchment"}`}
+            >
+              Move media
+            </button>
+            <button
+              type="button"
+              onClick={() => setCanvasTool("frame")}
+              disabled={store.mediaFrame.shape === "full"}
+              className={`min-h-9 rounded-full px-3 transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${canvasTool === "frame" ? "bg-[var(--gold)] text-[var(--ink-deep)]" : "text-[var(--muted)] hover:text-parchment"}`}
+            >
+              Move frame
+            </button>
+          </div>
+          <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
           <span role="status" aria-label="Current media framing" className="text-[var(--muted)]">
-            {mediaTransformPositionLabel(store.mediaTransform)}
+            {canvasTool === "frame" && store.mediaFrame.shape !== "full"
+              ? `${store.mediaFrame.x.toFixed(0)}% across · ${store.mediaFrame.y.toFixed(0)}% down`
+              : mediaTransformPositionLabel(store.mediaTransform)}
           </span>
           <MediaZoomControl
             value={store.mediaTransform.scale}
@@ -784,6 +852,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
             Center media
           </button>
           <span className="text-[var(--muted-deep)]">Drag or use arrow keys</span>
+          </div>
         </div>
       )}
 

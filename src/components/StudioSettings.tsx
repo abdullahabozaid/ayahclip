@@ -13,7 +13,7 @@ import { getProject, saveProject } from "@/lib/projects";
 import { BackgroundThumb } from "./BackgroundThumb";
 import { sequenceDuration } from "@/lib/background-sequence";
 import type { Background } from "@/types";
-import { DEFAULT_SPLIT_MASK, normalizeSplitMask } from "@/lib/canvas-utils";
+import { DEFAULT_MEDIA_FRAME, DEFAULT_SPLIT_MASK, normalizeMediaFrame, normalizeSplitMask, type MediaFrameShape } from "@/lib/canvas-utils";
 import { formatClipDuration, importedClipDurationSeconds } from "@/lib/clip-duration";
 import { ArabicFontSpecimen } from "./ArabicFontSpecimen";
 
@@ -734,6 +734,35 @@ export function StudioSettings() {
             onChange={store.setArabicInkThickness}
           />
           <p className="-mt-2 text-[10px] leading-4 text-[var(--muted)]">Strengthens the selected Quran glyphs without faking a bold font. The crisp edge and glow remain separate.</p>
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs text-[var(--muted)]">Type scale</span>
+              <span className="text-[10px] text-[var(--muted-deep)]">Arabic / translation</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([
+                { label: "Compact", arabic: 26, translation: 12 },
+                { label: "Balanced", arabic: 30, translation: 14 },
+                { label: "Statement", arabic: 36, translation: 16 },
+              ] as const).map((preset) => {
+                const active = store.arabicFontSize === preset.arabic && store.translationFontSize === preset.translation;
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      store.setArabicFontSize(preset.arabic);
+                      store.setTranslationFontSize(preset.translation);
+                    }}
+                    className={`min-h-11 rounded-lg border px-2 text-[10px] transition-colors ${active ? "border-gold/60 bg-gold/10 text-parchment" : "border-[var(--hairline-soft)] text-[var(--muted)] hover:border-gold/40 hover:text-parchment"}`}
+                  >
+                    <span className="block">{preset.label}</span>
+                    <span className="mt-0.5 block tabular-nums text-[9px] opacity-60">{preset.arabic} / {preset.translation}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <Slider
             label="Arabic Size"
             value={store.arabicFontSize}
@@ -1114,6 +1143,83 @@ export function StudioSettings() {
 
           {/* Fit: Fill crops to fill the frame; Fit shows the whole video/image
               centered with rounded corners over a blurred backdrop. */}
+          {(store.background.type === "image" || store.background.type === "video") && (
+            <div className="mb-4 border-t border-[var(--hairline-soft)] pt-4">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs text-parchment">Media shape</p>
+                  <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">
+                    Choose a container, then move the frame and the media inside it independently.
+                  </p>
+                </div>
+                {store.mediaFrame.shape !== "full" && (
+                  <button
+                    type="button"
+                    onClick={() => store.setMediaFrame({ ...DEFAULT_MEDIA_FRAME })}
+                    className="min-h-9 shrink-0 rounded-full border border-[var(--hairline-soft)] px-3 text-[10px] text-[var(--muted)] hover:text-parchment"
+                  >
+                    Full canvas
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label="Media frame shape">
+                {([
+                  { id: "full", label: "Full", width: 100, height: 100, radius: 0 },
+                  { id: "square", label: "Square", width: 78, height: 46, radius: 0 },
+                  { id: "portrait", label: "Portrait", width: 72, height: 72, radius: 5 },
+                  { id: "circle", label: "Circle", width: 72, height: 42, radius: 50 },
+                  { id: "rounded", label: "Rounded", width: 86, height: 58, radius: 10 },
+                ] as const).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={store.mediaFrame.shape === option.id}
+                    onClick={() => store.setMediaFrame(normalizeMediaFrame({
+                      ...store.mediaFrame,
+                      shape: option.id as MediaFrameShape,
+                      x: 50,
+                      y: 50,
+                      width: option.width,
+                      height: option.height,
+                      radius: option.radius,
+                    }))}
+                    className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-lg border px-1 text-[9px] transition-colors ${
+                      store.mediaFrame.shape === option.id
+                        ? "border-gold/60 bg-gold/10 text-parchment"
+                        : "border-[var(--hairline-soft)] text-[var(--muted)] hover:border-gold/40 hover:text-parchment"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`block border border-current ${
+                        option.id === "full" ? "h-5 w-3" :
+                        option.id === "square" ? "h-4 w-4" :
+                        option.id === "portrait" ? "h-5 w-3.5 rounded-[2px]" :
+                        option.id === "circle" ? "h-4 w-4 rounded-full" :
+                        "h-3.5 w-5 rounded-[4px]"
+                      }`}
+                    />
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {store.mediaFrame.shape !== "full" && (
+                <div className="mt-4 grid gap-3 border-t border-[var(--hairline-soft)] pt-4">
+                  <Slider label="Frame width" value={store.mediaFrame.width} min={10} max={100} suffix="%" onChange={(width) => store.setMediaFrame(normalizeMediaFrame({ ...store.mediaFrame, width }))} />
+                  {(store.mediaFrame.shape === "portrait" || store.mediaFrame.shape === "rounded") && (
+                    <Slider label="Frame height" value={store.mediaFrame.height} min={10} max={100} suffix="%" onChange={(height) => store.setMediaFrame(normalizeMediaFrame({ ...store.mediaFrame, height }))} />
+                  )}
+                  <Slider label="Frame horizontal" value={store.mediaFrame.x} min={-50} max={150} suffix="%" onChange={(x) => store.setMediaFrame(normalizeMediaFrame({ ...store.mediaFrame, x }))} />
+                  <Slider label="Frame vertical" value={store.mediaFrame.y} min={-50} max={150} suffix="%" onChange={(y) => store.setMediaFrame(normalizeMediaFrame({ ...store.mediaFrame, y }))} />
+                  {(store.mediaFrame.shape === "portrait" || store.mediaFrame.shape === "rounded") && (
+                    <Slider label="Corner radius" value={store.mediaFrame.radius} min={0} max={30} suffix="%" onChange={(radius) => store.setMediaFrame(normalizeMediaFrame({ ...store.mediaFrame, radius }))} />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mb-3">
             <span className="mb-1.5 block text-xs text-[var(--muted)]">Media Fit</span>
             <div className="flex gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1">

@@ -10,7 +10,7 @@ const noLetterbox = {
 
 const base: StyleSettings = {
   arabicFont: "qcf",
-  arabicFontSize: 36,
+  arabicFontSize: 30,
   arabicFontWeight: 400,
   arabicInkThickness: 0.75,
   arabicEnabled: true,
@@ -24,7 +24,7 @@ const base: StyleSettings = {
   splitMask: { ...DEFAULT_SPLIT_MASK },
   translationEnabled: true,
   translationFont: "lora",
-  translationFontSize: 16,
+  translationFontSize: 14,
   translationFontWeight: 500,
   textColor: "#f5f2e9",
   translationColor: "#d8d3c7",
@@ -56,6 +56,7 @@ const base: StyleSettings = {
   backgroundFit: "cover",
   fitBackdrop: "black",
   mediaTransform: { scale: 1, x: 0, y: 0 },
+  mediaFrame: { shape: "full", x: 50, y: 50, width: 100, height: 100, radius: 6 },
   videoLoopMode: "loop",
   verseIntro: "fade",
   verseIntroMs: 320,
@@ -69,6 +70,7 @@ export const DEFAULT_TEMPLATE_STYLE: StyleSettings = {
   background: { ...base.background },
   letterbox: { ...base.letterbox },
   mediaTransform: { ...base.mediaTransform! },
+  mediaFrame: { ...base.mediaFrame! },
   splitMask: { ...base.splitMask! },
 };
 
@@ -84,10 +86,10 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFontSize: 38,
+      arabicFontSize: 32,
       textPosition: 53,
       translationFont: "lora",
-      translationFontSize: 15,
+      translationFontSize: 14,
       translationFontWeight: 500,
       overlayOpacity: 52,
       highlightEnabled: true,
@@ -124,7 +126,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       arabicFont: "scheherazade-new",
       arabicFontWeight: 700,
       arabicInkThickness: 0,
-      // Scheherazade is wider than Noto Naskh; 34px keeps the real Short sample
+      // Scheherazade is wider than Noto Naskh; this compact scale keeps the real Short sample
       // to two lines in the 50% reading panel without thinning the face.
       arabicFontSize: 30,
       lineHeight: 1.08,
@@ -138,7 +140,7 @@ export const TEMPLATES: TemplateDefinition[] = [
         fadeWidth: 20,
       },
       translationFont: "outfit",
-      translationFontSize: 16,
+      translationFontSize: 14,
       translationFontWeight: 600,
       textColor: "#f4f1e8",
       translationColor: "#d7d2c6",
@@ -171,10 +173,10 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFontSize: 38,
+      arabicFontSize: 32,
       textPosition: 49,
       translationFont: "lora",
-      translationFontSize: 16,
+      translationFontSize: 14,
       translationFontWeight: 500,
       overlayOpacity: 48,
       overlayColor: "#030806",
@@ -206,9 +208,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "use-template-media",
     settings: {
       ...base,
-      arabicFontSize: 36,
+      arabicFontSize: 30,
       translationFont: "outfit",
-      translationFontSize: 16,
+      translationFontSize: 14,
       translationFontWeight: 500,
       overlayOpacity: 0,
       textShadow: { enabled: true, color: "#000000", blur: 2, offsetX: 0, offsetY: 1 },
@@ -240,11 +242,11 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "use-template-media",
     settings: {
       ...base,
-      arabicFontSize: 32,
+      arabicFontSize: 29,
       lineHeight: 1,
       arabicTranslationGap: 0.95,
       translationFont: "outfit",
-      translationFontSize: 22,
+      translationFontSize: 19,
       translationFontWeight: 700,
       translationLineHeight: 1.12,
       overlayOpacity: 0,
@@ -279,9 +281,9 @@ export const TEMPLATES: TemplateDefinition[] = [
     mediaPolicy: "preserve-current-media",
     settings: {
       ...base,
-      arabicFontSize: 36,
+      arabicFontSize: 30,
       translationFont: "lora",
-      translationFontSize: 16,
+      translationFontSize: 14,
       overlayOpacity: 54,
       textShadow: { enabled: true, color: "#000000", blur: 9, offsetX: 0, offsetY: 2 },
       background: {

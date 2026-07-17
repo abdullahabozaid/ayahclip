@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   drawBgImage,
+  mediaFrameRect,
   mediaTransformPositionLabel,
+  normalizeMediaFrame,
   nudgeMediaTransform,
   type MediaTransform,
 } from "../canvas-utils";
@@ -16,6 +18,8 @@ function contextStub() {
     roundRect: vi.fn(),
     rect: vi.fn(),
     clip: vi.fn(),
+    translate: vi.fn(),
+    ellipse: vi.fn(),
     fillStyle: "",
     filter: "none",
   } as unknown as CanvasRenderingContext2D;
@@ -73,6 +77,40 @@ describe("media transform rendering", () => {
 });
 
 describe("media framing helpers", () => {
+  it("creates a movable square container without changing the media transform", () => {
+    const frame = normalizeMediaFrame({
+      shape: "square",
+      x: 25,
+      y: 70,
+      width: 80,
+      height: 50,
+      radius: 0,
+    });
+    expect(mediaFrameRect(1080, 1920, frame)).toEqual({
+      x: -162,
+      y: 912,
+      w: 864,
+      h: 864,
+      radius: 0,
+      shape: "square",
+    });
+  });
+
+  it("clips media to a square and paints the unused canvas black", () => {
+    const context = contextStub();
+    drawBgImage(context, landscape, 1080, 1920, "cover", "black", centered, {
+      shape: "square",
+      x: 50,
+      y: 50,
+      width: 80,
+      height: 50,
+      radius: 0,
+    });
+    expect(context.fillRect).toHaveBeenCalledWith(0, 0, 1080, 1920);
+    expect(context.rect).toHaveBeenCalledWith(108, 528, 864, 864);
+    expect(context.translate).toHaveBeenCalledWith(108, 528);
+  });
+
   it("describes centered and offset framing in creator language", () => {
     expect(mediaTransformPositionLabel(centered)).toBe(
       "horizontally centered · vertically centered · 1.00× zoom",

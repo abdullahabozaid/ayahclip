@@ -60,6 +60,7 @@ interface ExportOptions {
   background: Background;
   backgroundFit?: import("./canvas-utils").MediaFit;
   mediaTransform?: import("./canvas-utils").MediaTransform;
+  mediaFrame?: import("./canvas-utils").MediaFrame;
   backgroundSequenceEnabled?: boolean;
   backgroundScenes?: BackgroundScene[];
   fitBackdrop?: import("./canvas-utils").FitBackdrop;

@@ -25,6 +25,7 @@ import {
   EmphasisStyle,
   DrawVerseOptions,
   MediaTransform,
+  MediaFrame,
 } from "./canvas-utils";
 
 /** Output resolution per format. The ONLY size any render path may draw at. */
@@ -72,6 +73,7 @@ export interface SceneStyleSource {
   backgroundFit?: MediaFit;
   fitBackdrop?: FitBackdrop;
   mediaTransform?: MediaTransform;
+  mediaFrame?: MediaFrame;
   letterbox: LetterboxConfig;
   verseIntro?: VerseIntro;
   emphasisStyle: EmphasisStyle;
@@ -222,10 +224,11 @@ export function drawScene(
       video: HTMLVideoElement | undefined,
       fit: MediaFit | undefined,
       backdrop: FitBackdrop | undefined,
-      transform: MediaTransform | undefined
+      transform: MediaTransform | undefined,
+      frame: MediaFrame | undefined,
     ) => {
-      if (video) drawVideoFrame(ctx, video, rw, rh, fit, backdrop, transform);
-      else if (image) drawBgImage(ctx, image, rw, rh, fit, backdrop, transform);
+      if (video) drawVideoFrame(ctx, video, rw, rh, fit, backdrop, transform, frame);
+      else if (image) drawBgImage(ctx, image, rw, rh, fit, backdrop, transform, frame);
       else drawBackground(ctx, rw, rh, background);
     };
 
@@ -235,7 +238,8 @@ export function drawScene(
       media.video,
       media.fit ?? style.backgroundFit,
       media.backdrop ?? style.fitBackdrop,
-      media.transform ?? style.mediaTransform
+      media.transform ?? style.mediaTransform,
+      style.mediaFrame,
     );
 
     const transition = Math.max(0, Math.min(1, media.transitionProgress ?? 0));
@@ -248,7 +252,8 @@ export function drawScene(
         media.nextVideo,
         media.nextFit,
         media.nextBackdrop,
-        media.nextTransform
+        media.nextTransform,
+        style.mediaFrame,
       );
       ctx.restore();
     }

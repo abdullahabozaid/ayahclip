@@ -146,6 +146,7 @@ export async function renderClipFile(
     background: s.background,
     backgroundFit: s.backgroundFit,
     mediaTransform: s.mediaTransform,
+    mediaFrame: s.mediaFrame,
     backgroundSequenceEnabled: s.backgroundSequenceEnabled,
     backgroundScenes: s.backgroundScenes,
     fitBackdrop: s.fitBackdrop,

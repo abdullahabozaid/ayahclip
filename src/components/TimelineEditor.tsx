@@ -1232,7 +1232,23 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const busy = redetecting || deepProgress != null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 pb-1">
+      <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--hairline-soft)] pb-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/80">Timeline</p>
+          <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+            Park the gold playhead, split, then drag either edge. Tap a block to select its ayah.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-[var(--muted-deep)]">
+          <span className="rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 tabular-nums">
+            {timings.length} ayah{timings.length === 1 ? "" : "s"}
+          </span>
+          <span className="rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 tabular-nums">
+            {(timings.reduce((count, timing) => count + (timing.splits?.length ?? 0), 0))} cuts
+          </span>
+        </div>
+      </div>
       {/* Primary transport — the controls used 80% of the time stay in front.
           Pause rebuild, recitation alignment, and trim live in a collapsible cluster. */}
       <div className="flex flex-wrap items-center gap-3">
@@ -1254,6 +1270,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           )}
         </button>
         <button
+          type="button"
+          onClick={addSplit}
+          disabled={loading || duration === 0 || !timings[activeIdx]}
+          className="flex min-h-11 items-center gap-2 rounded-lg border border-gold/55 bg-gold/10 px-3.5 text-[11px] font-semibold text-gold-soft transition-colors hover:bg-gold/15 disabled:opacity-35 sm:min-h-10"
+          title="Create a caption cut at the fixed gold playhead (Shift+S)"
+        >
+          <TlIcon d={TL_ICON.scissors} /> Split at playhead
+        </button>
+        <button
           onClick={toggleLoop}
           disabled={loading || duration === 0}
           className={`flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 sm:min-h-9 ${
@@ -1271,7 +1296,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             onClick={undo}
             disabled={historyRef.current.length === 0}
             className="btn-ghost flex h-11 w-11 items-center justify-center rounded-l-full border-r-0 text-[13px] disabled:opacity-30 sm:h-9 sm:w-9"
-            aria-label="Undo last timeline edit"
+            aria-label="Undo edit"
             title="Undo (⌘Z)"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1282,7 +1307,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             onClick={redo}
             disabled={futureRef.current.length === 0}
             className="btn-ghost flex h-11 w-11 items-center justify-center rounded-r-full text-[13px] disabled:opacity-30 sm:h-9 sm:w-9"
-            aria-label="Redo timeline edit"
+            aria-label="Redo edit"
             title="Redo (⌘⇧Z)"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1511,7 +1536,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         const range = v.wordRange ?? { from: 0, to: Math.max(0, totalWords - 1) };
         const isTrimmed = !!v.wordRange;
         return (
-          <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-4 py-2.5">
+          <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-gold/20 bg-[var(--ink-deep)] px-3 py-2.5">
+            <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-deep)]">Selected</span>
             <span
               className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-md bg-[var(--gold)]/15 px-2 text-[12px] font-medium tabular-nums text-gold-soft ring-1 ring-inset ring-[var(--hairline)]"
               title={`Verse ${v.verseNumber} of this clip`}
@@ -1553,14 +1579,6 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                 {v.alignmentReviewed ? "Boundary checked" : `${timingMethodLabel(v.alignmentMethod)} · ${v.alignmentConfidence} confidence`}
               </span>
             )}
-
-            <button
-              onClick={addSplit}
-              className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] sm:min-h-7"
-              title="Split this verse's text at the playhead (for long verses)"
-            >
-              <TlIcon d={TL_ICON.scissors} /> Split
-            </button>
 
             {splitCount > 0 && (
               <span
@@ -1726,8 +1744,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                 startPan(e); // drag left/right to scrub (scroll under the centre line)
               }
             }}
-            className={`relative cursor-ew-resize touch-none overflow-hidden rounded-xl border border-[var(--hairline)] bg-[var(--ink-deep)] ${
-              fullscreen ? "h-[clamp(180px,38dvh,420px)]" : "h-24"
+            className={`relative cursor-ew-resize touch-none overflow-hidden rounded-xl border border-[var(--hairline)] bg-[linear-gradient(180deg,rgba(201,162,75,0.025),rgba(5,5,7,0.96))] ${
+              fullscreen ? "h-[clamp(200px,40dvh,440px)]" : "h-28 sm:h-32"
             }`}
           >
             <canvas
@@ -1900,7 +1918,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               verse's on-screen text (broken into split-segments) is visible
               inline with its time range. No playback needed to confirm what
               will appear when. */}
-          <div className="relative mt-1.5 h-10 rounded-md bg-[var(--ink-deep)]/60 ring-1 ring-[var(--hairline-soft)]">
+          <div className="relative mt-1.5 h-11 rounded-md bg-[var(--ink-deep)]/60 ring-1 ring-[var(--hairline-soft)]">
             {timings.map((tg, i) => {
               const verse = store.verses.find((v) => v.verse_number === tg.verseNumber);
               if (!verse) return null;
@@ -1947,6 +1965,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             line, so "at the playhead" always means screen-centre. */}
         <div className="pointer-events-none absolute inset-y-0 left-1/2 z-30 w-px -translate-x-1/2 bg-gold shadow-[0_0_6px_rgba(201,162,75,0.8)]">
           <span className="absolute -top-1 left-1/2 h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-gold" />
+          <span className="absolute left-1/2 top-3 -translate-x-1/2 rounded bg-gold px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[var(--ink-deep)] shadow-sm">
+            {fmt(headTime)}
+          </span>
         </div>
       </div>
 

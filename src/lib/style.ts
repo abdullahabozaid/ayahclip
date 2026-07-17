@@ -1,5 +1,5 @@
 import { Background, TextShadow, TextOutline, LetterboxConfig, SplitMaskConfig } from "@/types";
-import { MediaFit, FitBackdrop, VerseIntro, MediaTransform } from "./canvas-utils";
+import { MediaFit, FitBackdrop, VerseIntro, MediaTransform, MediaFrame } from "./canvas-utils";
 
 /** The visual style of a clip — the bundle a Template or Saved Style captures/applies.
  *  Deliberately excludes surah/verse selection, reciter, format, language and safe-area. */
@@ -41,6 +41,7 @@ export interface StyleSettings {
   background: Background;
   backgroundFit?: MediaFit;
   mediaTransform?: MediaTransform;
+  mediaFrame?: MediaFrame;
   fitBackdrop?: FitBackdrop;
   videoLoopMode?: "loop" | "freeze";
   verseIntro?: VerseIntro;
@@ -81,6 +82,7 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "background",
   "backgroundFit",
   "mediaTransform",
+  "mediaFrame",
   "fitBackdrop",
   "videoLoopMode",
   "verseIntro",
@@ -116,6 +118,7 @@ export const PRESET_KEYS: (keyof StyleSettings)[] = [
   "verseIntro",
   "verseIntroMs",
   "letterbox",
+  "mediaFrame",
 ];
 
 /**

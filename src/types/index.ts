@@ -134,6 +134,7 @@ export interface Project {
     background: Background;
     backgroundFit?: "cover" | "contain";
     mediaTransform?: { scale: number; x: number; y: number };
+    mediaFrame?: import("@/lib/canvas-utils").MediaFrame;
     backgroundSequenceEnabled?: boolean;
     backgroundScenes?: import("@/lib/background-sequence").BackgroundScene[];
     activeBackgroundSceneId?: string | null;

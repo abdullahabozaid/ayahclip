@@ -75,7 +75,9 @@ export default function StudioPage() {
   // Two ways to edit imported verses: "words" (per-verse cards: split text,
   // trim words, duplicate) and "timeline" (waveform with draggable verse
   // boundaries). Each suits a different job, so the user picks.
-  const [editorView, setEditorView] = useState<"words" | "timeline">("words");
+  const [editorView, setEditorView] = useState<"words" | "timeline">(
+    store.audioSource.mode === "imported" ? "timeline" : "words"
+  );
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const savedResetRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -284,6 +286,7 @@ export default function StudioPage() {
         background: state.background,
         backgroundFit: state.backgroundFit,
         mediaTransform: state.mediaTransform,
+        mediaFrame: state.mediaFrame,
         backgroundSequenceEnabled: state.backgroundSequenceEnabled,
         backgroundScenes: state.backgroundScenes,
         activeBackgroundSceneId: state.activeBackgroundSceneId,
@@ -360,7 +363,7 @@ export default function StudioPage() {
     store.arabicFont, store.arabicVerseNumber, store.arabicEnabled, store.translationEnabled, store.translationFontSize,
     store.translationFont, store.translationLanguage, store.textColor, store.translationColor,
     store.lineHeight, store.translationLineHeight, store.arabicTranslationGap, store.textPosition, store.textLayout, store.splitMask, store.overlayOpacity, store.overlayColor,
-    store.safeAreaTarget, store.safePadding, store.background, store.backgroundFit, store.mediaTransform, store.backgroundSequenceEnabled, store.backgroundScenes, store.activeBackgroundSceneId, store.fitBackdrop, store.videoLoopMode, store.textShadow, store.textOutline, store.letterbox,
+    store.safeAreaTarget, store.safePadding, store.background, store.backgroundFit, store.mediaTransform, store.mediaFrame, store.backgroundSequenceEnabled, store.backgroundScenes, store.activeBackgroundSceneId, store.fitBackdrop, store.videoLoopMode, store.textShadow, store.textOutline, store.letterbox,
     store.emphasis, store.emphasisStyle, store.emphasisColor,
     store.clipFadeMs, store.audioFadeIn,
     store.translationVerseNumber, store.wordHighlight, store.backgroundVideoSync,
@@ -704,7 +707,7 @@ export default function StudioPage() {
                       : "text-[var(--muted)] hover:text-parchment"
                   }`}
                 >
-                  Word split
+                  Captions
                 </button>
                 <button
                   onClick={() => setEditorView("timeline")}
@@ -746,7 +749,7 @@ export default function StudioPage() {
               the audio buffer two extra times. The dock is behind the overlay
               anyway; it remounts (fresh from the store) on close. */}
           {timelineOpen && !timelineFullscreen && (
-            <div className="mt-3 max-h-[28vh] overflow-y-auto pr-0.5 lg:max-h-[30vh]">
+            <div className="mt-3 max-h-[34vh] overflow-y-auto pr-0.5 lg:max-h-[38vh]">
               {store.audioSource.mode === "imported" ? (
                 editorView === "words" ? <VerseCardEditor /> : <TimelineEditor />
               ) : (
