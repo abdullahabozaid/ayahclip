@@ -24,7 +24,7 @@ export function SiteFooter() {
         AyahClip is free.{" "}
         <Link
           href="/support"
-          className="text-gold underline-offset-4 transition-colors hover:text-gold-soft hover:underline"
+          className="text-gold underline decoration-[var(--gold)]/60 underline-offset-4 transition-colors hover:text-gold-soft"
         >
           Support its development
         </Link>{" "}
@@ -46,14 +46,14 @@ export function SiteFooter() {
           Terms
         </Link>
       </p>
-      <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] text-[var(--muted)]">
+      <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-[var(--muted)]">
         {CREDITS.map((c) => (
           <li key={c.href}>
             <a
               href={c.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="transition-colors hover:text-parchment"
+              className="inline-flex min-h-8 items-center px-1 transition-colors hover:text-parchment"
             >
               {c.label}
             </a>

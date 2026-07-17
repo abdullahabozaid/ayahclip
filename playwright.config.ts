@@ -8,15 +8,20 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   projects: [
     {
-      name: "chromium",
-      testIgnore: /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts/,
-      use: { ...devices["Desktop Chrome"] },
+      name: process.env.GOOGLE_CHROME ? "google-chrome" : "chromium",
+      testIgnore: process.env.PLAYWRIGHT_BASE_URL
+        ? /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts/
+        : /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts|production-smoke\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(process.env.GOOGLE_CHROME ? { channel: "chrome" as const } : {}),
+      },
     },
     {
       name: "android-chrome",
@@ -40,10 +45,12 @@ export default defineConfig({
         }]
       : []),
   ],
-  webServer: {
-    command: "npm run start",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-  },
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: "npm run start",
+        url: "http://127.0.0.1:3000",
+        reuseExistingServer: !process.env.CI,
+        timeout: 30_000,
+      },
 });

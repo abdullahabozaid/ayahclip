@@ -5,6 +5,8 @@ import { DiagnosticsPanel } from "@/components/DiagnosticsPanel";
 export const metadata: Metadata = {
   title: "Troubleshooting | AyahClip",
   description: "Copy a privacy-safe AyahClip diagnostics report for troubleshooting imports, editing, and exports.",
+  alternates: { canonical: "/diagnostics" },
+  robots: { index: false, follow: false },
 };
 
 export default function DiagnosticsPage() {

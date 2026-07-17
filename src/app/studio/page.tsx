@@ -578,6 +578,8 @@ export default function StudioPage() {
                 : "btn-ghost"
             }`}
             aria-label="Toggle settings"
+            aria-expanded={settingsOpen}
+            aria-controls="studio-settings"
             title="Style, background, fonts & export options"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -645,6 +647,7 @@ export default function StudioPage() {
         {/* Settings — overlay drawer below lg, inline column at lg+ so it never
             squeezes the preview on phones. */}
         <aside
+          id="studio-settings"
           className={`z-30 overflow-y-auto bg-[var(--ink)] transition-all duration-300 lg:static lg:z-auto lg:shrink-0 lg:border-l lg:border-[var(--hairline-soft)] lg:shadow-none ${
             settingsOpen
               ? "absolute inset-y-0 right-0 w-[88%] max-w-[360px] border-l border-[var(--hairline-soft)] shadow-2xl lg:w-[360px] lg:max-w-none lg:shadow-none"

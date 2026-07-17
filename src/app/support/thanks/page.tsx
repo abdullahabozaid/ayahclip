@@ -5,6 +5,8 @@ import { NewClipLink } from "@/components/NewClipLink";
 export const metadata: Metadata = {
   title: "Thank you — AyahClip",
   description: "Thank you for supporting AyahClip.",
+  alternates: { canonical: "/support/thanks" },
+  robots: { index: false, follow: false },
 };
 
 export default function ThanksPage() {

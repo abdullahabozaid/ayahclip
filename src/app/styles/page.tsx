@@ -4,6 +4,7 @@ import { TemplateGallery } from "@/components/templates/TemplateGallery";
 export const metadata: Metadata = {
   title: "Templates",
   description: "Choose or create a reusable Quran clip composition.",
+  alternates: { canonical: "/styles" },
 };
 
 export default async function TemplatesPage({

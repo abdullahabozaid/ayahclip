@@ -54,16 +54,24 @@ test("a phone creator can import, style, render, and inspect a real MP4", async 
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await openImportedStudio(page);
 
-  await expect(page.getByRole("button", { name: "Toggle settings" })).toBeVisible();
+  const settingsToggle = page.getByRole("button", { name: "Toggle settings" });
+  await expect(settingsToggle).toBeVisible();
   const exportButton = page.getByRole("button", { name: "Export video" });
-  // Templates that require creator media open Settings automatically. Other
-  // templates leave it closed, so only toggle when the export action is not
-  // already exposed; blindly clicking here made the test close a valid drawer.
-  if (!(await exportButton.isVisible())) {
-    await page.getByRole("button", { name: "Toggle settings" }).click();
+  // Templates that require creator media open Settings automatically. Read the
+  // toggle state rather than treating an action below the drawer's scrollport
+  // as proof that the drawer is closed.
+  if ((await settingsToggle.getAttribute("aria-expanded")) !== "true") {
+    await settingsToggle.click();
   }
+  await expect(settingsToggle).toHaveAttribute("aria-expanded", "true");
+  await exportButton.scrollIntoViewIfNeeded();
   await expect(exportButton).toBeVisible();
-  await page.getByRole("button", { name: "Toggle settings" }).click();
+  const viewport = await page.evaluate(() => ({
+    width: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.width + 1);
+  await settingsToggle.click();
 
   // GitHub's isolated Linux images expose the mobile browser engines but no
   // usable H.264/AAC hardware encoder. Waiting for a final MP4 there exercises
@@ -73,11 +81,6 @@ test("a phone creator can import, style, render, and inspect a real MP4", async 
   // `npm run test:export-matrix` and must stay green before publishing.
   if (process.env.CI) {
     await expect(page.getByRole("button", { name: "Preview the final MP4" })).toBeEnabled();
-    const viewport = await page.evaluate(() => ({
-      width: window.innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    expect(viewport.scrollWidth).toBeLessThanOrEqual(viewport.width + 1);
     expect(pageErrors).toEqual([]);
     return;
   }

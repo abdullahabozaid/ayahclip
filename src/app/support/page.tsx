@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Support AyahClip",
   description:
     "AyahClip is free, with no ads or paywalls. If it has helped you, you can support its development and future projects.",
+  alternates: { canonical: "/support" },
 };
 
 const SUPPORT_GOES: { title: string; body: string }[] = [

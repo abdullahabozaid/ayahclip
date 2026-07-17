@@ -234,12 +234,12 @@ export default function Dashboard() {
           </div>
         )}
         {loading ? (
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="panel overflow-hidden">
-                <div className="shimmer aspect-[9/16] w-full" />
-              </div>
-            ))}
+          <div className="panel mx-auto max-w-lg px-8 py-16 text-center" aria-busy="true">
+            <EmptyClipsMark />
+            <h2 className="font-display text-2xl text-parchment">Your clips</h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
+              Loading projects stored in this browser…
+            </p>
           </div>
         ) : projects.length > 0 ? (
           <>
@@ -301,14 +301,11 @@ export default function Dashboard() {
           </>
         ) : (
           <div className="panel mx-auto max-w-lg px-8 py-16 text-center">
-            <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--hairline)] text-2xl text-gold-soft">
-              ﷽
-            </span>
-            <h2 className="font-display text-2xl text-parchment">Begin your first clip</h2>
+            <EmptyClipsMark />
+            <h2 className="font-display text-2xl text-parchment">Your clips</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
-              Your saved projects will gather here. Start from the Quran with an
-              online reciter, or bring your own recitation and let AyahClip find
-              the verses for you.
+              Begin your first clip from the Quran with an online reciter, or
+              bring your own recitation and let AyahClip find the verses for you.
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <NewClipLink href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
@@ -322,5 +319,20 @@ export default function Dashboard() {
         )}
       </section>
     </main>
+  );
+}
+
+function EmptyClipsMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--hairline)] text-gold-soft"
+    >
+      <svg viewBox="0 0 32 32" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.35">
+        <path d="M8 27V14.5C8 9.7 11.1 6.2 16 3c4.9 3.2 8 6.7 8 11.5V27" />
+        <path d="M12.5 27V16.5c0-2.6 1.2-4.8 3.5-6.7 2.3 1.9 3.5 4.1 3.5 6.7V27" />
+        <path d="M5 27h22" />
+      </svg>
+    </span>
   );
 }

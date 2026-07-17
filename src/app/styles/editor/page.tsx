@@ -4,6 +4,8 @@ import { TemplateStudio } from "@/components/templates/TemplateStudio";
 export const metadata: Metadata = {
   title: "Template Studio",
   description: "Create a reusable Quran clip composition on a focused phone canvas.",
+  alternates: { canonical: "/styles/editor" },
+  robots: { index: false, follow: false },
 };
 
 export default async function TemplateEditorPage({

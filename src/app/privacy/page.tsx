@@ -5,6 +5,7 @@ import { TelemetryPreference } from "@/components/TelemetryPreference";
 export const metadata: Metadata = {
   title: "Privacy",
   description: "How AyahClip keeps imported recitation media local and limits anonymous product diagnostics.",
+  alternates: { canonical: "/privacy" },
 };
 
 const sections = [

@@ -4,6 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Terms",
   description: "Plain-language terms for using AyahClip to create Quran recitation clips.",
+  alternates: { canonical: "/terms" },
 };
 
 const terms = [

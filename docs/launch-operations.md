@@ -66,6 +66,20 @@ Run the several-minute constrained-memory gate before an export-related release:
 npm run test:export-matrix
 ```
 
-That gate sets a 512 MB V8 heap, reports `navigator.deviceMemory = 4`, imports 181 seconds of audio, and requires a playable MP4 longer than 180 seconds.
+The export matrix sets a 512 MB V8 heap, reports `navigator.deviceMemory = 4`, imports 181 seconds of audio, and requires a playable MP4 longer than 180 seconds.
+
+Run the installed Google Chrome and Google Search metadata gate before a public release:
+
+```bash
+npm run test:google-chrome
+```
+
+After the production deployment is ready, verify the deployed routes, security headers and a real MP4 render in installed Google Chrome:
+
+```bash
+npm run test:production-google
+```
+
+`/robots.txt` advertises `/sitemap.xml`; the sitemap contains only public, indexable product pages. Browser-local libraries, editing surfaces, diagnostics and thank-you routes publish `noindex`. To connect Google Search Console, set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` to the verification token supplied by Google, redeploy, confirm the verification meta tag, and submit `https://ayahclip.vercel.app/sitemap.xml`. Indexing itself remains Google's decision and can take time.
 
 Browser profiles are not physical phones. Before announcing broad availability, repeat a short import, final-preview, Save Video and camera-roll playback check on current iPhone Safari and Android Chrome hardware. Record the operating-system version, browser version, source format, clip duration, output type and result. Do not call the physical-device gate complete from emulation alone.

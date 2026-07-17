@@ -14,30 +14,34 @@ import "./globals.css";
 import { SiteNav } from "@/components/SiteNav";
 import { SiteFooter } from "@/components/SiteFooter";
 import { ClientOperations } from "@/components/ClientOperations";
+import { PreloadResources } from "@/components/PreloadResources";
 
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit", display: "swap" });
 const marcellus = Marcellus({ weight: "400", subsets: ["latin"], variable: "--font-marcellus", display: "swap" });
-const cormorant = Cormorant_Garamond({ subsets: ["latin"], variable: "--font-cormorant", display: "swap" });
-const cinzel = Cinzel({ subsets: ["latin"], variable: "--font-cinzel", display: "swap" });
-const lora = Lora({ subsets: ["latin"], variable: "--font-lora", display: "swap" });
-const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", display: "swap" });
+const cormorant = Cormorant_Garamond({ subsets: ["latin"], variable: "--font-cormorant", display: "swap", preload: false });
+const cinzel = Cinzel({ subsets: ["latin"], variable: "--font-cinzel", display: "swap", preload: false });
+const lora = Lora({ subsets: ["latin"], variable: "--font-lora", display: "swap", preload: false });
+const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", display: "swap", preload: false });
 const amiriQuran = Amiri_Quran({
   weight: "400",
   subsets: ["arabic", "latin"],
   variable: "--font-amiri-quran",
   display: "swap",
+  preload: false,
 });
 const scheherazade = Scheherazade_New({
   weight: ["400", "500", "600", "700"],
   subsets: ["arabic", "latin"],
   variable: "--font-scheherazade",
   display: "swap",
+  preload: false,
 });
 const notoNaskh = Noto_Naskh_Arabic({
   weight: "variable",
   subsets: ["arabic", "latin"],
   variable: "--font-noto-naskh",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -64,6 +68,9 @@ export const metadata: Metadata = {
     description:
       "Select verses, shape the typography, arrange B-roll, and export a polished social video.",
   },
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
 };
 
 // viewport-fit=cover lets us pad around the notch / Dynamic Island via the
@@ -87,6 +94,7 @@ export default function RootLayout({
       className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoNaskh.variable}`}
     >
       <body className="grain min-h-dvh text-parchment antialiased">
+        <PreloadResources />
         <ClientOperations />
         <SiteNav />
         {children}
