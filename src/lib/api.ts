@@ -21,6 +21,7 @@ interface QuranApiWord {
   page_number: number;
   line_number: number;
   text_uthmani: string;
+  text_qpc_hafs?: string;
   char_type_name: QcfWord["char_type_name"];
   translation?: { text?: string };
 }
@@ -30,6 +31,7 @@ interface QuranApiVerse {
   verse_number: number;
   verse_key: string;
   text_uthmani: string;
+  text_qpc_hafs?: string;
   translations?: { text?: string }[];
   words?: QuranApiWord[];
 }
@@ -52,13 +54,14 @@ export async function fetchVerses(
 ): Promise<Verse[]> {
   const perPage = 300;
   const data = await fetchJson<{ verses: QuranApiVerse[] }>(
-    `${QURAN_API}/verses/by_chapter/${surahId}?language=en&translations=${translationId}&fields=text_uthmani&words=true&word_fields=code_v2,text_uthmani&per_page=${perPage}`
+    `${QURAN_API}/verses/by_chapter/${surahId}?language=en&translations=${translationId}&fields=text_uthmani,text_qpc_hafs&words=true&word_fields=code_v2,text_uthmani,text_qpc_hafs&per_page=${perPage}`
   );
   const verses: Verse[] = data.verses.map((v) => ({
     id: v.id,
     verse_number: v.verse_number,
     verse_key: v.verse_key,
     text_uthmani: v.text_uthmani,
+    text_qpc_hafs: v.text_qpc_hafs,
     translation: v.translations?.[0]?.text
       ? v.translations[0].text
           .replace(/<sup[^>]*>.*?<\/sup>/gi, "")
@@ -75,6 +78,7 @@ export async function fetchVerses(
         page_number: w.page_number,
         line_number: w.line_number,
         text_uthmani: w.text_uthmani,
+        text_qpc_hafs: w.text_qpc_hafs,
         char_type_name: w.char_type_name,
       })),
   }));

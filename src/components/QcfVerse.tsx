@@ -37,7 +37,7 @@ export function QcfVerse({ qcfWords, fallback, className = "", inkThickness = 0 
         className={`font-arabic text-[22px] leading-loose ${className}`}
         style={inkThickness > 0 ? { WebkitTextStroke: `${inkThickness}px currentColor`, paintOrder: "stroke fill" } : undefined}
       >
-        {arabicTextForFont(fallback, "uthmanic-hafs")}
+        {arabicTextForFont(fallback, "uthmanic-hafs", qcfWords)}
       </p>
     );
   }

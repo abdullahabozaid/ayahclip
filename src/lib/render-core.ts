@@ -131,17 +131,28 @@ export function sliceQcfForDisplay(
 ): QcfWord[] | undefined {
   const fullQcf = verse.qcfWords;
   if (!fullQcf || displayArabic === verse.text_uthmani) return fullQcf;
-  const allSimple = verse.text_uthmani.split(/\s+/).filter(Boolean);
-  const partSimple = displayArabic.split(/\s+/).filter(Boolean);
-  let simpleOffset = 0;
-  for (let i = 0; i <= allSimple.length - partSimple.length; i++) {
-    if (allSimple.slice(i, i + partSimple.length).every((w, j) => w === partSimple[j])) {
-      simpleOffset = i;
+  // Quran.com's Unicode verse text can expose a waqf mark as a separate token
+  // while one QCF glyph keeps the word and that mark together. Map by the raw
+  // source-token span covered by each glyph instead of assuming 1 token = 1
+  // glyph, otherwise every partial verse after a waqf can shift by one word.
+  const allTokens = verse.text_uthmani.split(/\s+/).filter(Boolean);
+  const partTokens = displayArabic.split(/\s+/).filter(Boolean);
+  let tokenOffset = 0;
+  for (let i = 0; i <= allTokens.length - partTokens.length; i++) {
+    if (allTokens.slice(i, i + partTokens.length).every((word, j) => word === partTokens[j])) {
+      tokenOffset = i;
       break;
     }
   }
-  const withoutEnd = fullQcf.filter((w) => w.char_type_name !== "end");
-  const sliced = withoutEnd.slice(simpleOffset, simpleOffset + partSimple.length);
+  const tokenEnd = tokenOffset + partTokens.length;
+  let coveredTokens = 0;
+  const sliced = fullQcf
+    .filter((word) => word.char_type_name !== "end")
+    .filter((word) => {
+      const wordStart = coveredTokens;
+      coveredTokens += Math.max(1, word.text_uthmani.split(/\s+/).filter(Boolean).length);
+      return coveredTokens > tokenOffset && wordStart < tokenEnd;
+    });
   if (isLastPart) {
     const endGlyph = fullQcf.find((w) => w.char_type_name === "end");
     return endGlyph ? [...sliced, endGlyph] : sliced;

@@ -245,4 +245,14 @@ describe("sliceQcfForDisplay", () => {
     const r = sliceQcfForDisplay(verse, "ۚ w4 w5", true)!;
     expect(r.map((w) => w.text_uthmani)).toEqual(["ۚ", "w4", "w5", "۝"]);
   });
+
+  it("does not shift a post-waqf slice when the API attaches the mark to one QCF word", () => {
+    const apiVerse: Pick<Verse, "text_uthmani" | "qcfWords"> = {
+      text_uthmani: "w1 w2 w3 ۚ w4 w5",
+      qcfWords: [qw(1, "w1"), qw(2, "w2"), qw(3, "w3 ۚ"), qw(4, "w4"), qw(5, "w5"), qw(6, "۝", "end")],
+    };
+
+    const r = sliceQcfForDisplay(apiVerse, "w4 w5", true)!;
+    expect(r.map((w) => w.text_uthmani)).toEqual(["w4", "w5", "۝"]);
+  });
 });

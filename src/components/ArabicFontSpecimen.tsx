@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { QcfWord } from "@/types";
-import { supportedArabicFontWeight } from "@/lib/canvas-utils";
+import { arabicTextForFont, supportedArabicFontWeight } from "@/lib/canvas-utils";
 import { QcfVerse } from "./QcfVerse";
 
 const SPECIMEN_FAMILIES: Record<string, string> = {
@@ -49,7 +49,7 @@ export function ArabicFontSpecimen({
   };
   return (
     <p dir="rtl" lang="ar" className={className} style={style}>
-      {fallback}
+      {arabicTextForFont(fallback, font, qcfWords)}
     </p>
   );
 }

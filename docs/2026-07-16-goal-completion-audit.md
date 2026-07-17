@@ -11,7 +11,7 @@ its saved-project, preview, and export paths agree.
 
 | Requirement | Current evidence | Status |
 |---|---|---|
-| Better Arabic fonts and real boldness | Five visually previewed modes; QCF page glyphs; Uthmanic Hafs; Amiri Quran; genuine Scheherazade/Noto weights; Arabic-only ink thickness; separate outline and glow; strict font loading before export; split preset defaults to fit-checked Scheherazade New Bold instead of a generic social face | Implemented and locally verified |
+| Better Arabic fonts and real boldness | Five visually previewed modes; QCF page glyphs with post-waqf partial-glyph mapping; source-matched QPC Hafs Unicode text with no deleted Quranic marks; Amiri Quran; genuine Scheherazade/Noto weights; Arabic-only ink thickness; separate outline and glow; strict font loading before export; split preset defaults to fit-checked Scheherazade New Bold instead of a generic social face | Implemented and locally verified |
 | Split text left / reciter media right | `textLayout`, `splitMask`, and the Reciter Split Fade template share one renderer between Template Studio, Studio preview, and export | Implemented and browser verified |
 | Creator-controlled media framing | Per-scene zoom, horizontal offset, vertical offset, direct canvas positioning, keyboard nudging, live human-readable position feedback, and a preview-level center action persist through templates/projects and apply in both `cover` and `contain` rendering | Implemented and E2E verified |
 | Solid or controlled gradient | Independent canvas solid/gradient editor plus a preview-level treatment switch; creator-authored solid and gradient alternatives survive comparisons and saved-template reloads; split-panel side, color, opacity, solid width, and fade width remain independently adjustable, and zero fade produces a truly solid edge | Implemented and E2E verified |
@@ -31,7 +31,7 @@ its saved-project, preview, and export paths agree.
 - Real-audio alignment: **13/13 passed**, including hold-out reciters, run-on
   recitation, phone-band/background stress, non-recitation intro, long ayah,
   mid-surah start, and repeated refrain.
-- Unit suite: **248/248 passed**.
+- Unit suite: **251/251 passed**.
 - Market-readiness browser suite: **11/11 passed locally**, including truthful
   recognition stages, storage quota failure, missing imported-audio recovery,
   and cancel/confirm deletion safety without native dialogs.

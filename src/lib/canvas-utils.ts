@@ -250,15 +250,22 @@ export function rgbaFromHex(hex: string, alpha: number): string {
 // space-separated tokens, but they MUST stay glued to their word — letting one
 // wrap onto a new line corrupts the recitation.
 
-// U+06DF renders incorrectly in the bundled legacy UthmanicHafs face. Modern
-// Arabic faces in the picker support it, so removing it globally would silently
-// alter the Quran text whenever a creator chooses Amiri, Scheherazade, or Noto.
-const UTHMANIC_HAFS_UNSUPPORTED = /۟/g;
-
-export function arabicTextForFont(text: string, font: string): string {
-  return font === "uthmanic-hafs" || font === "qcf"
-    ? text.replace(UTHMANIC_HAFS_UNSUPPORTED, "")
-    : text;
+/**
+ * Pair the QPC Hafs face with the Unicode source designed for it. Recognition,
+ * timing, and matching continue to use text_uthmani; only the painted text is
+ * substituted. Never delete a Quranic mark to accommodate a font fallback.
+ */
+export function arabicTextForFont(
+  text: string,
+  font: string,
+  qcfWords?: readonly QcfWord[],
+): string {
+  if (font !== "uthmanic-hafs" || !qcfWords?.length) return text;
+  const renderWords = qcfWords.filter((word) => word.char_type_name !== "end");
+  if (renderWords.length === 0 || renderWords.some((word) => !word.text_qpc_hafs)) {
+    return text;
+  }
+  return renderWords.map((word) => word.text_qpc_hafs).join(" ");
 }
 
 const MARK_ONLY =
@@ -708,7 +715,7 @@ export function analyzeArabicTextFit(
     ctx.font = `${weight} ${fontSize}px ${family}`;
     return useQcf
       ? measureQcfLines(ctx, qcfWords, fontSize, region.maxWidth)
-      : measureLines(ctx, arabicTextForFont(text, options.arabicFont), region.maxWidth).length;
+      : measureLines(ctx, arabicTextForFont(text, options.arabicFont, options.qcfWords), region.maxWidth).length;
   };
 
   const lineCount = countAt(options.arabicFontSize);
@@ -895,7 +902,7 @@ export function drawVerseText(
         : qcfWords.filter((w) => w.char_type_name !== "end"))
     : [];
 
-  const cleanArabic = arabicTextForFont(arabicText, options.arabicFont);
+  const cleanArabic = arabicTextForFont(arabicText, options.arabicFont, options.qcfWords);
   const arabicDisplay = options.arabicVerseNumber
     ? `${cleanArabic} ﴿${toArabicDigits(verseNumber)}﴾`
     : cleanArabic;

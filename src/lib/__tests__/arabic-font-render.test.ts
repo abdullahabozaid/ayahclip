@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  arabicTextForFont,
   ensureFontsReady,
   getArabicFontFamily,
   shouldUseQcf,
@@ -22,6 +23,19 @@ afterEach(() => {
 });
 
 describe("Arabic rendering modes", () => {
+  it("pairs the Uthmanic Hafs face with QPC Hafs text without deleting marks", () => {
+    const source = "مِنۡ شَيۡءٖ ۟";
+    const qpcWords: QcfWord[] = [
+      { ...words[0], position: 1, text_uthmani: "مِنۡ", text_qpc_hafs: "مِنۡ" },
+      { ...words[0], position: 2, text_uthmani: "شَىْءٍ", text_qpc_hafs: "شَيۡءٖ" },
+      { ...words[0], position: 3, char_type_name: "end", text_uthmani: "١", text_qpc_hafs: "١" },
+    ];
+
+    expect(arabicTextForFont(source, "uthmanic-hafs", qpcWords)).toBe("مِنۡ شَيۡءٖ");
+    expect(arabicTextForFont(source, "uthmanic-hafs")).toBe(source);
+    expect(arabicTextForFont(source, "scheherazade-new", qpcWords)).toBe(source);
+  });
+
   it("uses QCF glyphs only when the saved rendering mode requests them", () => {
     expect(shouldUseQcf("qcf", words)).toBe(true);
     expect(shouldUseQcf("uthmanic-hafs", words)).toBe(false);

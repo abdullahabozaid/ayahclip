@@ -84,8 +84,8 @@ const ARABIC_FONT_OPTIONS: {
   },
   {
     value: "uthmanic-hafs",
-    label: "Uthmanic Hafs",
-    note: "Compact Uthmani text with full recitation marks.",
+    label: "QPC Hafs Unicode",
+    note: "Quran Foundation's source-matched Hafs Unicode text with complete marks.",
     family: '"UthmanicHafs", serif',
     defaultWeight: 400,
   },

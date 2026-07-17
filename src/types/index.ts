@@ -16,6 +16,8 @@ export interface QcfWord {
   page_number: number;
   line_number: number;
   text_uthmani: string;
+  /** Unicode text shaped specifically for the QPC Hafs face. */
+  text_qpc_hafs?: string;
   char_type_name: "word" | "end" | "pause";
 }
 
@@ -24,6 +26,8 @@ export interface Verse {
   verse_number: number;
   verse_key: string;
   text_uthmani: string;
+  /** Unicode QPC Hafs text, kept separate from recognition/timing text. */
+  text_qpc_hafs?: string;
   translation?: string;
   qcfWords?: QcfWord[];
 }

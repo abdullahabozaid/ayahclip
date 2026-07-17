@@ -95,7 +95,7 @@ const TRANSLATION_FONT_OPTIONS = [
 
 const ARABIC_FONT_OPTIONS = [
   { value: "qcf", label: "Mushaf page", defaultWeight: 400, note: "Exact page glyphs and authentic ayah mark." },
-  { value: "uthmanic-hafs", label: "Madinah Uthmani", defaultWeight: 400, note: "Official-style Unicode Hafs with complete marks." },
+  { value: "uthmanic-hafs", label: "QPC Hafs Unicode", defaultWeight: 400, note: "Source-matched Quran Foundation Hafs text with complete marks." },
   { value: "amiri-quran", label: "Amiri Quran", defaultWeight: 400, note: "Open, literary Naskh for cinematic treatments." },
   { value: "scheherazade-new", label: "Scheherazade", defaultWeight: 600, note: "Traditional Naskh with genuine heavier faces." },
   { value: "noto-naskh-arabic", label: "Noto Naskh", defaultWeight: 700, note: "Compact, bold Arabic for social captions." },

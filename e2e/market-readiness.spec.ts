@@ -296,7 +296,7 @@ test("templates render and open the focused editor", async ({ page }) => {
   // same fallback face for every option, which would also corrupt final MP4s.
   const fontRenders: { family: string; faceCount: number; hash: number }[] = [];
   for (const name of [
-    "Uthmanic Hafs",
+    "QPC Hafs Unicode",
     "Amiri Quran",
     "Scheherazade New",
     "Noto Naskh Arabic",

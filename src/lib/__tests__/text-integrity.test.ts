@@ -1,7 +1,8 @@
 // Characterization tests for the Quran text helpers. These lock in behavior
 // that is sacred for textual integrity: waqf/pause marks must never become
 // their own wrap unit (a mark wrapping onto a new line corrupts the text),
-// and sanitization must strip exactly the unsupported mark and nothing else.
+// and font selection must never delete or rewrite Quran text without a
+// source-matched rendering alternative.
 import { describe, it, expect, vi } from "vitest";
 import { arabicTextForFont, splitWords, strokeTextWithInk, strokeTextWithOutline } from "@/lib/canvas-utils";
 
@@ -37,12 +38,13 @@ describe("splitWords (wrap units)", () => {
 });
 
 describe("arabicTextForFont", () => {
-  it("strips U+06DF only from the legacy Uthmanic fallback", () => {
-    expect(arabicTextForFont("وَءَامَنُوا۟", "uthmanic-hafs")).toBe("وَءَامَنُوا");
-    expect(arabicTextForFont("وَءَامَنُوا۟", "qcf")).toBe("وَءَامَنُوا");
+  it("never drops U+06DF from a fallback source", () => {
+    const text = "وَءَامَنُوا۟";
+    expect(arabicTextForFont(text, "uthmanic-hafs")).toBe(text);
+    expect(arabicTextForFont(text, "qcf")).toBe(text);
   });
 
-  it("preserves U+06DF in modern Arabic faces that support it", () => {
+  it("preserves U+06DF in every selectable Arabic face", () => {
     const text = "وَءَامَنُوا۟";
     expect(arabicTextForFont(text, "amiri-quran")).toBe(text);
     expect(arabicTextForFont(text, "scheherazade-new")).toBe(text);
