@@ -131,4 +131,19 @@ describe("assessVerseMatch", () => {
       expect.objectContaining({ surah: 1, ayahStart: 3, ayahEnd: 3 }),
     ]));
   });
+
+  it("ranks the complete short ayah before a longer verse with the same ending", () => {
+    const assessment = assessVerseMatch("الحمد لله رب العالمينِينَ");
+    const candidates = selectRecognitionCandidates(
+      assessment.match!,
+      assessment.alternatives,
+      10,
+    );
+
+    expect(assessment.match).toMatchObject({ surah: 1, ayahStart: 2, ayahEnd: 2 });
+    expect(assessment.confidence).toBe("low");
+    expect(candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ surah: 37, ayahStart: 182, ayahEnd: 182 }),
+    ]));
+  });
 });

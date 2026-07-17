@@ -157,6 +157,39 @@ function alignToRef(query: string, ref: string): { score: number; start: number;
   return { score: Math.max(0, 1 - bestCost / m), start: bestStart, end: bestEnd };
 }
 
+/**
+ * Global edit similarity between the complete transcript and complete Quran
+ * reference. Unlike `alignToRef`, this charges for unrecited text at either end
+ * of the reference. It is deliberately used only as a small ranking signal:
+ * mid-ayah clips must remain discoverable, but when two candidates contain the
+ * same phrase we should prefer the ayah whose complete wording best explains
+ * the transcript.
+ */
+function wholeReferenceSimilarity(query: string, ref: string): number {
+  const m = query.length;
+  const n = ref.length;
+  if (m === 0 || n === 0) return m === n ? 1 : 0;
+
+  let previous = new Int32Array(n + 1);
+  let current = new Int32Array(n + 1);
+  for (let j = 0; j <= n; j++) previous[j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    current[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const substitution = previous[j - 1] + (query[i - 1] === ref[j - 1] ? 0 : 1);
+      current[j] = Math.min(
+        substitution,
+        current[j - 1] + 1,
+        previous[j] + 1,
+      );
+    }
+    [previous, current] = [current, previous];
+  }
+
+  return Math.max(0, 1 - previous[n] / Math.max(m, n));
+}
+
 // ---- Corpus loading (lazy, cached) ----
 let bySurah: Map<number, CorpusVerse[]> | null = null;
 let surahIndex: SurahIndex[] | null = null;
@@ -283,10 +316,14 @@ function referenceCoverage(match: VerseMatch, query: string): number {
 }
 
 function recognitionRankScore(match: VerseMatch, query: string): number {
-  // Whole-verse coverage breaks ties between an exact ayah and a phrase merely
-  // contained inside a longer verse. Keep the adjustment small: transcript
-  // similarity remains the primary signal.
-  return match.score * (0.85 + 0.15 * referenceCoverage(match, query));
+  // Whole-reference similarity breaks the important tie between a complete
+  // short ayah and the same words appearing at the end of a longer ayah. Keep
+  // both adjustments small: semi-global transcript similarity remains the
+  // primary signal, so genuine mid-ayah clips stay retrievable.
+  const reference = getVersesText(match.surah, match.ayahStart, match.ayahEnd).text;
+  return match.score * 0.8 +
+    referenceCoverage(match, query) * 0.1 +
+    wholeReferenceSimilarity(query, reference) * 0.1;
 }
 
 function matchKey(match: VerseMatch): string {
