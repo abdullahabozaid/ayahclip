@@ -19,6 +19,7 @@ import {
   renderForPreview,
   type RenderedClip,
 } from "@/components/Mp4Preview";
+import { exportFailureMessage } from "@/lib/export-errors";
 
 // Editor zoom bounds. CSS `zoom` reflows layout, so the page scrolls naturally
 // when zoomed past the viewport (and shrinks within it when zoomed out).
@@ -40,6 +41,7 @@ export default function StudioPage() {
   const [mp4Clip, setMp4Clip] = useState<RenderedClip | null>(null);
   const [mp4Rendering, setMp4Rendering] = useState(false);
   const [mp4Progress, setMp4Progress] = useState({ current: 0, total: 0 });
+  const [mp4Error, setMp4Error] = useState<string | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("studio");
   const [showSafeZones, setShowSafeZones] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(true);
@@ -48,7 +50,7 @@ export default function StudioPage() {
   // trim words, duplicate) and "timeline" (waveform with draggable verse
   // boundaries). Each suits a different job, so the user picks.
   const [editorView, setEditorView] = useState<"words" | "timeline">("words");
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const savedResetRef = useRef<ReturnType<typeof setTimeout>>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const savedAudioUrlRef = useRef<string | null>(null);
@@ -97,6 +99,7 @@ export default function StudioPage() {
   const openMp4Preview = useCallback(async () => {
     if (mp4Rendering) return;
     setMp4Rendering(true);
+    setMp4Error(null);
     setMp4Progress({ current: 0, total: 0 });
     try {
       const clip = await renderForPreview((current, total) =>
@@ -105,7 +108,7 @@ export default function StudioPage() {
       if (clip) setMp4Clip(clip);
     } catch (err) {
       console.error("MP4 preview render failed:", err);
-      alert("Could not render the preview. Try a shorter clip, or use Export directly.");
+      setMp4Error(exportFailureMessage(err));
     } finally {
       setMp4Rendering(false);
     }
@@ -127,7 +130,7 @@ export default function StudioPage() {
   // by autosave (debounced) and the manual Save button so they never drift.
   const saveNow = useCallback(async () => {
     const state = useAppStore.getState();
-    if (!state.surah || state.selectedVerseNumbers.length === 0) return;
+    if (!state.surah || state.selectedVerseNumbers.length === 0) return false;
     const id = state.projectId ?? generateProjectId();
     if (!state.projectId) state.setProjectId(id);
     const src = state.audioSource;
@@ -141,23 +144,26 @@ export default function StudioPage() {
     // Persist uploaded media so the clip (and its editable verse timeline)
     // can be fully restored later. Blobs are saved once per URL.
     let imported: import("@/types").Project["imported"];
+    let mediaSaved = true;
     if (src.mode === "imported") {
       const videoBg = state.background.type === "video" && state.background.value.startsWith("blob:");
       imported = { name: src.name, timings: src.timings, videoBg };
       if (savedAudioUrlRef.current !== src.url) {
         try {
-          await saveBlob(`audio:${id}`, await (await fetch(src.url)).blob());
-          savedAudioUrlRef.current = src.url;
+          const saved = await saveBlob(`audio:${id}`, await (await fetch(src.url)).blob());
+          if (saved) savedAudioUrlRef.current = src.url;
+          else mediaSaved = false;
         } catch {
-          /* blob URL may be gone */
+          mediaSaved = false;
         }
       }
       if (videoBg && savedVideoUrlRef.current !== state.background.value) {
         try {
-          await saveBlob(`video:${id}`, await (await fetch(state.background.value)).blob());
-          savedVideoUrlRef.current = state.background.value;
+          const saved = await saveBlob(`video:${id}`, await (await fetch(state.background.value)).blob());
+          if (saved) savedVideoUrlRef.current = state.background.value;
+          else mediaSaved = false;
         } catch {
-          /* ignore */
+          mediaSaved = false;
         }
       }
     }
@@ -172,14 +178,15 @@ export default function StudioPage() {
       backgroundMedia.push({ sceneId: entry.sceneId, type: media.type });
       if (savedBackgroundUrlsRef.current.has(media.value)) continue;
       try {
-        await saveBlob(`background:${id}:${entry.sceneId}`, await (await fetch(media.value)).blob());
-        savedBackgroundUrlsRef.current.add(media.value);
+        const saved = await saveBlob(`background:${id}:${entry.sceneId}`, await (await fetch(media.value)).blob());
+        if (saved) savedBackgroundUrlsRef.current.add(media.value);
+        else mediaSaved = false;
       } catch {
-        /* object URL may already have been released */
+        mediaSaved = false;
       }
     }
 
-    await saveProject({
+    const projectSaved = await saveProject({
       id,
       name: `${state.surah.name_simple} ${sel[0]}-${sel[sel.length - 1]}`,
       surahId: state.surah.id,
@@ -246,6 +253,7 @@ export default function StudioPage() {
       createdAt: existing?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
     });
+    return projectSaved && mediaSaved;
   }, []);
 
   // Manual save — gives an explicit "Saved ✓" so the clip is clearly stored on
@@ -253,12 +261,12 @@ export default function StudioPage() {
   const handleSaveClick = useCallback(async () => {
     setSaveState("saving");
     try {
-      await saveNow();
-      setSaveState("saved");
+      const saved = await saveNow();
+      setSaveState(saved ? "saved" : "error");
       if (savedResetRef.current) clearTimeout(savedResetRef.current);
       savedResetRef.current = setTimeout(() => setSaveState("idle"), 2000);
     } catch {
-      setSaveState("idle");
+      setSaveState("error");
     }
   }, [saveNow]);
 
@@ -448,6 +456,8 @@ export default function StudioPage() {
             className={`flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm transition-colors disabled:opacity-60 sm:min-h-9 ${
               saveState === "saved"
                 ? "bg-emerald-accent/20 text-emerald-soft ring-1 ring-emerald-soft/40"
+                : saveState === "error"
+                  ? "bg-red-500/10 text-red-100 ring-1 ring-red-500/30"
                 : "btn-ghost"
             }`}
             title="Save this clip to your dashboard so you can reopen it later"
@@ -462,7 +472,7 @@ export default function StudioPage() {
               </svg>
             )}
             <span className="hidden sm:inline">
-              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save"}
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : saveState === "error" ? "Save failed" : "Save"}
             </span>
           </button>
 
@@ -513,6 +523,13 @@ export default function StudioPage() {
           </button>
         </div>
       </header>
+
+      {mp4Error && (
+        <div role="alert" className="flex items-start gap-3 border-b border-red-500/25 bg-red-500/[0.08] px-4 py-2.5 text-[11px] leading-relaxed text-red-100/90">
+          <span className="min-w-0 flex-1">{mp4Error}</span>
+          <button type="button" onClick={() => setMp4Error(null)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-red-100/60 hover:bg-white/[0.05] hover:text-red-100" aria-label="Dismiss preview error">×</button>
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1">
         {/* Preview stage */}

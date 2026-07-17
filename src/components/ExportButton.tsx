@@ -9,6 +9,7 @@ import {
   deliverFileInGesture,
 } from "@/lib/clip-export";
 import { Mp4PreviewOverlay, type RenderedClip } from "./Mp4Preview";
+import { exportFailureMessage } from "@/lib/export-errors";
 
 export function ExportButton() {
   const store = useAppStore();
@@ -42,9 +43,7 @@ export function ExportButton() {
       if (rendered) await after(rendered.file, rendered.fallbackReason);
     } catch (err) {
       console.error("Export failed:", err);
-      setError(
-        "Export failed. Your browser may not support video encoding, or it ran out of memory. Try a shorter clip."
-      );
+      setError(exportFailureMessage(err));
     } finally {
       setExporting(false);
       setProgress({ current: 0, total: 0 });

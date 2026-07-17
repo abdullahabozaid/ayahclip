@@ -14,11 +14,13 @@ function warnStorage(op: string, err: unknown): void {
   console.warn(`[projects] storage ${op} failed — persistence disabled`, err);
 }
 
-export async function saveProject(project: Project): Promise<void> {
+export async function saveProject(project: Project): Promise<boolean> {
   try {
     await set(projectKey(project.id), project);
+    return true;
   } catch (err) {
     warnStorage("saveProject", err);
+    return false;
   }
 }
 
@@ -49,11 +51,13 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 // ---- Uploaded-media blobs (audio track / background video) for imported clips ----
-export async function saveBlob(key: string, blob: Blob): Promise<void> {
+export async function saveBlob(key: string, blob: Blob): Promise<boolean> {
   try {
     await set(key, blob);
+    return true;
   } catch (err) {
     warnStorage("saveBlob", err);
+    return false;
   }
 }
 

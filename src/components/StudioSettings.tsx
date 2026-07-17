@@ -34,8 +34,8 @@ function SetCoverButton() {
     const thumbnail = off.toDataURL("image/jpeg", 0.85);
     const p = await getProject(projectId);
     if (!p) return;
-    await saveProject({ ...p, thumbnail, updatedAt: Date.now() });
-    setLabel("Cover set ✓");
+    const saved = await saveProject({ ...p, thumbnail, updatedAt: Date.now() });
+    setLabel(saved ? "Cover set ✓" : "Couldn’t save cover");
     setTimeout(() => setLabel("Set as cover"), 1600);
   };
   return (
