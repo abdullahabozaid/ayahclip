@@ -62,4 +62,20 @@ describe("Arabic rendering modes", () => {
       "بِسْمِ ٱللَّهِ ﴿١﴾",
     );
   });
+
+  it("rejects an empty font-load result instead of recording a platform fallback", async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    vi.stubGlobal("document", { fonts: { load } });
+    vi.stubGlobal("window", { setTimeout });
+
+    await expect(ensureFontsReady(
+      "uthmanic-hafs",
+      "serif",
+      400,
+      400,
+      { timeoutMs: 20, throwOnTimeout: true },
+    )).rejects.toThrow("selected Quran font did not finish loading");
+  });
 });

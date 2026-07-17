@@ -4,7 +4,6 @@ import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, Media
 import { StyleSettings } from "./style";
 import { VerseTiming } from "./audio-import";
 import { normalizeTimings } from "./timing-ops";
-import { sanitizeArabic } from "./canvas-utils";
 import { backgroundPresets } from "./backgrounds";
 import {
   createBackgroundScene,
@@ -450,7 +449,7 @@ export const useAppStore = create<AppState>((set) => ({
         if (!t.splits?.length || t.splitWords?.length) return t;
         const verse = verses.find((v) => v.verse_number === t.verseNumber);
         if (!verse) return t;
-        const total = sanitizeArabic(verse.text_uthmani).split(/\s+/).filter(Boolean).length;
+        const total = verse.text_uthmani.split(/\s+/).filter(Boolean).length;
         const dur = t.end - t.start;
         if (dur <= 0 || total < 2) return t;
         return {

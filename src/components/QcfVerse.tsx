@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { QcfWord } from "@/types";
 import { qcfFontFamily, ensureQcfFontsReady } from "@/lib/qcf-font-loader";
-import { sanitizeArabic } from "@/lib/canvas-utils";
+import { arabicTextForFont } from "@/lib/canvas-utils";
 
 interface QcfVerseProps {
   qcfWords?: QcfWord[];
@@ -32,7 +32,7 @@ export function QcfVerse({ qcfWords, fallback, className = "" }: QcfVerseProps) 
   if (!qcfWords || qcfWords.length === 0 || !fontsReady) {
     return (
       <p dir="rtl" className={`font-arabic text-[22px] leading-loose ${className}`}>
-        {sanitizeArabic(fallback)}
+        {arabicTextForFont(fallback, "uthmanic-hafs")}
       </p>
     );
   }

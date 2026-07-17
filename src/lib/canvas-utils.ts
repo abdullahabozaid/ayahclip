@@ -218,10 +218,16 @@ export async function ensureFontsReady(
     // opts into a longer, strict timeout so it never records the wrong face.
     const timeoutMs = Math.max(1, options.timeoutMs ?? 800);
     const completed = await Promise.race([
-      fontLoads.then(() => true),
-      new Promise<false>((resolve) => window.setTimeout(() => resolve(false), timeoutMs)),
+      fontLoads.then(([arabicFaces]) => ({ finished: true as const, arabicFaces })),
+      new Promise<{ finished: false; arabicFaces: FontFace[] }>((resolve) =>
+        window.setTimeout(() => resolve({ finished: false, arabicFaces: [] }), timeoutMs),
+      ),
     ]);
-    if (!completed && options.throwOnTimeout) {
+    // FontFaceSet.load resolves with an empty list when no matching @font-face
+    // exists. Treat that as a strict export failure; otherwise canvas silently
+    // records a platform fallback even though the wait technically completed.
+    const arabicFaceReady = completed.finished && completed.arabicFaces.length > 0;
+    if (!arabicFaceReady && options.throwOnTimeout) {
       throw new Error("The selected Quran font did not finish loading. Please retry the export.");
     }
   } catch (error) {
@@ -244,12 +250,15 @@ export function rgbaFromHex(hex: string, alpha: number): string {
 // space-separated tokens, but they MUST stay glued to their word — letting one
 // wrap onto a new line corrupts the recitation.
 
-// U+06DF renders as a large circle in UthmanicHafs instead of a tiny combining
-// mark. Strip before display — supplementary recitation mark, not essential.
-const FONT_UNSUPPORTED = /۟/g;
+// U+06DF renders incorrectly in the bundled legacy UthmanicHafs face. Modern
+// Arabic faces in the picker support it, so removing it globally would silently
+// alter the Quran text whenever a creator chooses Amiri, Scheherazade, or Noto.
+const UTHMANIC_HAFS_UNSUPPORTED = /۟/g;
 
-export function sanitizeArabic(text: string): string {
-  return text.replace(FONT_UNSUPPORTED, "");
+export function arabicTextForFont(text: string, font: string): string {
+  return font === "uthmanic-hafs" || font === "qcf"
+    ? text.replace(UTHMANIC_HAFS_UNSUPPORTED, "")
+    : text;
 }
 
 const MARK_ONLY =
@@ -639,7 +648,7 @@ export function analyzeArabicTextFit(
     ctx.font = `${weight} ${fontSize}px ${family}`;
     return useQcf
       ? measureQcfLines(ctx, qcfWords, fontSize, region.maxWidth)
-      : measureLines(ctx, sanitizeArabic(text), region.maxWidth).length;
+      : measureLines(ctx, arabicTextForFont(text, options.arabicFont), region.maxWidth).length;
   };
 
   const lineCount = countAt(options.arabicFontSize);
@@ -821,7 +830,7 @@ export function drawVerseText(
         : qcfWords.filter((w) => w.char_type_name !== "end"))
     : [];
 
-  const cleanArabic = sanitizeArabic(arabicText);
+  const cleanArabic = arabicTextForFont(arabicText, options.arabicFont);
   const arabicDisplay = options.arabicVerseNumber
     ? `${cleanArabic} ﴿${toArabicDigits(verseNumber)}﴾`
     : cleanArabic;

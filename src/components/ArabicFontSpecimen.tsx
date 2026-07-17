@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import type { QcfWord } from "@/types";
+import { supportedArabicFontWeight } from "@/lib/canvas-utils";
 import { QcfVerse } from "./QcfVerse";
 
 const SPECIMEN_FAMILIES: Record<string, string> = {
@@ -36,7 +37,9 @@ export function ArabicFontSpecimen({
 
   const style: CSSProperties = {
     fontFamily: SPECIMEN_FAMILIES[font] ?? '"UthmanicHafs", serif',
-    fontWeight: weight,
+    // Match canvas/export exactly and never synthesize a heavy Quran face from
+    // stale saved settings.
+    fontWeight: supportedArabicFontWeight(font, weight),
   };
   return (
     <p dir="rtl" lang="ar" className={className} style={style}>

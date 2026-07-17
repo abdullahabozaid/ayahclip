@@ -1,5 +1,4 @@
 import { WordTiming, WordData, fetchChapterTimings, fetchWordsByVerse } from "./api";
-import { sanitizeArabic } from "./canvas-utils";
 import { snapToSentenceBoundary } from "./audio-import";
 
 export interface TextSegment {
@@ -164,7 +163,9 @@ export async function loadVerseWords(
     const t = vt?.wordTimings.find((x) => x.wordPosition === w.position);
     return {
       position: w.position,
-      text: sanitizeArabic(w.textUthmani),
+      // Keep source Quran text intact. Font-specific compatibility belongs in
+      // the renderer; timing and saved segments must retain every mark.
+      text: w.textUthmani,
       translation: w.translation ?? "",
       startMs: t ? t.startMs : null,
       endMs: t ? t.endMs : null,

@@ -148,6 +148,54 @@ test("templates render and open the focused editor", async ({ page }) => {
   await expect(arabicInspector).not.toHaveAttribute("open", "");
   await arabicInspector.locator("summary").click();
   await arabicInspector.getByRole("button", { name: "Compare all five fonts" }).click();
+
+  // Prove the four bundled Unicode faces are genuinely loaded and visually
+  // distinct. A font dropdown can look correct while canvas silently paints the
+  // same fallback face for every option, which would also corrupt final MP4s.
+  const fontRenders: { family: string; faceCount: number; hash: number }[] = [];
+  for (const name of [
+    "Uthmanic Hafs",
+    "Amiri Quran",
+    "Scheherazade New",
+    "Noto Naskh Arabic",
+  ]) {
+    const specimen = arabicInspector
+      .getByRole("button", { name: new RegExp(name) })
+      .locator("p")
+      .first();
+    fontRenders.push(await specimen.evaluate(async (element) => {
+      const sample = "وَءَامَنُوا۟ بِسْمِ ٱللَّهِ ۚ";
+      const style = getComputedStyle(element);
+      const descriptor = `${style.fontWeight} 48px ${style.fontFamily}`;
+      const faces = await document.fonts.load(descriptor, sample);
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 140;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) throw new Error("Canvas context unavailable");
+      context.fillStyle = "#fff";
+      context.font = descriptor;
+      context.direction = "rtl";
+      context.textAlign = "right";
+      context.textBaseline = "top";
+      context.fillText(sample, 620, 12);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let hash = 2166136261;
+      for (let i = 3; i < pixels.length; i += 4) {
+        hash ^= pixels[i];
+        hash = Math.imul(hash, 16777619);
+      }
+      return {
+        family: style.fontFamily.split(",")[0],
+        faceCount: faces.length,
+        hash: hash >>> 0,
+      };
+    }));
+  }
+  expect(fontRenders.every((render) => render.faceCount > 0), fontRenders).toBe(true);
+  expect(new Set(fontRenders.map((render) => render.family)).size, fontRenders).toBe(4);
+  expect(new Set(fontRenders.map((render) => render.hash)).size, fontRenders).toBe(4);
+
   await arabicInspector.getByRole("button", { name: /Scheherazade New/ }).click();
   await expect(arabicInspector.getByRole("button", { name: "SemiBold", exact: true })).toHaveAttribute(
     "aria-pressed",

@@ -21,7 +21,6 @@ import {
 } from "@/lib/timing-ops";
 import { importedPlayer } from "@/lib/imported-player";
 import { browserDeviceMemoryGb } from "@/lib/import-limits";
-import { sanitizeArabic } from "@/lib/canvas-utils";
 import { QcfVerse } from "./QcfVerse";
 import {
   AlignmentProgress,
@@ -181,7 +180,7 @@ export function VerseCardEditor() {
       if (!seg) return;
       const verse = state.verses.find((v) => v.verse_number === seg.verseNumber);
       if (!verse) return;
-      const total = sanitizeArabic(verse.text_uthmani).split(/\s+/).filter(Boolean).length;
+      const total = verse.text_uthmani.split(/\s+/).filter(Boolean).length;
       const dur = seg.end - seg.start;
       if (dur <= 0 || total < 2) return;
       if (absBoundary <= 0 || absBoundary >= total) return;
@@ -623,7 +622,7 @@ function VerseCard({
   const verse = useAppStore((s) =>
     s.verses.find((v) => v.verse_number === timing.verseNumber)
   );
-  const allWords = sanitizeArabic(verse?.text_uthmani ?? "").split(/\s+/).filter(Boolean);
+  const allWords = (verse?.text_uthmani ?? "").split(/\s+/).filter(Boolean);
   const totalWords = allWords.length;
   // Translation words — split alongside the Arabic, proportionally by time so the
   // translation chunk for each part matches its Arabic chunk.
