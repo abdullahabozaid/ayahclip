@@ -29,6 +29,21 @@ const ZOOM_STEP = 0.1;
 const clampZoom = (z: number) =>
   Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 100) / 100;
 
+type SaveFailureReason = "invalid" | "media" | "project";
+type SaveResult =
+  | { ok: true }
+  | { ok: false; reason: SaveFailureReason };
+
+function saveFailureMessage(reason: SaveFailureReason): string {
+  if (reason === "media") {
+    return "The source media could not be stored. Keep this tab open, free some browser storage, then retry.";
+  }
+  if (reason === "invalid") {
+    return "Choose at least one ayah before saving this clip.";
+  }
+  return "The project could not be stored. Free some browser storage or leave private browsing, then retry.";
+}
+
 export default function StudioPage() {
   const router = useRouter();
   const store = useAppStore();
@@ -51,6 +66,7 @@ export default function StudioPage() {
   // boundaries). Each suits a different job, so the user picks.
   const [editorView, setEditorView] = useState<"words" | "timeline">("words");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const savedResetRef = useRef<ReturnType<typeof setTimeout>>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const savedAudioUrlRef = useRef<string | null>(null);
@@ -128,11 +144,12 @@ export default function StudioPage() {
 
   // Build + persist the current project (record + uploaded-media blobs). Shared
   // by autosave (debounced) and the manual Save button so they never drift.
-  const saveNow = useCallback(async () => {
+  const saveNow = useCallback(async (): Promise<SaveResult> => {
     const state = useAppStore.getState();
-    if (!state.surah || state.selectedVerseNumbers.length === 0) return false;
+    if (!state.surah || state.selectedVerseNumbers.length === 0) {
+      return { ok: false, reason: "invalid" };
+    }
     const id = state.projectId ?? generateProjectId();
-    if (!state.projectId) state.setProjectId(id);
     const src = state.audioSource;
     const sel = state.selectedVerseNumbers;
     // Preserve a user-chosen cover thumbnail across saves; otherwise grab a
@@ -185,6 +202,11 @@ export default function StudioPage() {
         mediaSaved = false;
       }
     }
+
+    // Do not publish metadata that points at media which failed to persist.
+    // Existing projects retain their last complete version; new drafts remain
+    // drafts instead of appearing on the dashboard as broken saved clips.
+    if (!mediaSaved) return { ok: false, reason: "media" };
 
     const projectSaved = await saveProject({
       id,
@@ -253,20 +275,29 @@ export default function StudioPage() {
       createdAt: existing?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
     });
-    return projectSaved && mediaSaved;
+    if (!projectSaved) return { ok: false, reason: "project" };
+    if (!state.projectId) state.setProjectId(id);
+    return { ok: true };
   }, []);
 
   // Manual save — gives an explicit "Saved ✓" so the clip is clearly stored on
   // the dashboard and retrievable later (autosave still runs in the background).
   const handleSaveClick = useCallback(async () => {
     setSaveState("saving");
+    setSaveError(null);
     try {
-      const saved = await saveNow();
-      setSaveState(saved ? "saved" : "error");
-      if (savedResetRef.current) clearTimeout(savedResetRef.current);
-      savedResetRef.current = setTimeout(() => setSaveState("idle"), 2000);
+      const result = await saveNow();
+      if (result.ok) {
+        setSaveState("saved");
+        if (savedResetRef.current) clearTimeout(savedResetRef.current);
+        savedResetRef.current = setTimeout(() => setSaveState("idle"), 2000);
+      } else {
+        setSaveState("error");
+        setSaveError(saveFailureMessage(result.reason));
+      }
     } catch {
       setSaveState("error");
+      setSaveError(saveFailureMessage("project"));
     }
   }, [saveNow]);
 
@@ -274,7 +305,15 @@ export default function StudioPage() {
     if (!surah || selectedVerseNumbers.length === 0 || !store.projectId) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      saveNow();
+      void saveNow().then((result) => {
+        if (result.ok) {
+          setSaveError(null);
+          setSaveState((current) => current === "error" ? "idle" : current);
+          return;
+        }
+        setSaveState("error");
+        setSaveError(saveFailureMessage(result.reason));
+      });
     }, 2000);
 
     return () => {
@@ -528,6 +567,16 @@ export default function StudioPage() {
         <div role="alert" className="flex items-start gap-3 border-b border-red-500/25 bg-red-500/[0.08] px-4 py-2.5 text-[11px] leading-relaxed text-red-100/90">
           <span className="min-w-0 flex-1">{mp4Error}</span>
           <button type="button" onClick={() => setMp4Error(null)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-red-100/60 hover:bg-white/[0.05] hover:text-red-100" aria-label="Dismiss preview error">×</button>
+        </div>
+      )}
+
+      {saveError && (
+        <div role="alert" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-red-500/25 bg-red-500/[0.08] px-4 py-2.5 text-xs leading-relaxed text-red-100/90">
+          <p className="min-w-0 flex-1"><strong className="font-semibold text-red-100">Not saved.</strong> {saveError}</p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={handleSaveClick} disabled={saveState === "saving"} className="min-h-10 rounded-full border border-red-300/30 px-3 font-medium text-red-50 transition-colors hover:bg-red-100/10 disabled:opacity-50">Retry</button>
+            <button type="button" onClick={() => { setSaveError(null); setSaveState("idle"); }} className="flex h-10 w-10 items-center justify-center rounded-full text-red-100/60 hover:bg-white/[0.05] hover:text-red-100" aria-label="Dismiss save error">×</button>
+          </div>
         </div>
       )}
 

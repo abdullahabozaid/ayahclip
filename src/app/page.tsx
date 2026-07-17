@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -61,6 +62,7 @@ export default function Dashboard() {
   const handleOpen = async (project: Project) => {
     if (opening) return;
     setOpening(project.id);
+    setOpenError(null);
     try {
       const surahs = await fetchSurahs();
       const surah = surahs.find((s) => s.id === project.surahId);
@@ -79,13 +81,15 @@ export default function Dashboard() {
         | undefined;
       if (project.imported) {
         const audioBlob = await getBlob(`audio:${project.id}`);
-        if (audioBlob) {
-          importedAudio = {
-            url: URL.createObjectURL(audioBlob),
-            name: project.imported.name,
-            timings: project.imported.timings,
-          };
+        if (!audioBlob) {
+          setOpenError(`“${project.name}” is missing its imported audio. Import the original source again to create a complete copy.`);
+          return;
         }
+        importedAudio = {
+          url: URL.createObjectURL(audioBlob),
+          name: project.imported.name,
+          timings: project.imported.timings,
+        };
         if (project.imported.videoBg && settings.background?.type === "video") {
           const videoBlob = await getBlob(`video:${project.id}`);
           if (videoBlob) settings.background = { ...settings.background, value: URL.createObjectURL(videoBlob) };
@@ -187,6 +191,15 @@ export default function Dashboard() {
 
       {/* Projects */}
       <section id="projects" className="mx-auto max-w-6xl px-5 py-16">
+        {openError && (
+          <div role="alert" className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl border border-red-500/25 bg-red-500/[0.08] px-4 py-3 text-sm leading-relaxed text-red-100/90">
+            <p className="min-w-0 flex-1"><strong className="font-semibold text-red-100">Clip could not open.</strong> {openError}</p>
+            <div className="flex shrink-0 items-center gap-2">
+              <NewClipLink href="/import" className="min-h-10 rounded-full border border-red-300/30 px-4 py-2 text-xs font-medium text-red-50 transition-colors hover:bg-red-100/10">Import source</NewClipLink>
+              <button type="button" onClick={() => setOpenError(null)} className="flex h-10 w-10 items-center justify-center rounded-full text-red-100/60 transition-colors hover:bg-white/[0.05] hover:text-red-100" aria-label="Dismiss clip error">×</button>
+            </div>
+          </div>
+        )}
         {loading ? (
           <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (

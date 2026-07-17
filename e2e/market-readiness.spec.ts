@@ -133,6 +133,79 @@ test("a real local audio file survives import, template choice, save, and reopen
   assertNoErrors();
 });
 
+test("a failed first save stays a draft and explains how to recover", async ({ page }) => {
+  test.slow();
+  await page.addInitScript(() => {
+    IDBObjectStore.prototype.put = function () {
+      throw new DOMException("Quota exceeded", "QuotaExceededError");
+    };
+  });
+  await page.goto("/import");
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "unsaved-source.wav",
+    mimeType: "audio/wav",
+    buffer: toneWav(),
+  });
+  await page.getByRole("combobox", { name: "Surah" }).selectOption("51");
+  await page.getByRole("spinbutton", { name: "From" }).fill("1");
+  await page.getByRole("spinbutton", { name: "To" }).fill("2");
+  await page.getByRole("checkbox", { name: /I confirm this Quran range/ }).check();
+  await page.getByRole("button", { name: "Choose a template" }).click();
+  const templateCard = page.locator("article").filter({
+    has: page.getByRole("heading", { level: 2, name: "Reciter Split Fade" }),
+  });
+  await templateCard.getByRole("button", { name: "Use template" }).click();
+
+  await expect(page.getByRole("button", { name: "Exit editor" })).toHaveAttribute(
+    "title",
+    "Exit without saving this draft",
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save failed", exact: true })).toBeVisible();
+  await expect(
+    page.locator('[role="alert"]').filter({ hasText: "Not saved." }),
+  ).toContainText("source media could not be stored");
+  await expect(page.getByRole("button", { name: "Exit editor" })).toHaveAttribute(
+    "title",
+    "Exit without saving this draft",
+  );
+});
+
+test("a saved imported clip with missing audio never reopens as a reciter clip", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("keyval-store");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const transaction = request.result.transaction("keyval", "readwrite");
+        transaction.onerror = () => reject(transaction.error);
+        transaction.oncomplete = () => resolve();
+        transaction.objectStore("keyval").put({
+          id: "missing-imported-audio",
+          name: "Adh-Dhariyat 1-2",
+          surahId: 51,
+          surahName: "Adh-Dhariyat",
+          selectedVerseNumbers: [1, 2],
+          imported: { name: "missing-source.wav", timings: [], videoBg: false },
+          settings: {},
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }, "project:missing-imported-audio");
+      };
+    });
+  });
+  await page.reload();
+
+  await page.getByRole("heading", { level: 3, name: "Adh-Dhariyat 1-2" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.locator('[role="alert"]').filter({ hasText: "Clip could not open." }),
+  ).toContainText("missing its imported audio");
+  await expect(page.getByRole("link", { name: "Import source" })).toBeVisible();
+});
+
 test("templates render and open the focused editor", async ({ page }) => {
   const assertNoErrors = failOnPageErrors(page);
   await page.goto("/styles");

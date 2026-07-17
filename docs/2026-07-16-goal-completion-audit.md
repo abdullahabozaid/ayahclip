@@ -19,6 +19,7 @@ its saved-project, preview, and export paths agree.
 | Automatic alignment re-review | Hybrid transcript/CTC/pause fusion, retry after non-recitation intro, per-boundary confidence, reversible manual edits, persistent review markers, and a listen/check review queue reconstructed after reopening | Implemented; broader mixed-speech corpus still required |
 | Multiple B-roll clips | Ordered background scenes, per-scene fit/position, duration and transition controls, template media slots, and rotating B-roll preset | Implemented and E2E verified |
 | TikTok/account visual research | @ayahclip and reference posts reviewed for dark reciter footage, strong Quran hierarchy, restrained translation, outline/glow separation, and consistent vertical framing | Incorporated into templates and typography controls |
+| Saved-project integrity | Media writes must complete before project metadata is updated; failed first saves remain drafts with inline recovery; imported projects with missing audio are blocked instead of reopening with unrelated reciter audio | Implemented and E2E verified |
 
 ## Current quantitative gates
 
@@ -29,9 +30,9 @@ its saved-project, preview, and export paths agree.
 - Real-audio alignment: **13/13 passed**, including hold-out reciters, run-on
   recitation, phone-band/background stress, non-recitation intro, long ayah,
   mid-surah start, and repeated refrain.
-- Unit suite: **230 tests passed** at the typography release; the persisted
-  alignment-review reconstruction adds two further focused tests.
-- Market-readiness browser suite: **7/7 passed locally**.
+- Unit suite: **237/237 passed**.
+- Market-readiness browser suite: **9/9 passed locally**, including storage
+  quota failure and missing imported-audio recovery.
 - Lint, TypeScript, production build, Vercel production deployment, and live
   HTTP checks passed.
 
