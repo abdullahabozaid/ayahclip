@@ -13,11 +13,13 @@ import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
 import { alignImportedAudio, attachAlignmentDiagnostics } from "@/lib/deep-align";
 import {
   alignmentFailureMessage,
+  alignmentReviewProgress,
   buildAlignmentReview,
   type AlignmentReview,
 } from "@/lib/alignment-feedback";
 import {
   applyAlignedTimingsToRows,
+  markAlignmentBoundaryReviewed,
   verseNumbersForAlignment,
 } from "@/lib/timing-ops";
 import { importedPlayer } from "@/lib/imported-player";
@@ -508,7 +510,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           const b = Math.max(next[i].start + MIN_DUR, Math.min(next[i + 1].end - MIN_DUR, t));
           next[i].end = b;
           next[i + 1].start = b;
-          commit(next);
+          commit(markAlignmentBoundaryReviewed(next, i + 1));
         }
       } else if (e.code === "KeyL" || e.code === "KeyR") {
         // L / R: pull the LEFT or RIGHT boundary of the verse under the playhead
@@ -526,12 +528,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           const b = Math.max(next[i - 1].start + MIN_DUR, Math.min(next[i].end - MIN_DUR, t));
           next[i - 1].end = b;
           next[i].start = b;
-          commit(next);
+          commit(markAlignmentBoundaryReviewed(next, i));
         } else if (e.code === "KeyR" && i < next.length - 1) {
           const b = Math.max(next[i].start + MIN_DUR, Math.min(next[i + 1].end - MIN_DUR, t));
           next[i].end = b;
           next[i + 1].start = b;
-          commit(next);
+          commit(markAlignmentBoundaryReviewed(next, i + 1));
         }
       }
     };
@@ -629,18 +631,23 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     if (!seg) return;
 
     let edgeTime = t;
+    let reviewedBoundaryIndexes: number[] = [];
     if (drag.kind === "start") {
       const floor = i > 0 ? next[i - 1].start + MIN_DUR : 0;
       const s = Math.min(seg.end - MIN_DUR, Math.max(floor, t));
       if (i > 0 && s < next[i - 1].end) next[i - 1].end = s;
       seg.start = s;
       edgeTime = s;
+      reviewedBoundaryIndexes = [i];
     } else if (drag.kind === "end") {
       const ceil = i < next.length - 1 ? next[i + 1].end - MIN_DUR : dur;
       const e = Math.max(seg.start + MIN_DUR, Math.min(ceil, t));
       if (i < next.length - 1 && e > next[i + 1].start) next[i + 1].start = e;
       seg.end = e;
       edgeTime = e;
+      if (i < next.length - 1 && Math.abs(e - next[i + 1].start) < 1e-6) {
+        reviewedBoundaryIndexes = [i + 1];
+      }
     } else if (drag.kind === "split") {
       const splits = (seg.splits ?? []).slice();
       const si = drag.splitIdx ?? 0;
@@ -659,10 +666,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       seg.start = s;
       seg.end = s + len;
       edgeTime = s;
+      reviewedBoundaryIndexes = [i];
     }
     // Drag mutations don't record history per frame; the start snapshot is
     // pushed on release so undo restores to the pre-drag state in one step.
-    commit(next, false);
+    const reviewed = reviewedBoundaryIndexes.reduce(
+      (result, boundaryIndex) => markAlignmentBoundaryReviewed(result, boundaryIndex),
+      next,
+    );
+    commit(reviewed, false);
     setDragInfo({ pct: (edgeTime / dur) * 100, time: edgeTime, snapped });
     // commit reads the current Zustand snapshot and stable history refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -983,6 +995,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
     const next = cur.timings.map((x) => ({ ...x }));
     const seg = next[i];
     if (!seg) return;
+    let reviewedBoundaryIndex = kind === "start" ? i : -1;
     if (kind === "start") {
       const floor = i > 0 ? next[i - 1].start + MIN_DUR : 0;
       const s = Math.min(seg.end - MIN_DUR, Math.max(floor, t));
@@ -993,8 +1006,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       const e = Math.max(seg.start + MIN_DUR, Math.min(ceil, t));
       if (i < next.length - 1 && e > next[i + 1].start) next[i + 1].start = e;
       seg.end = e;
+      if (i < next.length - 1 && Math.abs(e - next[i + 1].start) < 1e-6) {
+        reviewedBoundaryIndex = i + 1;
+      }
     }
-    commit(next);
+    commit(markAlignmentBoundaryReviewed(next, reviewedBoundaryIndex));
   };
 
   // Delete the head (everything before the playhead) or the tail (everything after).
@@ -1122,6 +1138,9 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
 
   if (!imported || timings.length === 0) return null;
 
+  const visibleAlignmentReview = alignmentReview
+    ? alignmentReviewProgress(alignmentReview, timings)
+    : null;
   const pct = (t: number) => (duration > 0 ? (t / duration) * 100 : 0);
 
   // Fixed-center geometry: an explicit-pixel track (viewport × zoom) padded by
@@ -1347,16 +1366,16 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         </div>
       )}
 
-      {alignmentReview && (
+      {visibleAlignmentReview && (
         <div
           role="status"
           className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] ${
-            alignmentReview.reviewVerseNumbers.length
+            visibleAlignmentReview.reviewVerseNumbers.length
               ? "border-amber-400/30 bg-amber-400/10 text-amber-100/90"
               : "border-emerald-soft/25 bg-emerald-soft/10 text-emerald-soft"
           }`}
         >
-          <span className="leading-relaxed">{alignmentReview.message}</span>
+          <span className="leading-relaxed">{visibleAlignmentReview.message}</span>
           <button
             onClick={() => setAlignmentReview(null)}
             aria-label="Dismiss alignment report"
@@ -1630,7 +1649,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                 const isReferenceBoundary = isFirst && seg.tIdx > 0 &&
                   timings[seg.tIdx - 1]?.verseNumber !== seg.vn;
                 const needsReview = isReferenceBoundary &&
-                  (alignmentReview?.reviewVerseNumbers.includes(seg.vn) ||
+                  timings[seg.tIdx]?.alignmentReviewed !== true &&
+                  (visibleAlignmentReview?.reviewVerseNumbers.includes(seg.vn) ||
                     timings[seg.tIdx]?.alignmentConfidence === "medium" ||
                     timings[seg.tIdx]?.alignmentConfidence === "low");
                 return (

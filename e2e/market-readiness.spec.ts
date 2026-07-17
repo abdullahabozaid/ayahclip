@@ -192,9 +192,10 @@ test("templates render and open the focused editor", async ({ page }) => {
       };
     }));
   }
-  expect(fontRenders.every((render) => render.faceCount > 0), fontRenders).toBe(true);
-  expect(new Set(fontRenders.map((render) => render.family)).size, fontRenders).toBe(4);
-  expect(new Set(fontRenders.map((render) => render.hash)).size, fontRenders).toBe(4);
+  const fontEvidence = JSON.stringify(fontRenders);
+  expect(fontRenders.every((render) => render.faceCount > 0), fontEvidence).toBe(true);
+  expect(new Set(fontRenders.map((render) => render.family)).size, fontEvidence).toBe(4);
+  expect(new Set(fontRenders.map((render) => render.hash)).size, fontEvidence).toBe(4);
 
   await arabicInspector.getByRole("button", { name: /Scheherazade New/ }).click();
   await expect(arabicInspector.getByRole("button", { name: "SemiBold", exact: true })).toHaveAttribute(

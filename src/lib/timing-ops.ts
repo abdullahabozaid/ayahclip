@@ -72,6 +72,24 @@ export function verseNumbersForAlignment(timings: readonly VerseTiming[]): numbe
   return [...new Set(timings.map((timing) => timing.verseNumber))].sort((a, b) => a - b);
 }
 
+/** Mark one real internal ayah boundary as creator-checked without rewriting the
+ * model's original confidence. Index 0 is the clip trim, not an internal cut. */
+export function markAlignmentBoundaryReviewed(
+  timings: readonly VerseTiming[],
+  boundaryRowIndex: number,
+): VerseTiming[] {
+  if (boundaryRowIndex <= 0 || boundaryRowIndex >= timings.length) {
+    return timings.map((timing) => ({ ...timing }));
+  }
+  const boundary = timings[boundaryRowIndex];
+  if (boundary.alignmentConfidence !== "medium" && boundary.alignmentConfidence !== "low") {
+    return timings.map((timing) => ({ ...timing }));
+  }
+  return timings.map((timing, index) => index === boundaryRowIndex
+    ? { ...timing, alignmentReviewed: true }
+    : { ...timing });
+}
+
 /**
  * Project one aligned timing per ayah back onto the user's current editor rows.
  *
@@ -134,6 +152,10 @@ export function applyAlignedTimingsToRows(
         ((time - timing.start) / oldRowDuration) * Math.max(0, end - start);
     }
 
+    // The diagnostic describes the boundary before the ayah, not every editor
+    // row carrying that ayah. Duplicate rows are intra-ayah edits and must not
+    // display extra model-review markers.
+    const carriesAyahBoundary = group.indexes[0] === rowIndex;
     return {
       ...timing,
       start,
@@ -144,9 +166,12 @@ export function applyAlignedTimingsToRows(
         ? [...timing.splitCharFractions]
         : undefined,
       wordRange: timing.wordRange ? { ...timing.wordRange } : undefined,
-      alignmentMethod: target.alignmentMethod,
-      alignmentConfidence: target.alignmentConfidence,
-      alignmentAgreementSeconds: target.alignmentAgreementSeconds,
+      alignmentMethod: carriesAyahBoundary ? target.alignmentMethod : undefined,
+      alignmentConfidence: carriesAyahBoundary ? target.alignmentConfidence : undefined,
+      alignmentAgreementSeconds: carriesAyahBoundary
+        ? target.alignmentAgreementSeconds
+        : undefined,
+      alignmentReviewed: carriesAyahBoundary ? false : undefined,
     };
   });
 }

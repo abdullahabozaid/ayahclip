@@ -12,11 +12,13 @@ import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
 import { alignImportedAudio, attachAlignmentDiagnostics } from "@/lib/deep-align";
 import {
   alignmentFailureMessage,
+  alignmentReviewProgress,
   buildAlignmentReview,
   type AlignmentReview,
 } from "@/lib/alignment-feedback";
 import {
   applyAlignedTimingsToRows,
+  markAlignmentBoundaryReviewed,
   verseNumbersForAlignment,
 } from "@/lib/timing-ops";
 import { importedPlayer } from "@/lib/imported-player";
@@ -285,6 +287,7 @@ export function VerseCardEditor() {
       const next = cur.timings.map((x) => ({ ...x }));
       const seg = next[verseIdx];
       if (!seg) return;
+      let reviewedBoundaryIndex = kind === "start" ? verseIdx : -1;
       if (kind === "start") {
         const floor = verseIdx > 0 ? next[verseIdx - 1].start + MIN_DUR : 0;
         const s = Math.min(seg.end - MIN_DUR, Math.max(floor, t));
@@ -296,8 +299,17 @@ export function VerseCardEditor() {
         const e = Math.max(seg.start + MIN_DUR, Math.min(ceil, t));
         if (verseIdx < next.length - 1 && e > next[verseIdx + 1].start) next[verseIdx + 1].start = e;
         seg.end = e;
+        if (
+          verseIdx < next.length - 1 &&
+          Math.abs(e - next[verseIdx + 1].start) < 1e-6
+        ) {
+          reviewedBoundaryIndex = verseIdx + 1;
+        }
       }
-      commit(next);
+      commit(markAlignmentBoundaryReviewed(
+        next,
+        reviewedBoundaryIndex,
+      ));
     },
     [commit, duration]
   );
@@ -431,6 +443,9 @@ export function VerseCardEditor() {
 
   if (!imported || timings.length === 0) return null;
 
+  const visibleAlignmentReview = alignmentReview
+    ? alignmentReviewProgress(alignmentReview, timings)
+    : null;
   const activeIdx = store.currentVerseIndex;
   const canUndo = historyRef.current.length > 0;
   const canRedo = futureRef.current.length > 0;
@@ -524,16 +539,16 @@ export function VerseCardEditor() {
         </div>
       )}
 
-      {alignmentReview && (
+      {visibleAlignmentReview && (
         <div
           role="status"
           className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] ${
-            alignmentReview.reviewVerseNumbers.length
+            visibleAlignmentReview.reviewVerseNumbers.length
               ? "border-amber-400/30 bg-amber-400/10 text-amber-100/90"
               : "border-emerald-soft/25 bg-emerald-soft/10 text-emerald-soft"
           }`}
         >
-          <span className="leading-relaxed">{alignmentReview.message}</span>
+          <span className="leading-relaxed">{visibleAlignmentReview.message}</span>
           <button
             onClick={() => setAlignmentReview(null)}
             aria-label="Dismiss alignment report"

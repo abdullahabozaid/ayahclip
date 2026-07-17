@@ -38,6 +38,9 @@ export interface VerseTiming {
   alignmentMethod?: "transcript" | "ctc" | "hybrid" | "pause";
   alignmentConfidence?: "high" | "medium" | "low";
   alignmentAgreementSeconds?: number | null;
+  /** True after the creator has manually checked/adjusted this internal ayah
+   * boundary. Kept separate from model confidence so provenance stays honest. */
+  alignmentReviewed?: boolean;
 }
 
 /**

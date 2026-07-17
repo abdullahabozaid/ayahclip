@@ -37,6 +37,7 @@ export function attachAlignmentDiagnostics(
       alignmentMethod: method,
       alignmentConfidence: diagnostic?.confidence ?? "low",
       alignmentAgreementSeconds: diagnostic?.agreementSeconds ?? null,
+      alignmentReviewed: false,
     };
   });
 }

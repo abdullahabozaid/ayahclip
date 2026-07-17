@@ -19,11 +19,13 @@ describe("attachAlignmentDiagnostics", () => {
       alignmentMethod: "hybrid",
       alignmentConfidence: "high",
       alignmentAgreementSeconds: 0.1,
+      alignmentReviewed: false,
     });
     expect(result[1]).toMatchObject({
       alignmentMethod: "hybrid",
       alignmentConfidence: "medium",
       alignmentAgreementSeconds: 0.55,
+      alignmentReviewed: false,
     });
   });
 

@@ -19,6 +19,7 @@ describe("imported project timing round-trip", () => {
           alignmentMethod: "hybrid",
           alignmentConfidence: "medium",
           alignmentAgreementSeconds: 0.55,
+          alignmentReviewed: true,
         },
         {
           verseNumber: 1,
@@ -43,6 +44,7 @@ describe("imported project timing round-trip", () => {
       alignmentMethod: "hybrid",
       alignmentConfidence: "medium",
       alignmentAgreementSeconds: 0.55,
+      alignmentReviewed: true,
     });
   });
 });

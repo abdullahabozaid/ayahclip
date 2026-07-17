@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   applyAlignedTimingsToRows,
+  markAlignmentBoundaryReviewed,
   normalizeTimings,
   verseNumbersForAlignment,
 } from "../timing-ops";
@@ -140,12 +141,38 @@ describe("alignment row projection", () => {
       alignmentMethod: "hybrid",
       alignmentConfidence: "medium",
       alignmentAgreementSeconds: 0.55,
+      alignmentReviewed: false,
     });
-    expect(result[1]).toMatchObject({
-      alignmentMethod: "hybrid",
+    expect(result[1].alignmentMethod).toBeUndefined();
+    expect(result[1].alignmentConfidence).toBeUndefined();
+    expect(result[1].alignmentAgreementSeconds).toBeUndefined();
+    expect(result[1].alignmentReviewed).toBeUndefined();
+  });
+
+  it("persists creator review separately from model confidence", () => {
+    const timings = [
+      t({ verseNumber: 1, alignmentConfidence: "low", alignmentReviewed: false }),
+      t({ verseNumber: 2, alignmentConfidence: "medium", alignmentReviewed: false }),
+    ];
+    const reviewed = markAlignmentBoundaryReviewed(timings, 1);
+    expect(reviewed[1]).toMatchObject({
       alignmentConfidence: "medium",
-      alignmentAgreementSeconds: 0.55,
+      alignmentReviewed: true,
     });
+    expect(reviewed[0].alignmentReviewed).toBe(false);
+  });
+
+  it("never treats the clip start as an internal reviewed boundary", () => {
+    const timings = [t({ alignmentConfidence: "low", alignmentReviewed: false })];
+    expect(markAlignmentBoundaryReviewed(timings, 0)[0].alignmentReviewed).toBe(false);
+  });
+
+  it("does not invent review provenance on an intra-ayah duplicate row", () => {
+    const timings = [
+      t({ verseNumber: 1, alignmentConfidence: "low", alignmentReviewed: false }),
+      t({ verseNumber: 1 }),
+    ];
+    expect(markAlignmentBoundaryReviewed(timings, 1)[1].alignmentReviewed).toBeUndefined();
   });
 
   it("distributes degenerate duplicate rows across the aligned span", () => {

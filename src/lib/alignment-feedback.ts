@@ -1,4 +1,5 @@
 import type { BoundaryDiagnostic } from "./forced-align";
+import type { VerseTiming } from "./audio-import";
 
 export type AlignmentMethod = "transcript" | "ctc" | "hybrid" | "pause";
 
@@ -6,6 +7,34 @@ export interface AlignmentReview {
   methodLabel: string;
   message: string;
   reviewVerseNumbers: number[];
+}
+
+/** Reconcile a just-produced review report with durable creator corrections. */
+export function alignmentReviewProgress(
+  review: AlignmentReview,
+  timings: readonly VerseTiming[],
+): AlignmentReview {
+  if (review.reviewVerseNumbers.length === 0) return review;
+  const remaining = review.reviewVerseNumbers.filter((verseNumber) =>
+    timings.some((timing) =>
+      timing.verseNumber === verseNumber &&
+      (timing.alignmentConfidence === "medium" || timing.alignmentConfidence === "low") &&
+      timing.alignmentReviewed !== true,
+    ),
+  );
+  if (remaining.length === 0) {
+    return {
+      ...review,
+      message: `${review.methodLabel}. All flagged internal boundaries have been checked.`,
+      reviewVerseNumbers: [],
+    };
+  }
+  const count = remaining.length;
+  return {
+    ...review,
+    message: `${review.methodLabel}. Review ${count} remaining ${count === 1 ? "boundary" : "boundaries"} marked in amber before export.`,
+    reviewVerseNumbers: remaining,
+  };
 }
 
 /** Turn low-level aligner diagnostics into honest, actionable editor copy. */
