@@ -61,6 +61,29 @@ describe("saved templates", () => {
     expect(saved[0].extras.clipFadeMs).toBe(350);
   });
 
+  it("round-trips reversible solid and gradient canvas treatments", () => {
+    const gradient = "linear-gradient(125deg, #223344 0%, #050507 100%)";
+    saveTemplate({
+      name: "Two canvas treatments",
+      mediaPolicy: "use-template-media",
+      settings: {
+        ...base,
+        background: {
+          type: "solid",
+          value: "#334455",
+          label: "Custom solid",
+          canvasAlternates: { solid: "#334455", gradient },
+        },
+      },
+    });
+
+    expect(getSavedTemplates(base)[0].settings.background).toMatchObject({
+      type: "solid",
+      value: "#334455",
+      canvasAlternates: { solid: "#334455", gradient },
+    });
+  });
+
   it("drops malformed records without hiding valid templates", () => {
     saveTemplate({ name: "Valid", mediaPolicy: "use-template-media", settings: base });
     const raw = JSON.parse(window.localStorage.getItem(SAVED_TEMPLATES_KEY) ?? "[]");

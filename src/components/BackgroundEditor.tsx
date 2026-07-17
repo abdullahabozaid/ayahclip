@@ -1,34 +1,16 @@
 "use client";
 
 import {
-  parseLinearGradient,
-  serializeLinearGradient,
   type LinearGradientSpec,
 } from "@/lib/canvas-utils";
+import {
+  canvasBackgroundForMode,
+  canvasGradientFrom,
+  canvasPickerColor,
+  updateCanvasGradient,
+  updateCanvasSolid,
+} from "@/lib/canvas-background";
 import type { Background } from "@/types";
-
-const DEFAULT_SOLID = "#08090d";
-const DEFAULT_GRADIENT: LinearGradientSpec = {
-  angle: 160,
-  stops: [
-    { color: "#111319", offset: 0 },
-    { color: "#050507", offset: 1 },
-  ],
-};
-
-function pickerColor(color: string): string {
-  if (/^#[0-9a-f]{6}$/i.test(color)) return color;
-  if (/^#[0-9a-f]{3}$/i.test(color)) {
-    return `#${color.slice(1).split("").map((value) => value + value).join("")}`;
-  }
-  return DEFAULT_SOLID;
-}
-
-function gradientFrom(background: Background): LinearGradientSpec {
-  if (background.type !== "gradient") return DEFAULT_GRADIENT;
-  const parsed = parseLinearGradient(background.value);
-  return parsed.stops.length >= 2 ? parsed : DEFAULT_GRADIENT;
-}
 
 export function BackgroundEditor({
   value,
@@ -37,22 +19,13 @@ export function BackgroundEditor({
   value: Background;
   onChange: (background: Background) => void;
 }) {
-  const gradient = gradientFrom(value);
+  const gradient = canvasGradientFrom(value);
   const setGradient = (spec: LinearGradientSpec) => {
-    const css = serializeLinearGradient(spec);
-    onChange({ type: "gradient", value: css, label: "Custom gradient" });
+    onChange(updateCanvasGradient(value, spec));
   };
 
   const chooseMode = (mode: "solid" | "gradient") => {
-    if (mode === "solid") {
-      onChange({
-        type: "solid",
-        value: value.type === "solid" ? pickerColor(value.value) : DEFAULT_SOLID,
-        label: "Custom solid",
-      });
-      return;
-    }
-    setGradient(gradient);
+    onChange(canvasBackgroundForMode(value, mode));
   };
 
   const updateStop = (
@@ -95,7 +68,7 @@ export function BackgroundEditor({
           <p className="text-xs font-medium text-parchment">Custom canvas</p>
           <p className="mt-0.5 text-[10px] text-[var(--muted)]">Build a solid field or precise linear gradient.</p>
         </div>
-        <div className="grid grid-cols-2 gap-1 rounded-lg border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1">
+        <div aria-label="Canvas treatment" className="grid grid-cols-2 gap-1 rounded-lg border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1">
           {(["solid", "gradient"] as const).map((mode) => (
             <button
               key={mode}
@@ -118,11 +91,11 @@ export function BackgroundEditor({
         <label className="flex min-h-11 items-center justify-between gap-3 text-xs text-[var(--muted)]">
           <span>Canvas color</span>
           <span className="flex items-center gap-2">
-            <span className="font-mono text-[10px] uppercase text-[var(--muted-deep)]">{pickerColor(value.value)}</span>
+            <span className="font-mono text-[10px] uppercase text-[var(--muted-deep)]">{canvasPickerColor(value.value)}</span>
             <input
               type="color"
-              value={pickerColor(value.value)}
-              onChange={(event) => onChange({ type: "solid", value: event.target.value, label: "Custom solid" })}
+              value={canvasPickerColor(value.value)}
+              onChange={(event) => onChange(updateCanvasSolid(value, event.target.value))}
               className="h-10 w-12 cursor-pointer rounded-lg border border-[var(--hairline-soft)] bg-transparent p-1"
               aria-label="Canvas color"
             />
@@ -138,7 +111,7 @@ export function BackgroundEditor({
               <div key={`${index}-${stop.color}`} className="grid grid-cols-[40px_1fr_42px_32px] items-center gap-2">
                 <input
                   type="color"
-                  value={pickerColor(stop.color)}
+                  value={canvasPickerColor(stop.color)}
                   onChange={(event) => updateStop(index, { color: event.target.value })}
                   className="h-10 w-10 cursor-pointer rounded-lg border border-[var(--hairline-soft)] bg-transparent p-1"
                   aria-label={`Gradient stop ${index + 1} color`}

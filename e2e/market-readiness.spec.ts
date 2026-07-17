@@ -462,10 +462,18 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await backgroundInspector.locator("summary").click();
   await backgroundInspector.getByRole("button", { name: "gradient", exact: true }).click();
   await expect(page.getByLabel("Gradient preview")).toBeVisible();
+  const previewCanvasTreatment = page.getByLabel("Preview canvas treatment");
+  await expect(previewCanvasTreatment.getByRole("button", { name: "Gradient canvas" })).toHaveAttribute("aria-pressed", "true");
+  await backgroundInspector.getByLabel("Gradient stop 1 color").fill("#123456");
   await backgroundInspector.getByRole("button", { name: "Add color stop" }).click();
   await expect(page.getByLabel("Gradient stop 3 color")).toBeVisible();
-  await backgroundInspector.getByRole("button", { name: "solid", exact: true }).click();
-  await expect(page.getByLabel("Canvas color")).toBeVisible();
+  await previewCanvasTreatment.getByRole("button", { name: "Solid canvas" }).click();
+  await expect(backgroundInspector.getByLabel("Canvas color")).toHaveValue("#123456");
+  await backgroundInspector.getByLabel("Canvas color").fill("#654321");
+  await previewCanvasTreatment.getByRole("button", { name: "Gradient canvas" }).click();
+  await expect(backgroundInspector.getByLabel("Gradient stop 1 color")).toHaveValue("#123456");
+  await previewCanvasTreatment.getByRole("button", { name: "Solid canvas" }).click();
+  await expect(backgroundInspector.getByLabel("Canvas color")).toHaveValue("#654321");
   assertNoErrors();
 });
 

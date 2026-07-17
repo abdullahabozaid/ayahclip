@@ -42,6 +42,7 @@ import { BackgroundEditor } from "@/components/BackgroundEditor";
 import { ArabicFontSpecimen } from "@/components/ArabicFontSpecimen";
 import { InlineActionPrompt } from "@/components/InlineActionPrompt";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
+import { canvasBackgroundForMode } from "@/lib/canvas-background";
 import {
   FALLBACK_SAMPLE,
   loadTemplateSamples,
@@ -606,6 +607,29 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
               </button>
             ))}
           </div>
+
+          {(draft.settings.background.type === "solid" || draft.settings.background.type === "gradient") && (
+            <div
+              aria-label="Preview canvas treatment"
+              className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/85 p-1 backdrop-blur"
+            >
+              {(["solid", "gradient"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setCustomBackground(canvasBackgroundForMode(draft.settings.background, mode))}
+                  aria-pressed={draft.settings.background.type === mode}
+                  className={`min-h-11 rounded-full px-4 text-[11px] font-medium capitalize transition-colors sm:min-h-9 ${
+                    draft.settings.background.type === mode
+                      ? "bg-white/[0.09] text-parchment"
+                      : "text-[var(--muted)] hover:text-parchment"
+                  }`}
+                >
+                  {mode} canvas
+                </button>
+              ))}
+            </div>
+          )}
 
           <div ref={phoneCanvasRef} className="relative h-[min(64dvh,720px)] min-h-[460px] overflow-hidden rounded-[2.2rem] border-[7px] border-[var(--surface-2)] bg-[var(--ink-deep)] shadow-[0_32px_90px_-30px_rgba(0,0,0,0.95)]" style={{ aspectRatio: "9 / 16" }}>
             <TemplatePreview

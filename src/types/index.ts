@@ -51,6 +51,11 @@ export interface Background {
   type: BackgroundType;
   value: string;
   label: string;
+  /** Last creator-authored canvas treatments, retained while comparing modes. */
+  canvasAlternates?: {
+    solid?: string;
+    gradient?: string;
+  };
 }
 
 export interface SplitMaskConfig {
