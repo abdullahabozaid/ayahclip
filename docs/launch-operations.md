@@ -4,6 +4,8 @@ This runbook covers the public creator journey, privacy-safe product events, cli
 
 ## Creator journey
 
+Use [`docs/public-beta-field-test.md`](./public-beta-field-test.md) for the unassisted ordinary-creator protocol, physical-device matrix, pass thresholds, and privacy-safe result sheet. Automated events support that evidence; they do not replace direct observation on real devices.
+
 The measurable path is:
 
 1. `journey_started`, with `firstVisit: true` for a browser that has not opened Import before.
