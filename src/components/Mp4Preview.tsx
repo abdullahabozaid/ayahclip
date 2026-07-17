@@ -86,7 +86,13 @@ export function Mp4PreviewOverlay({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/95" onClick={close}>
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-black/95"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Final MP4 preview"
+      onClick={close}
+    >
       <div
         className="flex shrink-0 items-center justify-between px-4 py-3"
         style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}

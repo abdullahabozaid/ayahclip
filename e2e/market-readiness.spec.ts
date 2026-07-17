@@ -95,8 +95,9 @@ test("a real local audio file survives import, template choice, save, and reopen
   await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Preview the final MP4" }).click();
-  await expect(page.getByText("Final MP4", { exact: false })).toBeVisible({ timeout: 60_000 });
-  const finalVideo = page.locator("video");
+  const finalPreview = page.getByRole("dialog", { name: "Final MP4 preview" });
+  await expect(finalPreview).toBeVisible({ timeout: 60_000 });
+  const finalVideo = finalPreview.locator("video");
   await expect(finalVideo).toBeVisible();
   await expect.poll(
     () => finalVideo.evaluate((video: HTMLVideoElement) => video.readyState),
