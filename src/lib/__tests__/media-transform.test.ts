@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-
-import { drawBgImage } from "../canvas-utils";
+import {
+  drawBgImage,
+  mediaTransformPositionLabel,
+  nudgeMediaTransform,
+  type MediaTransform,
+} from "../canvas-utils";
 
 function contextStub() {
   return {
@@ -18,15 +22,12 @@ function contextStub() {
 }
 
 const landscape = { width: 1600, height: 900 } as HTMLImageElement;
+const centered: MediaTransform = { scale: 1, x: 0, y: 0 };
 
 describe("media transform rendering", () => {
   it("keeps the default contain fit centered", () => {
     const context = contextStub();
-    drawBgImage(context, landscape, 1080, 1920, "contain", "black", {
-      scale: 1,
-      x: 0,
-      y: 0,
-    });
+    drawBgImage(context, landscape, 1080, 1920, "contain", "black", centered);
 
     expect(context.drawImage).toHaveBeenLastCalledWith(
       landscape,
@@ -45,8 +46,6 @@ describe("media transform rendering", () => {
       y: -1,
     });
 
-    // 1.5× zoom creates horizontal overflow. Positive X moves the media right
-    // to reveal its left edge; negative Y aligns it to the frame top.
     const call = vi.mocked(context.drawImage).mock.calls.at(-1)!;
     expect(call[0]).toBe(landscape);
     expect(call[1]).toBeCloseTo(0);
@@ -70,5 +69,26 @@ describe("media transform rendering", () => {
       1080,
       607.5,
     );
+  });
+});
+
+describe("media framing helpers", () => {
+  it("describes centered and offset framing in creator language", () => {
+    expect(mediaTransformPositionLabel(centered)).toBe(
+      "horizontally centered · vertically centered · 1.00× zoom",
+    );
+    expect(mediaTransformPositionLabel({ scale: 1.75, x: 0.34, y: -0.2 })).toBe(
+      "34% right · 20% up · 1.75× zoom",
+    );
+  });
+
+  it("nudges precisely, supports coarse movement, and clamps the range", () => {
+    expect(nudgeMediaTransform(centered, "right")).toEqual({ scale: 1, x: 0.03, y: 0 });
+    expect(nudgeMediaTransform(centered, "up", true)).toEqual({ scale: 1, x: 0, y: -0.1 });
+    expect(nudgeMediaTransform({ scale: 2, x: 0.99, y: -0.99 }, "right", true)).toEqual({
+      scale: 2,
+      x: 1,
+      y: -0.99,
+    });
   });
 });

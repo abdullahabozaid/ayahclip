@@ -441,6 +441,10 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   const directMediaPosition = page.getByRole("slider", { name: "Media position" });
   await directMediaPosition.press("ArrowRight");
   await expect(directMediaPosition).toHaveAttribute("aria-valuetext", /horizontal/);
+  await expect(page.getByRole("status", { name: "Media framing position" })).toContainText("3% right");
+  await page.getByRole("button", { name: "Center media" }).click();
+  await expect(directMediaPosition).toHaveAttribute("aria-valuetext", "0% horizontal, 0% vertical");
+  await directMediaPosition.press("ArrowRight");
   const mediaInspector = page.getByTestId("inspector-media");
   await mediaInspector.locator("summary").click();
   await mediaInspector.getByLabel("Zoom").fill("1.75");

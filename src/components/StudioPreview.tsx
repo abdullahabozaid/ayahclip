@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppStore } from "@/lib/store";
 import { reciters } from "@/lib/reciters";
 import { preloadVerseAudios } from "@/lib/audio";
@@ -11,7 +11,12 @@ import {
   loadVerseWords,
   buildPartsFromBoundaries,
 } from "@/lib/playback-engine";
-import { ensureFontsReady, splitWords } from "@/lib/canvas-utils";
+import {
+  ensureFontsReady,
+  mediaTransformPositionLabel,
+  nudgeMediaTransform,
+  splitWords,
+} from "@/lib/canvas-utils";
 import {
   FORMAT_SIZES,
   drawScene,
@@ -725,6 +730,22 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     });
   };
 
+  const nudgeReframe = (event: ReactKeyboardEvent<HTMLCanvasElement>) => {
+    if (!canReframe) return;
+    const direction = event.key === "ArrowLeft"
+      ? "left"
+      : event.key === "ArrowRight"
+        ? "right"
+        : event.key === "ArrowUp"
+          ? "up"
+          : event.key === "ArrowDown"
+            ? "down"
+            : null;
+    if (!direction) return;
+    event.preventDefault();
+    store.setMediaTransform(nudgeMediaTransform(store.mediaTransform, direction, event.shiftKey));
+  };
+
   return (
     <div className="flex flex-col items-center gap-6">
       <DevicePreview
@@ -736,18 +757,31 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       >
         <canvas
           ref={canvasRef}
+          tabIndex={canReframe ? 0 : -1}
+          aria-label={canReframe ? "Media preview. Drag to reframe or use the arrow keys." : "Clip preview"}
           className={`h-full w-full ${canReframe ? "cursor-grab touch-none active:cursor-grabbing" : ""}`}
           onPointerDown={startReframe}
           onPointerMove={moveReframe}
           onPointerUp={() => { reframeDragRef.current = null; }}
           onPointerCancel={() => { reframeDragRef.current = null; }}
+          onKeyDown={nudgeReframe}
         />
       </DevicePreview>
 
       {canReframe && (
-        <p className="-mt-4 text-[11px] text-[var(--muted)]">
-          Drag the preview to reframe · use Style → Background to zoom
-        </p>
+        <div className="-mt-4 flex max-w-full flex-wrap items-center justify-center gap-2 text-[11px]">
+          <span role="status" aria-label="Current media framing" className="text-[var(--muted)]">
+            {mediaTransformPositionLabel(store.mediaTransform)}
+          </span>
+          <button
+            type="button"
+            onClick={() => store.setMediaTransform({ ...store.mediaTransform, x: 0, y: 0 })}
+            className="min-h-10 rounded-full border border-[var(--hairline-soft)] px-3 text-parchment transition-colors hover:border-gold"
+          >
+            Center media
+          </button>
+          <span className="text-[var(--muted-deep)]">Drag or use arrow keys · Style controls zoom</span>
+        </div>
       )}
 
       {rows.length > 0 && (

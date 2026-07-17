@@ -10,6 +10,8 @@ import {
   DEFAULT_SPLIT_MASK,
   TRANSLATION_FONTS,
   ensureFontsReady,
+  mediaTransformPositionLabel,
+  nudgeMediaTransform,
   normalizeSplitMask,
   type ArabicTextFitResult,
 } from "@/lib/canvas-utils";
@@ -641,15 +643,18 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
               onKeyDown={(event) => {
                 if (canvasTool === "media") {
                   const transform = draft.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM;
-                  const step = event.shiftKey ? 0.1 : 0.03;
-                  const next = { ...transform };
-                  if (event.key === "ArrowLeft") next.x = Math.max(-1, transform.x - step);
-                  else if (event.key === "ArrowRight") next.x = Math.min(1, transform.x + step);
-                  else if (event.key === "ArrowUp") next.y = Math.max(-1, transform.y - step);
-                  else if (event.key === "ArrowDown") next.y = Math.min(1, transform.y + step);
-                  else return;
+                  const direction = event.key === "ArrowLeft"
+                    ? "left"
+                    : event.key === "ArrowRight"
+                      ? "right"
+                      : event.key === "ArrowUp"
+                        ? "up"
+                        : event.key === "ArrowDown"
+                          ? "down"
+                          : null;
+                  if (!direction) return;
                   event.preventDefault();
-                  setStyle("mediaTransform", next);
+                  setStyle("mediaTransform", nudgeMediaTransform(transform, direction, event.shiftKey));
                   return;
                 }
                 const next = templateTextPositionFromKey(
@@ -687,10 +692,27 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-4 flex max-w-full flex-wrap items-center justify-center gap-2">
             <button type="button" onClick={() => setReplayToken((value) => value + 1)} className="flex min-h-10 items-center gap-2 rounded-full border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)] hover:text-parchment">
               <TemplateIcon name="refresh" className="h-4 w-4" /> Replay
             </button>
+            {canvasTool === "media" && (() => {
+              const transform = draft.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM;
+              return (
+                <>
+                  <span role="status" aria-label="Media framing position" className="rounded-full bg-white/[0.035] px-3 py-2 text-[10px] text-[var(--muted)]">
+                    {mediaTransformPositionLabel(transform)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStyle("mediaTransform", { ...transform, x: 0, y: 0 })}
+                    className="min-h-10 rounded-full border border-[var(--hairline-soft)] px-3 text-xs text-parchment transition-colors hover:border-gold"
+                  >
+                    Center media
+                  </button>
+                </>
+              );
+            })()}
             <span className="hidden h-4 w-px bg-white/10 sm:block" aria-hidden="true" />
             <span className="hidden text-[10px] uppercase tracking-[0.14em] text-[var(--muted-deep)] sm:block">
               {canvasTool === "text" ? "Drag vertically or use ↑↓" : "Drag media or use arrow keys"}

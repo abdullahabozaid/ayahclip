@@ -1202,6 +1202,45 @@ export interface MediaTransform {
 
 export const DEFAULT_MEDIA_TRANSFORM: MediaTransform = { scale: 1, x: 0, y: 0 };
 
+export type MediaNudgeDirection = "left" | "right" | "up" | "down";
+
+/** Move a media focal point by a predictable keyboard step without allowing it
+ * to disappear beyond the supported framing range. */
+export function nudgeMediaTransform(
+  transform: MediaTransform,
+  direction: MediaNudgeDirection,
+  coarse = false,
+): MediaTransform {
+  const step = coarse ? 0.1 : 0.03;
+  const clamp = (value: number) => Math.max(-1, Math.min(1, value));
+  return {
+    ...transform,
+    x: direction === "left"
+      ? clamp(transform.x - step)
+      : direction === "right"
+        ? clamp(transform.x + step)
+        : transform.x,
+    y: direction === "up"
+      ? clamp(transform.y - step)
+      : direction === "down"
+        ? clamp(transform.y + step)
+        : transform.y,
+  };
+}
+
+/** Human-readable framing feedback shared by Template Studio and Studio. */
+export function mediaTransformPositionLabel(transform: MediaTransform): string {
+  const horizontal = Math.round(transform.x * 100);
+  const vertical = Math.round(transform.y * 100);
+  const horizontalLabel = horizontal === 0
+    ? "horizontally centered"
+    : `${Math.abs(horizontal)}% ${horizontal < 0 ? "left" : "right"}`;
+  const verticalLabel = vertical === 0
+    ? "vertically centered"
+    : `${Math.abs(vertical)}% ${vertical < 0 ? "up" : "down"}`;
+  return `${horizontalLabel} · ${verticalLabel} · ${transform.scale.toFixed(2)}× zoom`;
+}
+
 /** Draw image/video into w×h. "cover" fills + crops (zoom); "contain" shows the
  *  whole media as-is, centered with rounded corners over a backdrop (a blurred fill
  *  of itself, or solid black) so nothing is stretched or cropped. */
