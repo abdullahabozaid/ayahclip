@@ -72,6 +72,15 @@ export interface TextShadow {
   offsetY: number;
 }
 
+/** A true canvas stroke around the glyphs. Unlike TextShadow this remains
+ * crisp over moving video and does not blur Quranic marks. */
+export interface TextOutline {
+  enabled: boolean;
+  color: string;
+  /** Stroke width in editor CSS pixels. Scaled with the export frame. */
+  width: number;
+}
+
 export interface LetterboxConfig {
   enabled: boolean;
   barColor: string;
@@ -101,6 +110,7 @@ export interface Project {
     translationFontWeight?: number;
     translationLanguage: string;
     textColor: string;
+    translationColor?: string;
     lineHeight: number;
     translationLineHeight?: number;
     arabicTranslationGap?: number;
@@ -126,6 +136,7 @@ export interface Project {
     /** Ramp the audio in over the same clip-start window. */
     audioFadeIn?: boolean;
     textShadow: TextShadow;
+    textOutline?: TextOutline;
     letterbox: LetterboxConfig;
     emphasis?: Record<string, { arabic: number[]; translation: number[] }>;
     emphasisStyle?: "color" | "underline";
@@ -166,9 +177,11 @@ export interface StudioSettings {
   translationFont: string;
   translationLanguage: string;
   textColor: string;
+  translationColor?: string;
   textLayout?: "center" | "left-panel";
   overlayOpacity: number;
   background: Background;
   textShadow: TextShadow;
+  textOutline?: TextOutline;
   letterbox: LetterboxConfig;
 }

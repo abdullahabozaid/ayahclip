@@ -1,4 +1,4 @@
-import { Verse, VideoFormat, Background, TextShadow, LetterboxConfig, SplitMaskConfig } from "@/types";
+import { Verse, VideoFormat, Background, TextShadow, TextOutline, LetterboxConfig, SplitMaskConfig } from "@/types";
 import type { VerseEmphasis } from "./store";
 import { getAudioUrl } from "./api";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
@@ -45,6 +45,7 @@ interface ExportOptions {
   translationFontWeight: number;
   translationDirection?: "ltr" | "rtl";
   textColor: string;
+  translationColor?: string;
   lineHeight: number;
   translationLineHeight: number;
   arabicTranslationGap: number;
@@ -73,6 +74,7 @@ interface ExportOptions {
   /** Ramp the audio in over the same clip-start window. */
   audioFadeIn?: boolean;
   textShadow: TextShadow;
+  textOutline?: TextOutline;
   letterbox: LetterboxConfig;
   emphasis: Record<string, VerseEmphasis>;
   emphasisStyle: "color" | "underline";

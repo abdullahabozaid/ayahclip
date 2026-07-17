@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { Surah, Verse, VideoFormat, Background, TextShadow, LetterboxConfig, Project, SplitMaskConfig } from "@/types";
+import { Surah, Verse, VideoFormat, Background, TextShadow, TextOutline, LetterboxConfig, Project, SplitMaskConfig } from "@/types";
 import { SafeAreaTarget, EmphasisStyle, MediaFit, FitBackdrop, VerseIntro, MediaTransform, DEFAULT_SPLIT_MASK } from "./canvas-utils";
 import { StyleSettings } from "./style";
 import { VerseTiming } from "./audio-import";
@@ -44,6 +44,7 @@ interface AppState {
   translationFontWeight: number;
   translationLanguage: string;
   textColor: string;
+  translationColor: string;
   lineHeight: number;
   translationLineHeight: number;
   arabicTranslationGap: number;
@@ -65,6 +66,7 @@ interface AppState {
   backgroundVideoSync: boolean; // sync the bg video's frames to the recitation (lip-sync)
   videoLoopMode: "loop" | "freeze"; // when the bg video ends: loop it, or hold the last frame
   textShadow: TextShadow;
+  textOutline: TextOutline;
   letterbox: LetterboxConfig;
   currentVerseIndex: number;
   projectId: string | null;
@@ -119,6 +121,7 @@ interface AppState {
   setTranslationFontWeight: (weight: number) => void;
   setTranslationLanguage: (lang: string) => void;
   setTextColor: (color: string) => void;
+  setTranslationColor: (color: string) => void;
   setLineHeight: (lh: number) => void;
   setTranslationLineHeight: (lh: number) => void;
   setArabicTranslationGap: (gap: number) => void;
@@ -144,6 +147,7 @@ interface AppState {
   setBackgroundVideoSync: (on: boolean) => void;
   setVideoLoopMode: (m: "loop" | "freeze") => void;
   setTextShadow: (shadow: TextShadow) => void;
+  setTextOutline: (outline: TextOutline) => void;
   setLetterbox: (config: LetterboxConfig) => void;
   setCurrentVerseIndex: (index: number) => void;
   setProjectId: (id: string | null) => void;
@@ -201,6 +205,7 @@ export const useAppStore = create<AppState>((set) => ({
   translationFontWeight: 400,
   translationLanguage: "en",
   textColor: "#ffffff",
+  translationColor: "#d8d3c7",
   lineHeight: 1,
   translationLineHeight: 1,
   arabicTranslationGap: 0.6,
@@ -222,6 +227,7 @@ export const useAppStore = create<AppState>((set) => ({
   backgroundVideoSync: false,
   videoLoopMode: "loop",
   textShadow: { enabled: true, color: "#000000", blur: 4, offsetX: 0, offsetY: 2 },
+  textOutline: { enabled: true, color: "#050507", width: 1.25 },
   letterbox: { enabled: false, barColor: "#000000", barStyle: "solid" },
   currentVerseIndex: 0,
   projectId: null,
@@ -290,6 +296,7 @@ export const useAppStore = create<AppState>((set) => ({
   setTranslationFontWeight: (weight) => set({ translationFontWeight: weight }),
   setTranslationLanguage: (lang) => set({ translationLanguage: lang }),
   setTextColor: (color) => set({ textColor: color }),
+  setTranslationColor: (color) => set({ translationColor: color }),
   setLineHeight: (lh) => set({ lineHeight: lh }),
   setTranslationLineHeight: (lh) => set({ translationLineHeight: lh }),
   setArabicTranslationGap: (gap) => set({ arabicTranslationGap: gap }),
@@ -433,6 +440,7 @@ export const useAppStore = create<AppState>((set) => ({
   setBackgroundVideoSync: (on) => set({ backgroundVideoSync: on }),
   setVideoLoopMode: (m) => set({ videoLoopMode: m }),
   setTextShadow: (shadow) => set({ textShadow: shadow }),
+  setTextOutline: (outline) => set({ textOutline: outline }),
   setLetterbox: (config) => set({ letterbox: config }),
   setCurrentVerseIndex: (index) => set((state) => ({
     currentVerseIndex: index,
@@ -481,6 +489,8 @@ export const useAppStore = create<AppState>((set) => ({
       textLayout: settings.textLayout ?? "center",
       splitMask: settings.splitMask ?? { ...DEFAULT_SPLIT_MASK },
       arabicEnabled: settings.arabicEnabled ?? true,
+      translationColor: settings.translationColor ?? "#d8d3c7",
+      textOutline: settings.textOutline ?? { enabled: false, color: "#050507", width: 1.25 },
       mediaTransform: settings.mediaTransform ?? { scale: 1, x: 0, y: 0 },
       backgroundSequenceEnabled: settings.backgroundSequenceEnabled ?? false,
       backgroundScenes: settings.backgroundScenes ?? [],

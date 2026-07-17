@@ -26,6 +26,7 @@ const base: StyleSettings = {
   translationFontSize: 18,
   translationFontWeight: 500,
   textColor: "#f5f2e9",
+  translationColor: "#d8d3c7",
   overlayOpacity: 42,
   overlayColor: "#000000",
   textShadow: {
@@ -34,6 +35,11 @@ const base: StyleSettings = {
     blur: 7,
     offsetX: 0,
     offsetY: 2,
+  },
+  textOutline: {
+    enabled: true,
+    color: "#050507",
+    width: 1.25,
   },
   highlightEnabled: false,
   highlightColor: "#74652d",
@@ -58,6 +64,7 @@ const base: StyleSettings = {
 export const DEFAULT_TEMPLATE_STYLE: StyleSettings = {
   ...base,
   textShadow: { ...base.textShadow },
+  textOutline: { ...base.textOutline! },
   background: { ...base.background },
   letterbox: { ...base.letterbox },
   mediaTransform: { ...base.mediaTransform! },
@@ -130,6 +137,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       translationFontSize: 18,
       translationFontWeight: 600,
       textColor: "#f4f1e8",
+      translationColor: "#d7d2c6",
       overlayOpacity: 10,
       background: {
         type: "gradient",
@@ -137,6 +145,7 @@ export const TEMPLATES: TemplateDefinition[] = [
         label: "Add reciter video",
       },
       textShadow: { enabled: true, color: "#050507", blur: 5, offsetX: 0, offsetY: 1 },
+      textOutline: { enabled: true, color: "#050507", width: 1.5 },
     },
     extras: {
       clipFadeMs: 320,
@@ -166,6 +175,7 @@ export const TEMPLATES: TemplateDefinition[] = [
       overlayOpacity: 48,
       overlayColor: "#030806",
       textShadow: { enabled: true, color: "#f7f3e8", blur: 5, offsetX: 0, offsetY: 0 },
+      textOutline: { enabled: true, color: "#040806", width: 1 },
       background: {
         type: "gradient",
         value: "linear-gradient(155deg, #10241b 0%, #050907 100%)",

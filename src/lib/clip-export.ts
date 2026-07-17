@@ -115,6 +115,7 @@ export async function renderClipFile(
     translationFontWeight: s.translationFontWeight,
     translationDirection: getTranslationLanguage(s.translationLanguage).direction,
     textColor: s.textColor,
+    translationColor: s.translationColor,
     lineHeight: s.lineHeight,
     translationLineHeight: s.translationLineHeight,
     arabicTranslationGap: s.arabicTranslationGap,
@@ -154,6 +155,7 @@ export async function renderClipFile(
     clipFadeMs: s.clipFadeMs,
     audioFadeIn: s.audioFadeIn,
     textShadow: s.textShadow,
+    textOutline: s.textOutline,
     letterbox: s.letterbox,
   };
 

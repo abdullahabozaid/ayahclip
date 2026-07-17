@@ -2,8 +2,8 @@
 // that is sacred for textual integrity: waqf/pause marks must never become
 // their own wrap unit (a mark wrapping onto a new line corrupts the text),
 // and sanitization must strip exactly the unsupported mark and nothing else.
-import { describe, it, expect } from "vitest";
-import { arabicTextForFont, splitWords } from "@/lib/canvas-utils";
+import { describe, it, expect, vi } from "vitest";
+import { arabicTextForFont, splitWords, strokeTextWithOutline } from "@/lib/canvas-utils";
 
 describe("splitWords (wrap units)", () => {
   it("splits plain words on spaces", () => {
@@ -52,5 +52,44 @@ describe("arabicTextForFont", () => {
   it("leaves all other diacritics and waqf marks untouched", () => {
     const text = "قُلْ هُوَ ٱللَّهُ أَحَدٌ ۚ";
     expect(arabicTextForFont(text, "uthmanic-hafs")).toBe(text);
+  });
+});
+
+describe("strokeTextWithOutline", () => {
+  it("draws a scaled round outline without reusing the glow", () => {
+    const ctx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      strokeText: vi.fn(),
+      shadowColor: "white",
+      shadowBlur: 12,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      strokeStyle: "",
+      lineWidth: 0,
+      lineJoin: "miter",
+      miterLimit: 10,
+    } as unknown as CanvasRenderingContext2D;
+
+    strokeTextWithOutline(ctx, "ٱلْحَمْدُ", 120, 240, {
+      enabled: true,
+      color: "#050507",
+      width: 1.25,
+    }, 2);
+
+    expect(ctx.strokeText).toHaveBeenCalledWith("ٱلْحَمْدُ", 120, 240);
+    expect(ctx.strokeStyle).toBe("#050507");
+    expect(ctx.lineWidth).toBe(2.5);
+    expect(ctx.lineJoin).toBe("round");
+  });
+
+  it("does nothing when the outline is disabled", () => {
+    const ctx = { strokeText: vi.fn() } as unknown as CanvasRenderingContext2D;
+    strokeTextWithOutline(ctx, "ٱلْحَمْدُ", 0, 0, {
+      enabled: false,
+      color: "#050507",
+      width: 1.25,
+    });
+    expect(ctx.strokeText).not.toHaveBeenCalled();
   });
 });

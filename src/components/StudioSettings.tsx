@@ -768,10 +768,44 @@ export function StudioSettings() {
                 value={store.translationFontWeight}
                 onChange={store.setTranslationFontWeight}
               />
+              <ColorRow
+                label="Translation Color"
+                value={store.translationColor}
+                onChange={store.setTranslationColor}
+              />
             </>
           )}
 
-          <ColorRow label="Text Color" value={store.textColor} onChange={store.setTextColor} />
+          <ColorRow label="Quran Text Color" value={store.textColor} onChange={store.setTextColor} />
+
+          <Toggle
+            label="Crisp Text Edge"
+            checked={store.textOutline.enabled}
+            onChange={() =>
+              store.setTextOutline({ ...store.textOutline, enabled: !store.textOutline.enabled })
+            }
+          />
+          {store.textOutline.enabled && (
+            <div className="space-y-3">
+              <p className="text-[11px] leading-4 text-[var(--muted)]">
+                A true outline for moving video. Keep it narrow so Quran marks stay open.
+              </p>
+              <ColorRow
+                label="Edge Color"
+                value={store.textOutline.color}
+                onChange={(color) => store.setTextOutline({ ...store.textOutline, color })}
+              />
+              <Slider
+                label="Edge Width"
+                value={store.textOutline.width}
+                min={0.5}
+                max={3}
+                step={0.25}
+                display={(v) => `${v.toFixed(2)}px`}
+                onChange={(width) => store.setTextOutline({ ...store.textOutline, width })}
+              />
+            </div>
+          )}
 
           <Toggle
             label="Text Shadow"

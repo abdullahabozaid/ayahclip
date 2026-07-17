@@ -263,6 +263,20 @@ test("split compositions expose precise media, panel, solid, and gradient contro
     arabicInspector.getByRole("button", { name: "Bold", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
 
+  const translationInspector = page.getByTestId("inspector-translation");
+  await translationInspector.locator("summary").click();
+  await expect(translationInspector.getByLabel("Translation color")).toHaveValue("#d7d2c6");
+
+  const treatmentInspector = page.getByTestId("inspector-treatment");
+  await treatmentInspector.locator("summary").click();
+  await expect(treatmentInspector.getByRole("button", { name: "Crisp edge", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(treatmentInspector.getByLabel("Crisp text edge")).toBeChecked();
+  await expect(treatmentInspector.getByLabel("Edge width")).toHaveValue("1.5");
+  await treatmentInspector.getByRole("button", { name: "Soft glow", exact: true }).click();
+  await expect(treatmentInspector.getByLabel("Crisp text edge")).not.toBeChecked();
+  await treatmentInspector.getByRole("button", { name: "Crisp edge", exact: true }).click();
+  await expect(treatmentInspector.getByLabel("Crisp text edge")).toBeChecked();
+
   await expect(page.getByRole("button", { name: "Split fade", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",

@@ -1,4 +1,4 @@
-import { TextShadow, LetterboxConfig, QcfWord, SplitMaskConfig } from "@/types";
+import { TextShadow, TextOutline, LetterboxConfig, QcfWord, SplitMaskConfig } from "@/types";
 import { qcfFontFamily } from "./qcf-font-loader";
 
 export type SafeAreaTarget = "none" | "tiktok" | "reels";
@@ -335,6 +335,29 @@ interface EmphasisOpts {
   indexOffset: number;
   fontSize: number;
   rtl: boolean;
+  outline?: TextOutline;
+  scale?: number;
+}
+
+/** Draw the crisp edge independently from shadow/glow. Keeping the outline in
+ * its own no-shadow pass avoids doubling the glow while preserving every mark. */
+export function strokeTextWithOutline(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  outline: TextOutline | undefined,
+  scale = 1,
+) {
+  if (!outline?.enabled || outline.width <= 0) return;
+  ctx.save();
+  clearShadow(ctx);
+  ctx.strokeStyle = outline.color;
+  ctx.lineWidth = Math.max(0.5, outline.width * scale);
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.strokeText(text, x, y);
+  ctx.restore();
 }
 
 /** Word-by-word draw used only when some word is emphasised. Mirrors wrapText's line
@@ -356,6 +379,7 @@ function drawEmphasizedBlock(
   const drawUnit = (u: WrapUnit, x: number, y: number, width: number) => {
     const emph = opts.indices.has(u.index - opts.indexOffset);
     ctx.fillStyle = emph && opts.style === "color" ? opts.color : opts.baseColor;
+    strokeTextWithOutline(ctx, u.text, x, y, opts.outline, opts.scale);
     ctx.fillText(u.text, x, y);
     if (emph && opts.style === "underline") {
       // Underline only the base letters, not trailing standalone marks (e.g. waqf ۛ)
@@ -406,11 +430,14 @@ export function wrapText(
   x: number,
   y: number,
   maxWidth: number,
-  lineHeight: number
+  lineHeight: number,
+  outline?: TextOutline,
+  scale = 1,
 ) {
   const lines = measureLines(ctx, text, maxWidth);
   const startY = y - ((lines.length - 1) * lineHeight) / 2;
   for (let i = 0; i < lines.length; i++) {
+    strokeTextWithOutline(ctx, lines[i], x, startY + i * lineHeight, outline, scale);
     ctx.fillText(lines[i], x, startY + i * lineHeight);
   }
 }
@@ -536,7 +563,10 @@ export interface DrawVerseOptions {
   translationFont: string;
   translationDirection?: "ltr" | "rtl";
   textColor: string;
+  /** Independent translation color; falls back to a softened Quran color. */
+  translationColor?: string;
   textShadow: TextShadow;
+  textOutline?: TextOutline;
   /** Line-height multiplier applied to the base 1.8 Arabic. Default 1. */
   lineHeight?: number;
   /** Line-height multiplier applied to the base 1.6 translation. Falls back to lineHeight. */
@@ -745,7 +775,9 @@ function drawQcfBlock(
   maxWidth: number,
   lineHeight: number,
   fontSize: number,
-  emphasis?: EmphasisOpts
+  emphasis?: EmphasisOpts,
+  outline?: TextOutline,
+  scale = 1,
 ) {
   const lines = wrapQcfWords(ctx, words, fontSize, maxWidth);
   const gap = fontSize * 0.15;
@@ -771,6 +803,7 @@ function drawQcfBlock(
         ctx.fillStyle = emphasis?.baseColor ?? ctx.fillStyle;
       }
 
+      strokeTextWithOutline(ctx, u.word.code_v2, x, y, outline, scale);
       ctx.fillText(u.word.code_v2, x, y);
 
       if (emph && emphasis!.style === "underline") {
@@ -981,7 +1014,7 @@ export function drawVerseText(
           : undefined;
       drawQcfBlock(
         tctx, qcfRenderWords, centerX, arabicFirstLineY(startY), maxWidth, arabicLineH,
-        arabicSize, qcfEmph
+        arabicSize, qcfEmph, options.textOutline, scale
       );
     } else if (options.arabicEmphasis && options.arabicEmphasis.length > 0) {
       drawEmphasizedBlock(tctx, arabicDisplay, centerX, arabicFirstLineY(startY), maxWidth, arabicLineH, {
@@ -992,9 +1025,11 @@ export function drawVerseText(
         indexOffset: 0,
         fontSize: arabicSize,
         rtl: true,
+        outline: options.textOutline,
+        scale,
       });
     } else {
-      wrapText(tctx, arabicDisplay, centerX, startY, maxWidth, arabicLineH);
+      wrapText(tctx, arabicDisplay, centerX, startY, maxWidth, arabicLineH, options.textOutline, scale);
     }
     tctx.direction = "ltr";
 
@@ -1002,7 +1037,7 @@ export function drawVerseText(
       const transY = startY + arabicBlockHeight / 2 + gap + transBlockHeight / 2;
       const fontFamily = getTranslationFontFamily(options.translationFont);
       tctx.font = `${transWeight} ${transSize}px ${fontFamily}`;
-      const transBase = options.textColor + "cc";
+      const transBase = options.translationColor ?? options.textColor + "cc";
       tctx.fillStyle = transBase;
       const transRtl = options.translationDirection === "rtl";
       if (transRtl) tctx.direction = "rtl";
@@ -1017,9 +1052,11 @@ export function drawVerseText(
           indexOffset: showTransNum ? 1 : 0,
           fontSize: transSize,
           rtl: transRtl,
+          outline: options.textOutline,
+          scale,
         });
       } else {
-        wrapText(tctx, translationText, centerX, transY, maxWidth, transLineH);
+        wrapText(tctx, translationText, centerX, transY, maxWidth, transLineH, options.textOutline, scale);
       }
       tctx.direction = "ltr";
     }

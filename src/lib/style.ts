@@ -1,4 +1,4 @@
-import { Background, TextShadow, LetterboxConfig, SplitMaskConfig } from "@/types";
+import { Background, TextShadow, TextOutline, LetterboxConfig, SplitMaskConfig } from "@/types";
 import { MediaFit, FitBackdrop, VerseIntro, MediaTransform } from "./canvas-utils";
 
 /** The visual style of a clip — the bundle a Template or Saved Style captures/applies.
@@ -22,9 +22,13 @@ export interface StyleSettings {
   translationFontSize: number;
   translationFontWeight: number;
   textColor: string;
+  /** Translation can be quieter than the Quran text without reducing Arabic contrast. */
+  translationColor?: string;
   overlayOpacity: number;
   overlayColor: string;
   textShadow: TextShadow;
+  /** Crisp glyph edge rendered separately from the optional shadow/glow. */
+  textOutline?: TextOutline;
   /** Continuous rounded bar behind each Arabic line. */
   highlightEnabled?: boolean;
   highlightColor?: string;
@@ -60,9 +64,11 @@ export const STYLE_KEYS: (keyof StyleSettings)[] = [
   "translationFontSize",
   "translationFontWeight",
   "textColor",
+  "translationColor",
   "overlayOpacity",
   "overlayColor",
   "textShadow",
+  "textOutline",
   "highlightEnabled",
   "highlightColor",
   "highlightOpacity",
@@ -96,7 +102,9 @@ export const PRESET_KEYS: (keyof StyleSettings)[] = [
   "translationFont",
   "translationFontSize",
   "translationFontWeight",
+  "translationColor",
   "textShadow",
+  "textOutline",
   "highlightEnabled",
   "highlightRadius",
   "highlightPadding",

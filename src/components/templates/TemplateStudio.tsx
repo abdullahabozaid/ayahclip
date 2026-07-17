@@ -115,6 +115,9 @@ function cloneTemplate(template: TemplateDefinition): TemplateDefinition {
       ...template.settings,
       background: { ...template.settings.background },
       textShadow: { ...template.settings.textShadow },
+      textOutline: template.settings.textOutline
+        ? { ...template.settings.textOutline }
+        : undefined,
       letterbox: { ...template.settings.letterbox },
       mediaTransform: template.settings.mediaTransform
         ? { ...template.settings.mediaTransform }
@@ -147,6 +150,9 @@ function blankTemplate(): TemplateDefinition {
       ...DEFAULT_TEMPLATE_STYLE,
       background: { ...DEFAULT_TEMPLATE_STYLE.background },
       textShadow: { ...DEFAULT_TEMPLATE_STYLE.textShadow },
+      textOutline: DEFAULT_TEMPLATE_STYLE.textOutline
+        ? { ...DEFAULT_TEMPLATE_STYLE.textOutline }
+        : undefined,
       letterbox: { ...DEFAULT_TEMPLATE_STYLE.letterbox },
       mediaTransform: DEFAULT_TEMPLATE_STYLE.mediaTransform
         ? { ...DEFAULT_TEMPLATE_STYLE.mediaTransform }
@@ -243,8 +249,9 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const selectedTreatment = useMemo(() => {
     if (!draft) return "clean";
     if (draft.settings.highlightEnabled) return "gold";
-    if (draft.settings.textShadow.color.toLowerCase() !== "#000000") return "glow";
-    if (draft.settings.textShadow.blur <= 2) return "outline";
+    const shadowColor = draft.settings.textShadow.color.toLowerCase();
+    if (!["#000000", "#050507", "#040806"].includes(shadowColor)) return "glow";
+    if (draft.settings.textOutline?.enabled) return "outline";
     return "clean";
   }, [draft]);
 
@@ -278,13 +285,16 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
       const settings = { ...current.settings };
       if (treatment === "clean") {
         settings.highlightEnabled = false;
+        settings.textOutline = { ...(settings.textOutline ?? { color: "#050507", width: 1.25 }), enabled: false };
         settings.textShadow = { enabled: true, color: "#000000", blur: 5, offsetX: 0, offsetY: 2 };
       } else if (treatment === "glow") {
         settings.highlightEnabled = false;
+        settings.textOutline = { ...(settings.textOutline ?? { color: "#050507", width: 1.25 }), enabled: false };
         settings.textShadow = { enabled: true, color: "#f4f0e6", blur: 5, offsetX: 0, offsetY: 0 };
       } else if (treatment === "outline") {
         settings.highlightEnabled = false;
-        settings.textShadow = { enabled: true, color: "#000000", blur: 1, offsetX: 0, offsetY: 1 };
+        settings.textOutline = { enabled: true, color: "#050507", width: 1.5 };
+        settings.textShadow = { enabled: true, color: "#000000", blur: 3, offsetX: 0, offsetY: 1 };
       } else {
         settings.highlightEnabled = true;
         settings.highlightColor = settings.highlightColor ?? "#74652d";
@@ -292,6 +302,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
         settings.highlightRadius = settings.highlightRadius ?? 0.12;
         settings.highlightPadding = settings.highlightPadding ?? 0.5;
         settings.highlightHeight = settings.highlightHeight ?? 0.52;
+        settings.textOutline = { enabled: true, color: "#050507", width: 1.25 };
         settings.textShadow = { enabled: true, color: "#000000", blur: 6, offsetX: 0, offsetY: 2 };
       }
       return { ...current, settings };
@@ -847,6 +858,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   </label>
                   <RangeField label="Size" value={draft.settings.translationFontSize} min={9} max={32} suffix="px" onChange={(value) => setStyle("translationFontSize", value)} />
                   <Segmented value={String(draft.settings.translationFontWeight)} options={[400, 500, 600, 700].map((weight) => ({ value: String(weight), label: String(weight) }))} onChange={(value) => setStyle("translationFontWeight", Number(value))} />
+                  <ColorField label="Translation color" value={draft.settings.translationColor ?? "#d8d3c7"} onChange={(value) => setStyle("translationColor", value)} />
                 </>
               )}
             </InspectorSection>
@@ -864,7 +876,22 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   </button>
                 ))}
               </div>
-              <ColorField label="Text color" value={draft.settings.textColor} onChange={(value) => setStyle("textColor", value)} />
+              <ColorField label="Quran text color" value={draft.settings.textColor} onChange={(value) => setStyle("textColor", value)} />
+              <SwitchField
+                label="Crisp text edge"
+                checked={Boolean(draft.settings.textOutline?.enabled)}
+                onChange={(enabled) => setStyle("textOutline", {
+                  ...(draft.settings.textOutline ?? { color: "#050507", width: 1.25 }),
+                  enabled,
+                })}
+              />
+              {draft.settings.textOutline?.enabled && (
+                <>
+                  <p className="text-[10px] leading-4 text-[var(--muted)]">A narrow real outline keeps Quran marks readable over moving video.</p>
+                  <ColorField label="Edge color" value={draft.settings.textOutline.color} onChange={(color) => setStyle("textOutline", { ...draft.settings.textOutline!, color })} />
+                  <RangeField label="Edge width" value={draft.settings.textOutline.width} min={0.5} max={3} step={0.25} suffix="px" onChange={(width) => setStyle("textOutline", { ...draft.settings.textOutline!, width })} />
+                </>
+              )}
               <SwitchField
                 label="Text edge / glow"
                 checked={draft.settings.textShadow.enabled}

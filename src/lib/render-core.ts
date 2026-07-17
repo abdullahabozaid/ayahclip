@@ -2,6 +2,7 @@ import {
   Background,
   SplitMaskConfig,
   TextShadow,
+  TextOutline,
   LetterboxConfig,
   QcfWord,
   Verse,
@@ -53,7 +54,9 @@ export interface SceneStyleSource {
   translationFontWeight: number;
   translationDirection?: "ltr" | "rtl";
   textColor: string;
+  translationColor?: string;
   textShadow: TextShadow;
+  textOutline?: TextOutline;
   lineHeight: number;
   translationLineHeight: number;
   arabicTranslationGap: number;
@@ -170,7 +173,9 @@ export function drawScene(
     translationFont: style.translationFont,
     translationDirection: style.translationDirection,
     textColor: style.textColor,
+    translationColor: style.translationColor,
     textShadow: style.textShadow,
+    textOutline: style.textOutline,
     lineHeight: style.lineHeight,
     translationLineHeight: style.translationLineHeight,
     arabicTranslationGap: style.arabicTranslationGap,

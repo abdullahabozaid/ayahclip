@@ -67,6 +67,9 @@ export function sanitizeTemplateForStorage(
     ...input.settings,
     background: sanitizeBackground(input.settings.background, mediaSlots),
     textShadow: { ...input.settings.textShadow },
+    textOutline: input.settings.textOutline
+      ? { ...input.settings.textOutline }
+      : undefined,
     letterbox: { ...input.settings.letterbox },
     mediaTransform: input.settings.mediaTransform
       ? { ...input.settings.mediaTransform }
