@@ -56,7 +56,7 @@ npm run build
 npm run test:e2e
 ```
 
-`npm run test:e2e` includes Android Chromium and iPhone WebKit device profiles, with real encoded video byte and duration checks.
+`npm run test:e2e` includes Android Chromium and iPhone WebKit device profiles. On a capable local host they require real encoded video bytes and duration. GitHub's isolated Linux runner has no usable mobile H.264/AAC encoder, so CI verifies the complete touch workflow and enabled export controls while leaving byte-level encoding to the matrix below.
 
 Run the several-minute constrained-memory gate before an export-related release:
 
