@@ -3,6 +3,7 @@ import {
   alignmentFailureMessage,
   alignmentReviewProgress,
   buildAlignmentReview,
+  buildPersistedAlignmentReview,
 } from "../alignment-feedback";
 
 describe("alignment feedback", () => {
@@ -64,6 +65,26 @@ describe("alignment feedback", () => {
     ]);
     expect(progressed.reviewVerseNumbers).toEqual([]);
     expect(progressed.message).toContain("All flagged internal boundaries have been checked");
+  });
+
+  it("reconstructs a saved review queue after reopening a project", () => {
+    const review = buildPersistedAlignmentReview([
+      { verseNumber: 1, start: 0, end: 2, alignmentMethod: "hybrid", alignmentConfidence: "low" },
+      { verseNumber: 2, start: 2, end: 4, alignmentMethod: "hybrid", alignmentConfidence: "medium", alignmentReviewed: false },
+      { verseNumber: 3, start: 4, end: 6, alignmentMethod: "hybrid", alignmentConfidence: "low", alignmentReviewed: true },
+      // Duplicate caption rows carry no diagnostic and must not enter the queue.
+      { verseNumber: 3, start: 6, end: 7 },
+    ]);
+    expect(review?.methodLabel).toBe("Hybrid transcript + acoustic alignment");
+    expect(review?.reviewVerseNumbers).toEqual([2]);
+    expect(review?.message).toContain("1 saved boundary");
+  });
+
+  it("does not rebuild a queue after every saved cut is checked", () => {
+    expect(buildPersistedAlignmentReview([
+      { verseNumber: 1, start: 0, end: 2, alignmentConfidence: "low" },
+      { verseNumber: 2, start: 2, end: 4, alignmentConfidence: "medium", alignmentReviewed: true },
+    ])).toBeNull();
   });
 
   it("distinguishes memory, capability, model, and unknown failures", () => {

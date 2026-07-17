@@ -15,6 +15,7 @@ import {
   alignmentFailureMessage,
   alignmentReviewProgress,
   buildAlignmentReview,
+  buildPersistedAlignmentReview,
   type AlignmentReview,
 } from "@/lib/alignment-feedback";
 import {
@@ -150,6 +151,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const deepAbortRef = useRef<AbortController | null>(null);
   const [deepErr, setDeepErr] = useState<string | null>(null);
   const [alignmentReview, setAlignmentReview] = useState<AlignmentReview | null>(null);
+  const [alignmentReviewDismissed, setAlignmentReviewDismissed] = useState(false);
   const [reviewCursorVerse, setReviewCursorVerse] = useState<number | null>(null);
   const [looping, setLooping] = useState(false);
   const [viewportW, setViewportW] = useState(0);
@@ -1076,6 +1078,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       setDeepErr(null);
       const review = buildAlignmentReview("pause", diagnostics);
       setAlignmentReview(review);
+      setAlignmentReviewDismissed(false);
       setReviewCursorVerse(review.reviewVerseNumbers[0] ?? null);
     } finally {
       setRedetecting(false);
@@ -1118,6 +1121,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       commit(applyAlignedTimingsToRows(cur.timings, result.timings));
       const review = buildAlignmentReview(result.method, result.boundaryDiagnostics);
       setAlignmentReview(review);
+      setAlignmentReviewDismissed(false);
       setReviewCursorVerse(review.reviewVerseNumbers[0] ?? null);
       setDeepErr(null);
     } catch (error) {
@@ -1143,8 +1147,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
 
   if (!imported || timings.length === 0) return null;
 
-  const visibleAlignmentReview = alignmentReview
-    ? alignmentReviewProgress(alignmentReview, timings)
+  const persistedAlignmentReview = alignmentReviewDismissed
+    ? null
+    : buildPersistedAlignmentReview(timings);
+  const activeAlignmentReview = alignmentReview ?? persistedAlignmentReview;
+  const visibleAlignmentReview = activeAlignmentReview
+    ? alignmentReviewProgress(activeAlignmentReview, timings)
     : null;
   const reviewVerses = visibleAlignmentReview?.reviewVerseNumbers ?? [];
   const requestedReviewIndex = reviewCursorVerse == null
@@ -1440,7 +1448,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               </p>
             </div>
             <button
-              onClick={() => setAlignmentReview(null)}
+              onClick={() => {
+                setAlignmentReview(null);
+                setAlignmentReviewDismissed(true);
+              }}
               aria-label="Dismiss alignment review"
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-amber-100/50 hover:bg-white/[0.05] hover:text-amber-100"
             >
@@ -1457,7 +1468,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       ) : visibleAlignmentReview ? (
         <div role="status" className="flex items-center gap-2 rounded-lg border border-emerald-soft/25 bg-emerald-soft/10 px-3 py-2 text-[11px] text-emerald-soft">
           <span className="leading-relaxed">{visibleAlignmentReview.message}</span>
-          <button onClick={() => setAlignmentReview(null)} aria-label="Dismiss alignment report" className="ml-auto flex h-9 w-9 items-center justify-center rounded-full opacity-60 hover:bg-white/[0.04] hover:opacity-100"><TlIcon d={TL_ICON.x} /></button>
+          <button onClick={() => {
+            setAlignmentReview(null);
+            setAlignmentReviewDismissed(true);
+          }} aria-label="Dismiss alignment report" className="ml-auto flex h-9 w-9 items-center justify-center rounded-full opacity-60 hover:bg-white/[0.04] hover:opacity-100"><TlIcon d={TL_ICON.x} /></button>
         </div>
       ) : null}
 

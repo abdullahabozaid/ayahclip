@@ -9,6 +9,42 @@ export interface AlignmentReview {
   reviewVerseNumbers: number[];
 }
 
+function methodLabel(method: AlignmentMethod): string {
+  return method === "transcript"
+    ? "Transcript alignment"
+    : method === "hybrid"
+      ? "Hybrid transcript + acoustic alignment"
+      : method === "ctc"
+        ? "Acoustic alignment"
+        : "Pause-based fallback";
+}
+
+/** Reconstruct the creator's pending review queue from saved timing metadata.
+ * This keeps the safe-review workflow available after a project reload instead
+ * of leaving only unexplained amber marks on the track. */
+export function buildPersistedAlignmentReview(
+  timings: readonly VerseTiming[],
+): AlignmentReview | null {
+  const pending = timings.filter((timing, index) =>
+    index > 0 &&
+    timing.alignmentReviewed !== true &&
+    (timing.alignmentConfidence === "medium" || timing.alignmentConfidence === "low"),
+  );
+  if (pending.length === 0) return null;
+
+  const methods = [...new Set(pending.map((timing) => timing.alignmentMethod).filter(Boolean))];
+  const label = methods.length === 1
+    ? methodLabel(methods[0]!)
+    : "Saved alignment";
+  const reviewVerseNumbers = [...new Set(pending.map((timing) => timing.verseNumber))];
+  const count = reviewVerseNumbers.length;
+  return {
+    methodLabel: label,
+    message: `${label}. Review ${count} saved ${count === 1 ? "boundary" : "boundaries"} marked in amber before export.`,
+    reviewVerseNumbers,
+  };
+}
+
 /** Reconcile a just-produced review report with durable creator corrections. */
 export function alignmentReviewProgress(
   review: AlignmentReview,
@@ -42,13 +78,7 @@ export function buildAlignmentReview(
   method: AlignmentMethod,
   diagnostics: readonly BoundaryDiagnostic[],
 ): AlignmentReview {
-  const methodLabel = method === "transcript"
-    ? "Transcript alignment"
-    : method === "hybrid"
-      ? "Hybrid transcript + acoustic alignment"
-    : method === "ctc"
-      ? "Acoustic alignment"
-      : "Pause-based fallback";
+  const methodLabelText = methodLabel(method);
   // The first ayah start is the clip trim, not an internal verse boundary.
   const internal = diagnostics.slice(1);
   const reviewVerseNumbers = internal
@@ -57,22 +87,22 @@ export function buildAlignmentReview(
 
   if (method === "pause") {
     return {
-      methodLabel,
-      message: `${methodLabel}. Speech recognition could not produce a reliable path; review each cut by ear.`,
+      methodLabel: methodLabelText,
+      message: `${methodLabelText}. Speech recognition could not produce a reliable path; review each cut by ear.`,
       reviewVerseNumbers: internal.map((diagnostic) => diagnostic.verseNumber),
     };
   }
   if (reviewVerseNumbers.length === 0) {
     return {
-      methodLabel,
-      message: `${methodLabel}. The independent timing methods agreed on every internal boundary.`,
+      methodLabel: methodLabelText,
+      message: `${methodLabelText}. The independent timing methods agreed on every internal boundary.`,
       reviewVerseNumbers,
     };
   }
   const count = reviewVerseNumbers.length;
   return {
-    methodLabel,
-    message: `${methodLabel}. Review ${count} ${count === 1 ? "boundary" : "boundaries"} marked in amber before export.`,
+    methodLabel: methodLabelText,
+    message: `${methodLabelText}. Review ${count} ${count === 1 ? "boundary" : "boundaries"} marked in amber before export.`,
     reviewVerseNumbers,
   };
 }
