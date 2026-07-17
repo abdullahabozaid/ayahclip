@@ -13,6 +13,7 @@ import type { SavedTemplate, TemplateDefinition, TemplateFamily } from "@/lib/te
 import { TemplateCard } from "./TemplateCard";
 import { TemplateIcon } from "./TemplateIcon";
 import { InlineActionPrompt } from "@/components/InlineActionPrompt";
+import { trackProductEvent } from "@/lib/telemetry";
 
 type Filter = "featured" | "all" | "mine" | TemplateFamily;
 
@@ -50,6 +51,7 @@ export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }
 
   const handleUseTemplate = (template: TemplateDefinition) => {
     applyTemplate(template);
+    trackProductEvent("template_chosen");
     router.push("/studio");
   };
 

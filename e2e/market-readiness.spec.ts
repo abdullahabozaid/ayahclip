@@ -69,6 +69,12 @@ test("recognition exposes truthful named stages before local model work", async 
 test("a real local audio file survives import, template choice, save, and reopen", async ({ page }) => {
   test.slow();
   const assertNoErrors = failOnPageErrors(page);
+  const productEvents: Record<string, unknown>[] = [];
+  await page.route("**/api/telemetry", async (route) => {
+    const body = route.request().postData();
+    if (body) productEvents.push(JSON.parse(body) as Record<string, unknown>);
+    await route.fulfill({ status: 204, body: "" });
+  });
   await page.goto("/import");
 
   await page.locator('input[type="file"]').setInputFiles({
@@ -101,6 +107,27 @@ test("a real local audio file survives import, template choice, save, and reopen
   await expect(page).toHaveURL(/\/studio/);
   await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Compare all five on this ayah" })).toBeVisible();
+  await expect.poll(() => productEvents.map((event) => event.event)).toEqual(
+    expect.arrayContaining([
+      "journey_started",
+      "source_loaded",
+      "range_confirmed",
+      "template_chosen",
+      "studio_opened",
+    ]),
+  );
+  for (const event of productEvents) {
+    expect(Object.keys(event).sort()).toEqual(expect.arrayContaining([
+      "browserFamily",
+      "deviceClass",
+      "event",
+      "journeyId",
+      "path",
+    ]));
+    expect(JSON.stringify(event)).not.toContain("market-readiness.wav");
+    expect(JSON.stringify(event)).not.toContain("transcript");
+    expect(JSON.stringify(event)).not.toContain("quranText");
+  }
   await expect(page.getByRole("slider", { name: "Quran Ink Thickness" })).toHaveValue("0");
   // The 100 ms silence at each edge is trimmed by autoSegment, so Studio must
   // report the one-second exported speech span rather than a per-verse guess.
@@ -152,6 +179,26 @@ test("a real local audio file survives import, template choice, save, and reopen
   expect(rendered.size).toBeGreaterThan(10_000);
   expect(rendered.duration).toBeGreaterThan(0.8);
   expect(rendered.duration).toBeLessThan(1.3);
+  await finalPreview.getByRole("button", { name: "Yes, on my own" }).click();
+  await expect.poll(() => productEvents.map((event) => event.event)).toContain("export_succeeded");
+  await expect.poll(() => productEvents).toContainEqual(
+    expect.objectContaining({ event: "journey_feedback", outcome: "without_help" }),
+  );
+  assertNoErrors();
+});
+
+test("privacy and terms explain the public product boundaries", async ({ page }) => {
+  const assertNoErrors = failOnPageErrors(page);
+  await page.goto("/privacy");
+  await expect(page.getByRole("heading", { level: 1, name: "Your recitation is not our data" })).toBeVisible();
+  await expect(page.getByText("Imported audio, video, recognition output", { exact: false })).toBeVisible();
+  const preference = page.getByRole("switch", { name: "Sharing is on" });
+  await expect(preference).toHaveAttribute("aria-checked", "true");
+  await preference.click();
+  await expect(page.getByRole("switch", { name: "Sharing is off" })).toHaveAttribute("aria-checked", "false");
+  await page.getByRole("link", { name: "Terms" }).last().click();
+  await expect(page.getByRole("heading", { level: 1, name: "Create carefully. Publish responsibly." })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Confirm every Quran range and final clip" })).toBeVisible();
   assertNoErrors();
 });
 
@@ -309,7 +356,20 @@ test("templates render and open the focused editor", async ({ page }) => {
       const sample = "وَءَامَنُوا۟ بِسْمِ ٱللَّهِ ۚ";
       const style = getComputedStyle(element);
       const descriptor = `${style.fontWeight} 48px ${style.fontFamily}`;
-      const faces = await document.fonts.load(descriptor, sample);
+      // The specimens above have already asked the browser to paint each face.
+      // Wait for those CSS-triggered loads instead of issuing a second
+      // FontFaceSet.load() request here. Chromium on GitHub's isolated Linux
+      // runner can reject that duplicate request with a generic NetworkError
+      // even though the self-hosted Next font is loaded and paints correctly.
+      await document.fonts.ready;
+      const primaryFamily = style.fontFamily
+        .split(",")[0]
+        .trim()
+        .replace(/^["']|["']$/g, "");
+      const faces = Array.from(document.fonts).filter((face) =>
+        face.status === "loaded" &&
+        face.family.replace(/^["']|["']$/g, "") === primaryFamily
+      );
       const canvas = document.createElement("canvas");
       canvas.width = 640;
       canvas.height = 140;

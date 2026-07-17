@@ -10,6 +10,11 @@ import {
 } from "@/lib/clip-export";
 import { Mp4PreviewOverlay, type RenderedClip } from "./Mp4Preview";
 import { exportFailureMessage } from "@/lib/export-errors";
+import {
+  durationBucket,
+  telemetryErrorCode,
+  trackProductEvent,
+} from "@/lib/telemetry";
 
 export function ExportButton() {
   const store = useAppStore();
@@ -31,6 +36,7 @@ export function ExportButton() {
   const hasSelection = store.selectedVerseNumbers.length > 0 && !!store.surah;
 
   const run = async (
+    action: "preview" | "download",
     after: (file: File, fallbackReason?: string) => Promise<void> | void
   ) => {
     setExporting(true);
@@ -38,14 +44,36 @@ export function ExportButton() {
     setLibraryWarning(null);
     setSavedLocation(null);
     setPendingFile(null);
+    const source = useAppStore.getState().audioSource;
+    const clipSeconds = source.mode === "imported"
+      ? source.timings.reduce((total, timing) => total + Math.max(0, timing.end - timing.start), 0)
+      : undefined;
+    const duration = clipSeconds === undefined ? undefined : durationBucket(clipSeconds);
+    trackProductEvent("export_started", { exportAction: action, durationBucket: duration });
     try {
       const rendered = await renderClipFile((current, total) =>
         setProgress({ current, total })
       );
-      if (rendered) await after(rendered.file, rendered.fallbackReason);
+      if (rendered) {
+        await after(rendered.file, rendered.fallbackReason);
+        trackProductEvent("export_succeeded", {
+          exportAction: action,
+          durationBucket: duration,
+          exportPath: rendered.fromCache
+            ? "cache"
+            : rendered.fallbackReason
+              ? "realtime"
+              : "webcodecs",
+        });
+      }
     } catch (err) {
       console.error("Export failed:", err);
       setError(exportFailureMessage(err));
+      trackProductEvent("export_failed", {
+        exportAction: action,
+        durationBucket: duration,
+        errorCode: telemetryErrorCode(err),
+      });
     } finally {
       setExporting(false);
       setProgress({ current: 0, total: 0 });
@@ -53,7 +81,7 @@ export function ExportButton() {
   };
 
   const handleExport = () =>
-    run(async (file) => {
+    run("download", async (file) => {
       const savedToLibrary = await saveRenderedToLibrary(file);
       if (!savedToLibrary) {
         setLibraryWarning(
@@ -74,7 +102,7 @@ export function ExportButton() {
 
   // Render the MP4 and open it in a real player BEFORE saving anything.
   const handlePreview = () =>
-    run((file, fallbackReason) => {
+    run("preview", (file, fallbackReason) => {
       setPreview({ file, url: URL.createObjectURL(file), fallbackReason });
     });
 

@@ -48,6 +48,11 @@ import {
   recognitionActionLabel,
   type RecognitionProgress,
 } from "@/lib/recognition-progress";
+import {
+  durationBucket,
+  startCreatorJourney,
+  trackProductEvent,
+} from "@/lib/telemetry";
 
 interface RecognitionResult {
   transcript: string;
@@ -306,6 +311,7 @@ export default function ImportPage() {
   };
 
   useEffect(() => {
+    startCreatorJourney();
     fetchSurahs().then(setSurahs);
   }, []);
 
@@ -349,6 +355,10 @@ export default function ImportPage() {
       if (decodeOperationRef.current !== operation) return;
       setSourceAudio(audioBlob);
       setBuffer(buf);
+      trackProductEvent("source_loaded", {
+        sourceKind: isVideo ? "video" : "audio",
+        durationBucket: durationBucket(buf.duration),
+      });
     } catch {
       if (decodeOperationRef.current !== operation) return;
       setError(
@@ -722,7 +732,15 @@ export default function ImportPage() {
             <input
               type="checkbox"
               checked={rangeConfirmed}
-              onChange={(event) => setRangeConfirmed(event.target.checked)}
+              onChange={(event) => {
+                const confirmed = event.target.checked;
+                setRangeConfirmed(confirmed);
+                if (confirmed) {
+                  trackProductEvent("range_confirmed", {
+                    durationBucket: buffer ? durationBucket(buffer.duration) : undefined,
+                  });
+                }
+              }}
               disabled={!buffer}
               className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--gold)]"
             />

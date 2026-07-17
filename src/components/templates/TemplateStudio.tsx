@@ -50,6 +50,7 @@ import {
   TemplatePreview,
   type SampleVerse,
 } from "./TemplatePreview";
+import { trackProductEvent } from "@/lib/telemetry";
 
 const FAMILY_ICONS: Record<TemplateFamily, TemplateIconName> = {
   ayahclip: "sparkles",
@@ -491,6 +492,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const use = () => {
     if (!draft) return;
     applyTemplate(draft);
+    trackProductEvent("template_chosen");
     router.push("/studio");
   };
 

@@ -13,6 +13,7 @@ import {
 import "./globals.css";
 import { SiteNav } from "@/components/SiteNav";
 import { SiteFooter } from "@/components/SiteFooter";
+import { ClientOperations } from "@/components/ClientOperations";
 
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit", display: "swap" });
 const marcellus = Marcellus({ weight: "400", subsets: ["latin"], variable: "--font-marcellus", display: "swap" });
@@ -86,6 +87,7 @@ export default function RootLayout({
       className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoNaskh.variable}`}
     >
       <body className="grain min-h-dvh text-parchment antialiased">
+        <ClientOperations />
         <SiteNav />
         {children}
         <SiteFooter />

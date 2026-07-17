@@ -9,6 +9,10 @@ import {
   saveRenderedToLibrary,
   deliverFileInGesture,
 } from "@/lib/clip-export";
+import {
+  firstExportFeedbackPending,
+  submitFirstExportFeedback,
+} from "@/lib/telemetry";
 
 export interface RenderedClip {
   file: File;
@@ -39,6 +43,12 @@ export function Mp4PreviewOverlay({
 }) {
   const [saving, setSaving] = useState(false);
   const [libState, setLibState] = useState<"idle" | "saving" | "saved">("idle");
+  const [showFirstExportQuestion, setShowFirstExportQuestion] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
+
+  useEffect(() => {
+    setShowFirstExportQuestion(firstExportFeedbackPending());
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -146,38 +156,71 @@ export function Mp4PreviewOverlay({
       </div>
 
       <div
-        className="flex shrink-0 items-center justify-center gap-3 px-4 py-4"
+        className="flex shrink-0 flex-col items-center gap-3 px-4 py-4"
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          onClick={close}
-          className="rounded-full border border-white/20 px-6 py-2.5 text-sm text-white/70 hover:text-white"
-        >
-          Discard
-        </button>
-        <button
-          onClick={saveToLibraryOnly}
-          disabled={libState !== "idle"}
-          className={`rounded-full border px-6 py-2.5 text-sm transition-colors ${
-            libState === "saved"
-              ? "border-emerald-400/40 text-emerald-300"
-              : "border-white/20 text-white/80 hover:text-white"
-          }`}
-        >
-          {libState === "saved"
-            ? "In library ✓"
-            : libState === "saving"
-              ? "Saving…"
-              : "Save to library"}
-        </button>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="btn-gold rounded-full px-8 py-2.5 text-sm disabled:opacity-60"
-        >
-          {saving ? "Saving…" : "Save this video"}
-        </button>
+        {showFirstExportQuestion && (
+          <div className="flex w-full max-w-2xl flex-col items-center justify-between gap-2 border-y border-white/10 py-3 text-center sm:flex-row sm:text-left">
+            <p className="text-xs leading-5 text-white/65">
+              {feedbackSent ? "Thank you. No project content was sent." : "First clip check: did you reach this preview without help?"}
+            </p>
+            {!feedbackSent && (
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    submitFirstExportFeedback("without_help");
+                    setFeedbackSent(true);
+                  }}
+                  className="min-h-10 rounded-full border border-white/20 px-3 text-xs text-white/80 hover:border-white/35 hover:text-white"
+                >
+                  Yes, on my own
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    submitFirstExportFeedback("needed_help");
+                    setFeedbackSent(true);
+                  }}
+                  className="min-h-10 rounded-full px-3 text-xs text-white/55 hover:text-white"
+                >
+                  I needed help
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:gap-3">
+          <button
+            onClick={close}
+            className="min-h-11 rounded-full border border-white/20 px-5 text-sm text-white/70 hover:text-white sm:px-6"
+          >
+            Discard
+          </button>
+          <button
+            onClick={saveToLibraryOnly}
+            disabled={libState !== "idle"}
+            className={`min-h-11 rounded-full border px-5 text-sm transition-colors sm:px-6 ${
+              libState === "saved"
+                ? "border-emerald-400/40 text-emerald-300"
+                : "border-white/20 text-white/80 hover:text-white"
+            }`}
+          >
+            {libState === "saved"
+              ? "In library ✓"
+              : libState === "saving"
+                ? "Saving…"
+                : "Save to library"}
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="btn-gold min-h-11 rounded-full px-6 text-sm disabled:opacity-60 sm:px-8"
+          >
+            {saving ? "Saving…" : "Save this video"}
+          </button>
+        </div>
       </div>
     </div>
   );

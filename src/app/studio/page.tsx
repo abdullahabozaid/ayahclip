@@ -20,6 +20,12 @@ import {
   type RenderedClip,
 } from "@/components/Mp4Preview";
 import { exportFailureMessage } from "@/lib/export-errors";
+import {
+  durationBucket,
+  telemetryErrorCode,
+  trackOncePerJourney,
+  trackProductEvent,
+} from "@/lib/telemetry";
 
 // Editor zoom bounds. CSS `zoom` reflows layout, so the page scrolls naturally
 // when zoomed past the viewport (and shrinks within it when zoomed out).
@@ -73,6 +79,10 @@ export default function StudioPage() {
   const savedVideoUrlRef = useRef<string | null>(null);
   const savedBackgroundUrlsRef = useRef<Set<string>>(new Set());
 
+  useEffect(() => {
+    trackOncePerJourney("studio_opened");
+  }, []);
+
   // The bottom timeline dock and the right settings drawer both eat into the
   // preview's space, so they're mutually exclusive: opening one closes the other.
   const openSettings = (next: boolean) => {
@@ -117,14 +127,32 @@ export default function StudioPage() {
     setMp4Rendering(true);
     setMp4Error(null);
     setMp4Progress({ current: 0, total: 0 });
+    const source = useAppStore.getState().audioSource;
+    const clipSeconds = source.mode === "imported"
+      ? source.timings.reduce((total, timing) => total + Math.max(0, timing.end - timing.start), 0)
+      : undefined;
+    const duration = clipSeconds === undefined ? undefined : durationBucket(clipSeconds);
+    trackProductEvent("export_started", { exportAction: "preview", durationBucket: duration });
     try {
       const clip = await renderForPreview((current, total) =>
         setMp4Progress({ current, total })
       );
-      if (clip) setMp4Clip(clip);
+      if (clip) {
+        setMp4Clip(clip);
+        trackProductEvent("export_succeeded", {
+          exportAction: "preview",
+          durationBucket: duration,
+          exportPath: clip.fallbackReason ? "realtime" : "webcodecs",
+        });
+      }
     } catch (err) {
       console.error("MP4 preview render failed:", err);
       setMp4Error(exportFailureMessage(err));
+      trackProductEvent("export_failed", {
+        exportAction: "preview",
+        durationBucket: duration,
+        errorCode: telemetryErrorCode(err),
+      });
     } finally {
       setMp4Rendering(false);
     }

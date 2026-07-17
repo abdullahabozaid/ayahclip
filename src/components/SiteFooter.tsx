@@ -35,9 +35,15 @@ export function SiteFooter() {
         AyahClip is a personal tool for crafting Quran recitation clips. Please
         respect the source licenses below when sharing your clips.
       </p>
-      <p className="mt-3 text-xs">
+      <p className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs">
         <Link href="/diagnostics" className="text-[var(--muted)] underline-offset-4 transition-colors hover:text-parchment hover:underline">
           Troubleshooting diagnostics
+        </Link>
+        <Link href="/privacy" className="text-[var(--muted)] underline-offset-4 transition-colors hover:text-parchment hover:underline">
+          Privacy
+        </Link>
+        <Link href="/terms" className="text-[var(--muted)] underline-offset-4 transition-colors hover:text-parchment hover:underline">
+          Terms
         </Link>
       </p>
       <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-[11px] text-[var(--muted)]">

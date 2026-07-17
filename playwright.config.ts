@@ -15,8 +15,30 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "android-chrome",
+      testMatch: /device-export-readiness\.spec\.ts/,
+      use: { ...devices["Pixel 7"] },
+    },
+    {
+      name: "iphone-webkit",
+      testMatch: /device-export-readiness\.spec\.ts/,
+      use: { ...devices["iPhone 15 Pro"] },
+    },
+    ...(process.env.EXPORT_STRESS
+      ? [{
+          name: "low-memory-chrome",
+          testMatch: /long-export-readiness\.spec\.ts/,
+          use: {
+            ...devices["Desktop Chrome"],
+            channel: "chrome" as const,
+            launchOptions: { args: ["--js-flags=--max-old-space-size=512"] },
+          },
+        }]
+      : []),
   ],
   webServer: {
     command: "npm run start",
