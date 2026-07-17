@@ -193,9 +193,11 @@ async function main() {
     loadCorpus,
     normalizeArabic,
     recoverLeadingVerse,
+    recoverRecognitionWindowCandidates,
     selectRecognitionCandidates,
   } = await import("../src/lib/verse-match");
-  const { findSpeechSpan } = await import("../src/lib/audio-import");
+  const { findSilenceCenters, findSpeechSpan } = await import("../src/lib/audio-import");
+  const { recognitionTranscriptWindows } = await import("../src/lib/recognition-retry");
   await loadCorpus();
   const runner = await createNodeAsrRunner(projectRoot);
 
@@ -204,7 +206,8 @@ async function main() {
     const audio = decodeAudioFile(item.audioPath);
     const emissions = await runner.recognize(audio);
     const assessment = assessVerseMatch(emissions.transcription.text);
-    const speechStart = findSpeechSpan(asAudioBuffer(audio)).start;
+    const audioBuffer = asAudioBuffer(audio);
+    const speechStart = findSpeechSpan(audioBuffer).start;
     const recovery = assessment.match
       ? recoverLeadingVerse(
         assessment.match,
@@ -216,11 +219,24 @@ async function main() {
     const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
       ? "medium"
       : assessment.confidence;
-    const candidates = predicted
-      ? selectRecognitionCandidates(predicted, assessment.alternatives, 3)
+    const windowCandidates = effectiveConfidence === "low"
+      ? recoverRecognitionWindowCandidates(recognitionTranscriptWindows(
+        emissions.transcription,
+        findSilenceCenters(audioBuffer),
+        audioBuffer.duration,
+      ))
       : [];
-    const allCandidates = predicted
-      ? selectRecognitionCandidates(predicted, assessment.alternatives, 10)
+    const reviewPrimary = windowCandidates[0] ?? predicted;
+    const reviewAlternatives = [
+      ...windowCandidates.slice(1),
+      ...(predicted ? [predicted] : []),
+      ...assessment.alternatives,
+    ];
+    const candidates = reviewPrimary
+      ? selectRecognitionCandidates(reviewPrimary, reviewAlternatives, 3)
+      : [];
+    const allCandidates = reviewPrimary
+      ? selectRecognitionCandidates(reviewPrimary, reviewAlternatives, 10)
       : [];
     const reference = normalizeArabic(
       getVersesText(item.surah, item.ayahStart, item.ayahEnd).text,

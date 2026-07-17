@@ -17,6 +17,7 @@ import {
   assessVerseMatch,
   getVerseWeights,
   loadCorpus,
+  recoverRecognitionWindowCandidates,
   selectRecognitionCandidates,
   recoverLeadingVerse,
   type VerseMatch,
@@ -32,6 +33,7 @@ import { Surah } from "@/types";
 import {
   leadingRecognitionRetryOffset,
   offsetEmissions,
+  recognitionTranscriptWindows,
 } from "@/lib/recognition-retry";
 import {
   browserDeviceMemoryGb,
@@ -184,6 +186,13 @@ export default function ImportPage() {
       const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
         ? "medium"
         : assessment.confidence;
+      const windowCandidates = effectiveConfidence === "low"
+        ? recoverRecognitionWindowCandidates(recognitionTranscriptWindows(
+          emissions.transcription,
+          findSilenceCenters(buffer),
+          buffer.duration,
+        ))
+        : [];
       const buildRecognitionResult = (
         match: VerseMatch,
       ): Omit<RecognitionResult, "confidence"> => {
@@ -236,8 +245,13 @@ export default function ImportPage() {
           ...result,
           confidence: effectiveConfidence,
         });
-      } else if (m) {
-        const uniqueMatches = selectRecognitionCandidates(m, assessment.alternatives);
+      } else if (windowCandidates[0] ?? m) {
+        const reviewPrimary = windowCandidates[0] ?? m!;
+        const uniqueMatches = selectRecognitionCandidates(reviewPrimary, [
+          ...windowCandidates.slice(1),
+          ...(m ? [m] : []),
+          ...assessment.alternatives,
+        ]);
         setDetectProgress({ stage: "align", detail: "Preparing likely Quran ranges" });
         setRecognitionCandidates(uniqueMatches.map((match) => ({
           ...buildRecognitionResult(match),
@@ -245,8 +259,9 @@ export default function ImportPage() {
         })));
         setDetected(null);
         setRangeConfirmed(false);
-        setDetectError(
-          "This recitation matches several similar Quran passages. Choose the range that sounds right, or enter it manually."
+        setDetectError(windowCandidates.length > 0
+          ? "A Quran passage was found after separating speech around a pause. Check the suggested range by ear, or enter it manually."
+          : "This recitation matches several similar Quran passages. Choose the range that sounds right, or enter it manually."
         );
       } else {
         setDetectError(detected

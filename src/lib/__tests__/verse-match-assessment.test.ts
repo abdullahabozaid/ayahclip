@@ -6,9 +6,11 @@ import {
   assessVerseMatch,
   getVersesText,
   loadCorpus,
+  recoverRecognitionWindowCandidates,
   selectRecognitionCandidates,
   recoverLeadingVerse,
 } from "@/lib/verse-match";
+import { recognitionTranscriptWindows } from "@/lib/recognition-retry";
 
 beforeAll(async () => {
   const corpus = JSON.parse(
@@ -52,6 +54,24 @@ describe("assessVerseMatch", () => {
     expect(assessment.match?.score).toBe(1);
     expect(assessment.confidence).toBe("high");
     expect(assessment.margin).toBeGreaterThan(0.12);
+  });
+
+  it("recovers a Quran range for review from a pause-separated spoken intro", () => {
+    const quran = getVersesText(89, 6, 10).text;
+    const intro = "هذا حديث قبل التلاوة وليس من القرآن الكريم";
+    const words = `${intro} ${quran}`.split(/\s+/);
+    const boundaryIndex = intro.split(/\s+/).length;
+    const windows = recognitionTranscriptWindows({
+      text: words.join(" "),
+      charTimes: [],
+      wordStarts: words.map((_, index) => index * 0.35),
+    }, [{ time: boundaryIndex * 0.35 - 0.1, len: 0.35 }], words.length * 0.35 + 1);
+
+    expect(recoverRecognitionWindowCandidates(windows)[0]).toMatchObject({
+      surah: 89,
+      ayahStart: 6,
+      ayahEnd: 10,
+    });
   });
 
   it("does not pull a short opening verse into a standalone second ayah", () => {

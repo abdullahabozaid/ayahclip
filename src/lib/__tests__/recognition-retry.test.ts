@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { leadingRecognitionRetryOffset, offsetEmissions } from "../recognition-retry";
+import {
+  leadingRecognitionRetryOffset,
+  offsetEmissions,
+  recognitionTranscriptWindows,
+} from "../recognition-retry";
 import type { Emissions } from "../asr";
 
 describe("leading recognition retry", () => {
@@ -30,5 +34,25 @@ describe("leading recognition retry", () => {
     expect(shifted.timeOffset).toBe(2.25);
     expect(shifted.transcription.charTimes).toEqual([2.45, 2.65]);
     expect(shifted.transcription.wordStarts).toEqual([2.45]);
+  });
+
+  it("creates bounded candidate-only windows around a strong internal pause", () => {
+    const words = "intro speech before recitation starts quran words continue after pause".split(" ");
+    const windows = recognitionTranscriptWindows({
+      text: words.join(" "),
+      charTimes: [],
+      wordStarts: words.map((_, index) => index * 0.5),
+    }, [{ time: 2.2, len: 0.4 }], 8);
+
+    expect(windows).toContain("quran words continue after pause");
+    expect(windows).toContain("intro speech before recitation starts");
+  });
+
+  it("does not guess transcript boundaries when ASR words and timings disagree", () => {
+    expect(recognitionTranscriptWindows({
+      text: "one two three four five six seven eight",
+      charTimes: [],
+      wordStarts: [0, 1],
+    }, [{ time: 2, len: 0.5 }], 10)).toEqual([]);
   });
 });

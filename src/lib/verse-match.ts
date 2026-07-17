@@ -574,6 +574,39 @@ export function assessVerseMatch(transcript: string): VerseMatchAssessment {
 }
 
 /**
+ * Recover strong Quran candidates from pause-bounded transcript windows. These
+ * candidates are deliberately detached from whole-clip confidence: they may
+ * be shown for creator review, but must never become an automatic range.
+ */
+export function recoverRecognitionWindowCandidates(
+  windows: readonly string[],
+  limit = 9,
+): VerseMatch[] {
+  const ranked = windows.flatMap((window) => {
+    const assessment = assessVerseMatch(window);
+    if (!assessment.match || assessment.confidence === "low") return [];
+    return [{
+      match: assessment.match,
+      confidence: assessment.confidence,
+      evidenceLength: normalizeArabic(window).replace(/ /g, "").length,
+    }];
+  }).sort((left, right) =>
+    (right.confidence === "high" ? 2 : 1) - (left.confidence === "high" ? 2 : 1) ||
+    right.match.score - left.match.score ||
+    right.evidenceLength - left.evidenceLength
+  );
+
+  return ranked
+    .map((item) => item.match)
+    .filter((match, index, matches) => matches.findIndex((item) =>
+      item.surah === match.surah &&
+      item.ayahStart === match.ayahStart &&
+      item.ayahEnd === match.ayahEnd
+    ) === index)
+    .slice(0, Math.max(1, limit));
+}
+
+/**
  * Identify the surah + ayah range a transcript covers. Returns null if no
  * candidate clears a minimum confidence.
  */
