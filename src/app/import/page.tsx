@@ -40,23 +40,11 @@ import {
   recognitionDurationWarning,
   RECOMMENDED_IMPORT_BYTES,
 } from "@/lib/import-limits";
-
-const RECOGNITION_STAGES = [
-  { id: "prepare", label: "Prepare" },
-  { id: "listen", label: "Listen" },
-  { id: "match", label: "Match" },
-  { id: "align", label: "Align" },
-] as const;
-
-type RecognitionStage = (typeof RECOGNITION_STAGES)[number]["id"];
-
-interface RecognitionProgress {
-  stage: RecognitionStage;
-  detail: string;
-  percent?: number;
-  loadedBytes?: number;
-  totalBytes?: number;
-}
+import {
+  RECOGNITION_STAGES,
+  recognitionActionLabel,
+  type RecognitionProgress,
+} from "@/lib/recognition-progress";
 
 interface RecognitionResult {
   transcript: string;
@@ -164,6 +152,10 @@ export default function ImportPage() {
           await computeEmissions(audio.subarray(retrySamples), undefined, controller.signal),
           retryOffset,
         );
+        setDetectProgress({
+          stage: "match",
+          detail: "Matching the retried transcript to the Quran",
+        });
         const retryAssessment = assessVerseMatch(retryEmissions.transcription.text);
         const currentScore = assessment.match?.score ?? 0;
         const retryScore = retryAssessment.match?.score ?? 0;
@@ -552,7 +544,11 @@ export default function ImportPage() {
                   disabled={detecting || !buffer || !!recognitionBlock}
                   className="btn-gold min-h-11 rounded-full px-4 text-xs disabled:opacity-50"
                 >
-                  {detecting ? "Analysing…" : detected || recognitionCandidates.length ? "Run again" : "Recognise verses"}
+                  {recognitionActionLabel(
+                    detecting,
+                    detectProgress,
+                    Boolean(detected || recognitionCandidates.length),
+                  )}
                 </button>
                 {detecting && (
                   <button
@@ -593,7 +589,7 @@ export default function ImportPage() {
                     >
                       <span>
                         <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
-                          {index === 0 ? "Closest match" : `Alternative ${index + 1}`}
+                          {index === 0 ? "Closest match" : `Alternative ${index}`}
                         </span>
                         <span className="mt-0.5 block text-sm text-parchment">{candidate.ref}</span>
                       </span>
@@ -611,11 +607,11 @@ export default function ImportPage() {
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <p className="font-display text-xl text-parchment">{detected.ref}</p>
-                  <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                    {detected.confidence === "selected" ? "creator selected" : `${detected.confidence} match`}
+                  <span aria-label="Quran range confidence" className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Range: {detected.confidence === "selected" ? "creator selected" : `${detected.confidence} confidence`}
                   </span>
-                  <span className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                    {detected.review.methodLabel}
+                  <span aria-label="Ayah cut method" className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Cuts: {detected.review.methodLabel}
                   </span>
                 </div>
                 <p className={`mt-3 rounded-lg border px-3 py-2.5 text-[11px] leading-relaxed ${

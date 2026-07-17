@@ -49,6 +49,23 @@ test("import clearly supports local audio and phone video formats", async ({ pag
   assertNoErrors();
 });
 
+test("recognition exposes truthful named stages before local model work", async ({ page }) => {
+  await page.goto("/import");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "recognition-stage.wav",
+    mimeType: "audio/wav",
+    buffer: toneWav(),
+  });
+
+  await page.getByRole("button", { name: "Recognise verses" }).click();
+  await expect(
+    page.getByRole("button", { name: /Preparing|Listening|Matching|Aligning/ }),
+  ).toBeVisible();
+  await expect(page.getByRole("list", { name: "Recognition stages" })).toBeVisible();
+  await expect(page.getByText("Private, on-device processing", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Analysing…" })).toHaveCount(0);
+});
+
 test("a real local audio file survives import, template choice, save, and reopen", async ({ page }) => {
   test.slow();
   const assertNoErrors = failOnPageErrors(page);
