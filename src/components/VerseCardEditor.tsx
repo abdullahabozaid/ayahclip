@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import {
   decodeAudioFile,
   autoSegment,
+  mapSplitBoundariesToWords,
   snapToSentenceBoundary,
   type VerseTiming,
 } from "@/lib/audio-import";
@@ -658,7 +659,7 @@ function VerseCard({
   const hasFixed = !!(sw && sw.length === splits.length);
   const wordBounds = hasFixed ? [0, ...sw, totalWords] : null;
   const transBounds = hasFixed && swTotal > 0
-    ? [0, ...sw.map((w) => snapToSentenceBoundary(transWords, Math.round((w / swTotal) * transTotal))), transTotal]
+    ? [0, ...mapSplitBoundariesToWords(transWords, sw, swTotal), transTotal]
     : null;
   const parts = points.slice(0, -1).map((from, i) => {
     const to = points[i + 1];
@@ -990,9 +991,19 @@ export function PartBlock({
                     <span className="relative mx-1 inline-block h-[1.3em] w-0 translate-y-[0.2em] border-r-2 border-emerald-soft align-middle" />
                   )}
                   <span
+                    role={i >= 1 && i < words.length ? "button" : undefined}
+                    tabIndex={i >= 1 && i < words.length ? 0 : undefined}
+                    aria-label={i >= 1 && i < words.length ? `Split before word ${i + 1}: ${w}` : undefined}
                     onClick={() => {
                       if (i < 1 || i >= words.length) return;
                       setSelectedIdx(i);
+                    }}
+                    onKeyDown={(event) => {
+                      if (i < 1 || i >= words.length) return;
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedIdx(i);
+                      }
                     }}
                     onMouseEnter={() => {
                       if (selectedIdx == null && i >= 1 && i < words.length) setHoverIdx(i);

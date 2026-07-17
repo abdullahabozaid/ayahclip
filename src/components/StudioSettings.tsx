@@ -156,6 +156,7 @@ function Toggle({
       <button
         onClick={onChange}
         role="switch"
+        aria-label={label}
         aria-checked={checked}
         className={`relative h-6 w-11 rounded-full transition-colors ${
           checked ? "bg-[var(--gold)]" : "bg-white/10"

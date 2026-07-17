@@ -29,7 +29,7 @@ import { clipFadeProgress } from "@/lib/clip-fade";
 import { FrameMode } from "./PlatformChrome";
 import { DevicePreview } from "./DevicePreview";
 import { importedPlayer } from "@/lib/imported-player";
-import { verseTextAt, snapToSentenceBoundary } from "@/lib/audio-import";
+import { mapSplitBoundariesToWords, verseTextAt } from "@/lib/audio-import";
 import { buildClipRows } from "@/lib/clip-rows";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
 import { resolveBackgroundScene } from "@/lib/background-sequence";
@@ -53,6 +53,8 @@ interface StudioPreviewProps {
 
 export function StudioPreview({ frameMode = "studio", showSafeZones = false }: StudioPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewRootRef = useRef<HTMLDivElement>(null);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const store = useAppStore();
 
   const selectedVerses = store.verses.filter((v) =>
@@ -438,8 +440,13 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         displayArabic = words.slice(lo, hi).join(" ");
         if (cv.translation) {
           const tWords = cv.translation.split(/\s+/).filter(Boolean);
-          const tLo = snapToSentenceBoundary(tWords, Math.floor((lo / words.length) * tWords.length));
-          const tHi = snapToSentenceBoundary(tWords, Math.floor((hi / words.length) * tWords.length));
+          const translationCuts = [
+            0,
+            ...mapSplitBoundariesToWords(tWords, sorted, words.length),
+            tWords.length,
+          ];
+          const tLo = translationCuts[pi];
+          const tHi = translationCuts[pi + 1];
           displayTranslation = tWords.slice(tLo, tHi).join(" ");
         } else {
           displayTranslation = cv.translation;
@@ -715,9 +722,32 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   ]);
 
   const framed = frameMode !== "studio";
-  const displayWidth = framed ? 348 : size.w >= size.h ? 460 : 360;
   const canReframe = store.background.type === "image" || store.background.type === "video";
+  const preferredWidth = framed ? 348 : size.w >= size.h ? 460 : 360;
+  const chromeWidthRatio = framed ? 1.09 : 1;
+  const chromeHeightRatio = framed ? 16 / 9 + 0.09 : size.h / size.w;
+  const controlsHeight = (canReframe ? 64 : 0) + (rows.length > 0 ? 64 : 0);
+  const widthFromStage = stageSize.width > 0
+    ? Math.max(140, (stageSize.width - 48) / chromeWidthRatio)
+    : preferredWidth;
+  const widthFromHeight = stageSize.height > 0
+    ? Math.max(140, (stageSize.height - 48 - controlsHeight) / chromeHeightRatio)
+    : preferredWidth;
+  const displayWidth = Math.round(Math.min(preferredWidth, widthFromStage, widthFromHeight));
   const frameGuide = mediaFrameRect(size.w, size.h, store.mediaFrame);
+
+  // The bottom editor can consume a large share of a laptop viewport. Measure
+  // the real preview stage and shrink the device proportionally so its bottom,
+  // platform chrome, and playback controls remain visible at true 100% zoom.
+  useEffect(() => {
+    const parent = previewRootRef.current?.parentElement;
+    if (!parent) return;
+    const update = () => setStageSize({ width: parent.clientWidth, height: parent.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, []);
 
   const startReframe = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!canReframe) return;
@@ -777,7 +807,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   };
 
   return (
-    <div className="flex flex-col items-center gap-6">
+    <div ref={previewRootRef} className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-4">
       <DevicePreview
         frameMode={frameMode}
         width={displayWidth}
@@ -816,7 +846,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       </DevicePreview>
 
       {canReframe && (
-        <div className="-mt-4 flex max-w-full flex-col items-center gap-2 text-[11px]">
+        <div className="-mt-2 flex max-w-full flex-col items-center gap-2 text-[11px] lg:flex-row lg:gap-3">
           <div className="flex rounded-full border border-[var(--hairline)] bg-[var(--ink-deep)] p-1" aria-label="Canvas drag tool">
             <button
               type="button"

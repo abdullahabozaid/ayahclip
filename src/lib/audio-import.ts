@@ -95,6 +95,39 @@ export function snapToSentenceBoundary(words: string[], raw: number): number {
 }
 
 /**
+ * Map Arabic split-word boundaries onto another text (normally a translation)
+ * without allowing adjacent parts to collapse onto the same boundary.
+ *
+ * Sentence snapping is helpful for a single split, but repeated splits can both
+ * snap to the same full stop. That used to produce an empty translation part in
+ * Studio and a duplicated full translation during playback/export. When the
+ * target has enough words, reserve at least one word for every remaining part.
+ */
+export function mapSplitBoundariesToWords(
+  words: string[],
+  splitWords: readonly number[],
+  sourceWordTotal: number,
+): number[] {
+  if (splitWords.length === 0 || words.length === 0 || sourceWordTotal <= 0) return [];
+
+  const canKeepEveryPartNonEmpty = words.length >= splitWords.length + 1;
+  let previous = 0;
+
+  return splitWords.map((sourceBoundary, index) => {
+    const raw = Math.round((sourceBoundary / sourceWordTotal) * words.length);
+    const snapped = snapToSentenceBoundary(words, raw);
+    const remainingSplits = splitWords.length - index - 1;
+    const min = canKeepEveryPartNonEmpty ? previous + 1 : previous;
+    const max = canKeepEveryPartNonEmpty
+      ? words.length - remainingSplits - 1
+      : words.length;
+    const boundary = Math.max(min, Math.min(max, snapped));
+    previous = boundary;
+    return boundary;
+  });
+}
+
+/**
  * For a verse with optional intra-verse splits, returns the slice of its text
  * that should be on-screen at time `t`. Words are divided by count proportional
  * to time within the verse — keeps it predictable without any text parsing.
@@ -125,14 +158,14 @@ export function verseTextAt(
     const isTranslation = allWords.length !== ref;
     const scaled = !isTranslation
       ? sw
-      : sw.map((w) => snapToSentenceBoundary(allWords, Math.round((w / ref) * allWords.length)));
+      : mapSplitBoundariesToWords(allWords, sw, ref);
     const wordBounds = [0, ...scaled, allWords.length];
     const wLo = wordBounds[segIdx];
     const wHi = wordBounds[segIdx + 1];
     const range = timing.wordRange;
     const keepLo = range ? Math.max(wLo, range.from) : wLo;
     const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
-    if (keepHi <= keepLo) return keptText;
+    if (keepHi <= keepLo) return "";
     return allWords.slice(keepLo, keepHi).join(" ");
   }
 

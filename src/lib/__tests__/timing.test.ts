@@ -6,6 +6,7 @@ import {
   verseTextAt,
   verseSegments,
   effectiveAudioBounds,
+  mapSplitBoundariesToWords,
   proportionalTimings,
   snapToSentenceBoundary,
   type VerseTiming,
@@ -191,6 +192,40 @@ describe("snapToSentenceBoundary", () => {
   it("keeps raw boundary when no punctuation is nearby", () => {
     const words = ["no", "punctuation", "here", "at", "all"];
     expect(snapToSentenceBoundary(words, 3)).toBe(3);
+  });
+});
+
+describe("mapSplitBoundariesToWords", () => {
+  it("keeps every repeated translation part non-empty when sentence snaps collide", () => {
+    const words = "In the name of Allah, the Entirely Merciful, the Especially Merciful.".split(" ");
+    const boundaries = mapSplitBoundariesToWords(words, [1, 2], 4);
+    const parts = [0, ...boundaries, words.length]
+      .slice(0, -1)
+      .map((start, index) => words.slice(start, [0, ...boundaries, words.length][index + 1]).join(" "));
+
+    expect(boundaries[0]).toBeLessThan(boundaries[1]);
+    expect(parts).toHaveLength(3);
+    expect(parts.every(Boolean)).toBe(true);
+    expect(parts.join(" ")).toBe(words.join(" "));
+  });
+});
+
+describe("verseTextAt repeated translation splits", () => {
+  it("never falls back to the full translation for a collapsed final part", () => {
+    const translation = "In the name of Allah, the Entirely Merciful, the Especially Merciful.";
+    const timing: VerseTiming = {
+      verseNumber: 1,
+      start: 0,
+      end: 6,
+      splits: [1.5, 3],
+      splitWords: [1, 2],
+      splitWordTotal: 4,
+    };
+
+    const parts = [0, 1.5, 3].map((time) => verseTextAt(timing, translation, time));
+    expect(parts.every(Boolean)).toBe(true);
+    expect(new Set(parts).size).toBe(3);
+    expect(parts.join(" ")).toBe(translation);
   });
 });
 

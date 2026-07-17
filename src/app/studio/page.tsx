@@ -749,7 +749,7 @@ export default function StudioPage() {
               the audio buffer two extra times. The dock is behind the overlay
               anyway; it remounts (fresh from the store) on close. */}
           {timelineOpen && !timelineFullscreen && (
-            <div className="mt-3 max-h-[34vh] overflow-y-auto pr-0.5 lg:max-h-[38vh]">
+            <div className="mt-3 max-h-[34vh] overflow-y-auto pr-0.5 lg:max-h-[32vh]">
               {store.audioSource.mode === "imported" ? (
                 editorView === "words" ? <VerseCardEditor /> : <TimelineEditor />
               ) : (
@@ -765,7 +765,10 @@ export default function StudioPage() {
     {/* Full-screen overlays live OUTSIDE the zoomed <main> so they always cover
         the real viewport regardless of the editor zoom level. */}
     {timelineFullscreen && (
-      <FullscreenTimeline onClose={() => setTimelineFullscreen(false)} />
+      <FullscreenTimeline
+        editorView={editorView}
+        onClose={() => setTimelineFullscreen(false)}
+      />
     )}
     {mp4Clip && <Mp4PreviewOverlay clip={mp4Clip} onClose={() => setMp4Clip(null)} />}
     </>

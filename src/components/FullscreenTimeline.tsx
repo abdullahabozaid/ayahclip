@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { TimelineEditor } from "./TimelineEditor";
+import { VerseCardEditor } from "./VerseCardEditor";
 import { ReciterVerseEditor } from "./ReciterVerseEditor";
 import { StudioPreview } from "./StudioPreview";
 import { verseTextAt } from "@/lib/audio-import";
@@ -10,6 +11,7 @@ import { importedPlayer } from "@/lib/imported-player";
 
 interface FullscreenTimelineProps {
   onClose: () => void;
+  editorView?: "words" | "timeline";
 }
 
 /**
@@ -17,7 +19,7 @@ interface FullscreenTimelineProps {
  * more room for the waveform + verse cards + drag handles. Opens from the dock's
  * "Expand" button; ESC or the top-right Close button exits.
  */
-export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
+export function FullscreenTimeline({ onClose, editorView = "timeline" }: FullscreenTimelineProps) {
   const surah = useAppStore((s) => s.surah);
   const selectedVerseNumbers = useAppStore((s) => s.selectedVerseNumbers);
   const isImported = useAppStore((s) => s.audioSource.mode === "imported");
@@ -75,7 +77,7 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
       className="fixed inset-0 z-50 flex flex-col bg-[var(--ink)]"
       role="dialog"
       aria-modal="true"
-      aria-label="Verse timeline editor"
+      aria-label={isImported && editorView === "words" ? "Caption editor" : "Verse timeline editor"}
     >
       {/* Header — quiet, identifies the verses being edited. */}
       <header
@@ -84,7 +86,7 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
       >
         <div className="flex items-baseline gap-3">
           <span className="text-[10px] uppercase tracking-[0.25em] text-gold-soft/80">
-            {isImported ? "Verse Timeline" : "Verse Editor"}
+            {isImported && editorView === "words" ? "Caption Editor" : isImported ? "Verse Timeline" : "Verse Editor"}
           </span>
           {surah && (
             <span className="text-sm text-[var(--muted)]">
@@ -120,7 +122,11 @@ export function FullscreenTimeline({ onClose }: FullscreenTimelineProps) {
         </section>
 
         <section className="flex-1 overflow-y-auto px-5 py-5">
-          {isImported ? <TimelineEditor fullscreen /> : <ReciterVerseEditor />}
+          {isImported ? (
+            editorView === "words" ? <VerseCardEditor /> : <TimelineEditor fullscreen />
+          ) : (
+            <ReciterVerseEditor />
+          )}
         </section>
       </div>
     </div>
