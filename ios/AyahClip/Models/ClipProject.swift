@@ -60,6 +60,7 @@ struct ClipProject: Identifiable, Codable, Equatable {
     var translation: String
     var mediaFilename: String?
     var bRollFilenames: [String]?
+    var sourceReferenceURL: String?
     var createdAt = Date()
     var updatedAt = Date()
     var arabicSize: Double = 36

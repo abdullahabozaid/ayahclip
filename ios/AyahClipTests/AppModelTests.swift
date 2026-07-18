@@ -189,6 +189,7 @@ final class AppModelTests: XCTestCase {
         project.captionStyle = .crispOutline
         project.mediaFilename = "recitation.mp4"
         project.bRollFilenames = ["ocean.mp4", "masjid.mp4"]
+        project.sourceReferenceURL = "https://youtube.com/shorts/abc123"
         let decoded = try JSONDecoder().decode(
             ClipProject.self,
             from: JSONEncoder().encode(project)
@@ -196,6 +197,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(decoded.layout, .lowerThird)
         XCTAssertEqual(decoded.captionStyle, .crispOutline)
         XCTAssertEqual(decoded.allMediaFilenames, ["recitation.mp4", "ocean.mp4", "masjid.mp4"])
+        XCTAssertEqual(decoded.sourceReferenceURL, "https://youtube.com/shorts/abc123")
         var reordered = decoded
         reordered.setMediaFilenames(["masjid.mp4", "recitation.mp4"])
         XCTAssertEqual(reordered.mediaFilename, "masjid.mp4")
@@ -205,7 +207,10 @@ final class AppModelTests: XCTestCase {
     func testSharedLinkInboxOpensImportWorkflow() async throws {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "group.app.ayahclip.mobile"))
         defaults.set("https://www.tiktok.com/@ayahclip/video/123", forKey: "pendingSharedLink")
-        defer { defaults.removeObject(forKey: "pendingSharedLink") }
+        defer {
+            defaults.removeObject(forKey: "pendingSharedLink")
+            UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
+        }
 
         let model = AppModel()
         await model.consumeSharedInbox()
@@ -214,8 +219,102 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.pendingLink, "https://www.tiktok.com/@ayahclip/video/123")
         XCTAssertEqual(
             model.notice,
-            "Link saved as a reference. Import the original file you own from Photos or Files to edit it."
+            "Reference saved on this iPhone. Import the original file you own from Photos or Files to edit it."
         )
+        XCTAssertNil(defaults.string(forKey: "pendingSharedLink"))
+        XCTAssertEqual(
+            UserDefaults.standard.string(forKey: "ayahclip.lastReference.v1"),
+            "https://www.tiktok.com/@ayahclip/video/123"
+        )
+    }
+
+    func testSupportedSocialReferencesAreNormalizedAndPersisted() throws {
+        UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
+        defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }
+        let references = [
+            " https://vm.tiktok.com/ZM123/#watch ",
+            "https://www.instagram.com/reel/ABC123/",
+            "https://youtube.com/shorts/xyz789?feature=share",
+            "https://youtu.be/xyz789"
+        ]
+
+        for reference in references {
+            let model = AppModel()
+            model.pendingLink = reference
+            XCTAssertTrue(model.referenceLink(), reference)
+            XCTAssertFalse(model.pendingLink.contains("#"), reference)
+            XCTAssertEqual(
+                UserDefaults.standard.string(forKey: "ayahclip.lastReference.v1"),
+                model.pendingLink
+            )
+        }
+        XCTAssertEqual(AppModel().pendingLink, "https://youtu.be/xyz789")
+    }
+
+    func testReferenceValidationRejectsUnsafeOrUnsupportedURLs() {
+        UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
+        defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }
+        for reference in [
+            "ftp://tiktok.com/video/123",
+            "https://tiktok.com.evil.example/video/123",
+            "https://user:password@youtube.com/shorts/123",
+            "https://example.com/video/123",
+            String(repeating: "a", count: 2_049)
+        ] {
+            let model = AppModel()
+            model.pendingLink = reference
+            XCTAssertFalse(model.referenceLink(), reference)
+        }
+        XCTAssertNil(UserDefaults.standard.string(forKey: "ayahclip.lastReference.v1"))
+    }
+
+    func testImportedMediaRetainsSavedSocialReference() async throws {
+        UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
+        defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }
+        let source = try await makeTestVideo()
+        let model = AppModel()
+        model.projects = []
+        model.activeProject = nil
+        model.pendingLink = "https://www.instagram.com/reel/ABC123/"
+        XCTAssertTrue(model.referenceLink())
+
+        let imported = await model.importMedia(from: source)
+        XCTAssertTrue(imported)
+        XCTAssertEqual(
+            model.activeProject?.sourceReferenceURL,
+            "https://www.instagram.com/reel/ABC123/"
+        )
+
+        model.saveActiveProject()
+        if let saved = model.projects.first { model.delete(saved) }
+        model.activeProject = nil
+    }
+
+    func testFailedSharedFileImportRemainsQueuedForRetry() async throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "group.app.ayahclip.mobile"))
+        let filename = "missing-\(UUID().uuidString).mov"
+        defaults.set(filename, forKey: "pendingSharedFile")
+        defer { defaults.removeObject(forKey: "pendingSharedFile") }
+
+        let model = AppModel()
+        await model.consumeSharedInbox()
+
+        XCTAssertEqual(defaults.string(forKey: "pendingSharedFile"), filename)
+        XCTAssertNotNil(model.notice)
+    }
+
+    func testInvalidSharedTextIsDeliveredOnceForCorrection() async throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "group.app.ayahclip.mobile"))
+        defaults.set("not a social URL", forKey: "pendingSharedLink")
+        defer { defaults.removeObject(forKey: "pendingSharedLink") }
+
+        let model = AppModel()
+        await model.consumeSharedInbox()
+
+        XCTAssertEqual(model.selectedTab, .import)
+        XCTAssertEqual(model.pendingLink, "not a social URL")
+        XCTAssertNil(defaults.string(forKey: "pendingSharedLink"))
+        XCTAssertEqual(model.notice, "Paste a complete TikTok, Instagram, or YouTube link.")
     }
 
     func testProjectCanBeDuplicatedAndDeleted() {

@@ -24,9 +24,11 @@ final class AppModel {
     var exportURL: URL?
 
     private let projectsKey = "ayahclip.projects.v2"
+    private let referenceKey = "ayahclip.lastReference.v1"
 
     init() {
         loadProjects()
+        pendingLink = UserDefaults.standard.string(forKey: referenceKey) ?? ""
     }
 
     func createProject() {
@@ -125,12 +127,14 @@ final class AppModel {
         }
     }
 
-    func importMedia(from sourceURL: URL) async {
+    @discardableResult
+    func importMedia(from sourceURL: URL) async -> Bool {
         await importMedia(from: [sourceURL])
     }
 
-    func importMedia(from sourceURLs: [URL]) async {
-        guard !sourceURLs.isEmpty else { return }
+    @discardableResult
+    func importMedia(from sourceURLs: [URL]) async -> Bool {
+        guard !sourceURLs.isEmpty else { return false }
         isImporting = true
         defer { isImporting = false }
 
@@ -155,10 +159,12 @@ final class AppModel {
 
             if activeProject == nil { activeProject = .starter }
             let isAddingPrimary = activeProject?.mediaFilename == nil
+            let sourceReference = normalizedReferenceURL(from: pendingLink)?.absoluteString
             updateActive { project in
                 var filenames = destinations.map(\.lastPathComponent)
                 if project.mediaFilename == nil, let primary = filenames.first {
                     project.mediaFilename = primary
+                    if let sourceReference { project.sourceReferenceURL = sourceReference }
                     filenames.removeFirst()
                 }
                 var bRoll = project.bRollFilenames ?? []
@@ -171,25 +177,24 @@ final class AppModel {
                 let duration = try await AVURLAsset(url: primaryURL).load(.duration).seconds
                 updateActive { $0.fitSegments(to: duration) }
             }
+            return true
         } catch {
             destinations.forEach { try? FileManager.default.removeItem(at: $0) }
             notice = "Could not import that file: \(error.localizedDescription)"
+            return false
         }
     }
 
-    func referenceLink() {
-        guard let url = URL(string: pendingLink), let host = url.host else {
+    @discardableResult
+    func referenceLink() -> Bool {
+        guard let url = normalizedReferenceURL(from: pendingLink) else {
             notice = "Paste a complete TikTok, Instagram, or YouTube link."
-            return
+            return false
         }
-        let supported = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be"].contains {
-            host == $0 || host.hasSuffix(".\($0)")
-        }
-        guard supported else {
-            notice = "That platform is not supported yet."
-            return
-        }
-        notice = "Link saved as a reference. Import the original file you own from Photos or Files to edit it."
+        pendingLink = url.absoluteString
+        UserDefaults.standard.set(pendingLink, forKey: referenceKey)
+        notice = "Reference saved on this iPhone. Import the original file you own from Photos or Files to edit it."
+        return true
     }
 
     func receiveSharedURL(_ url: URL) {
@@ -219,20 +224,25 @@ final class AppModel {
            let group = FileManager.default.containerURL(
                forSecurityApplicationGroupIdentifier: appGroup
            ) {
-            defaults.removeObject(forKey: "pendingSharedFile")
             let source = group
                 .appendingPathComponent("Incoming", isDirectory: true)
                 .appendingPathComponent(filename)
             selectedTab = .import
-            await importMedia(from: source)
-            try? FileManager.default.removeItem(at: source)
+            if await importMedia(from: source) {
+                defaults.removeObject(forKey: "pendingSharedFile")
+                try? FileManager.default.removeItem(at: source)
+            }
         }
 
         if let link = defaults.string(forKey: "pendingSharedLink") {
-            defaults.removeObject(forKey: "pendingSharedLink")
             pendingLink = link
             selectedTab = .import
-            referenceLink()
+            // The App Group key is a delivery inbox, not permanent storage.
+            // Once delivered, keep valid references in standard defaults and
+            // leave invalid text in the field for correction without showing
+            // the same alert every time the app becomes active.
+            _ = referenceLink()
+            defaults.removeObject(forKey: "pendingSharedLink")
         }
     }
 
@@ -275,5 +285,24 @@ final class AppModel {
     private func persistProjects() {
         guard let data = try? JSONEncoder().encode(projects) else { return }
         UserDefaults.standard.set(data, forKey: projectsKey)
+    }
+
+    private func normalizedReferenceURL(from value: String) -> URL? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.utf8.count <= 2_048,
+              var components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              components.user == nil, components.password == nil,
+              let host = components.host?.lowercased() else { return nil }
+
+        let supported = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be"].contains {
+            host == $0 || host.hasSuffix(".\($0)")
+        }
+        guard supported else { return nil }
+        components.scheme = scheme
+        components.host = host
+        components.fragment = nil
+        return components.url
     }
 }

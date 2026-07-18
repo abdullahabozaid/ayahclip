@@ -109,7 +109,7 @@ enum VideoExportService {
     }
 
     static func makeTimelineAsset(sourceURLs: [URL], project: ClipProject) async throws -> AVAsset {
-        guard let primaryURL = sourceURLs.first else { throw ExportError.noMedia }
+        guard !sourceURLs.isEmpty else { throw ExportError.noMedia }
         let assets = sourceURLs.map(AVURLAsset.init(url:))
         let primary = assets[0]
         let primaryDuration = try await primary.load(.duration)
