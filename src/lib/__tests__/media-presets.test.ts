@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { STOCK_IMAGES } from "@/lib/stock-library";
 import { VIDEO_PRESETS } from "@/lib/video-presets";
@@ -27,5 +29,16 @@ describe("curated media presets", () => {
     )).toBe(true);
     expect(JSON.stringify([...STOCK_IMAGES, ...VIDEO_PRESETS]).toLowerCase())
       .not.toContain("snaptik");
+  });
+
+  it("keeps the public picker on the reviewed library instead of unmoderated search", () => {
+    const pickerSource = readFileSync(
+      resolve(process.cwd(), "src/components/BackgroundPicker.tsx"),
+      "utf8",
+    );
+
+    expect(pickerSource).toContain("<StockLibrary");
+    expect(pickerSource).not.toContain("PexelsSearch");
+    expect(existsSync(resolve(process.cwd(), "src/app/api/pexels/route.ts"))).toBe(false);
   });
 });

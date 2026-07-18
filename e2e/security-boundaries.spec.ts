@@ -1,10 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("public API boundaries reject cross-site and oversized requests", async ({ request }) => {
-  const pexels = await request.get("/api/pexels?query=nature", {
-    headers: { "sec-fetch-site": "cross-site" },
-  });
-  expect(pexels.status()).toBe(403);
+  expect((await request.get("/api/pexels?query=nature")).status()).toBe(404);
 
   const checkout = await request.post("/api/support/checkout", {
     headers: { origin: "https://attacker.example" },
