@@ -32,6 +32,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Security/backend baseline | Implemented, distributed WAF pending | Zero production dependency advisories; no tracked secrets; headers, local-filesystem isolation, request limits and API boundary tests documented in `docs/2026-07-18-security-backend-audit.md` |
 | Operator analytics | Implemented for account-free beta | Authenticated local report aggregates production Runtime Logs into activation, successful exports, return-visit proxy, funnel, assistance, device/browser/source, and fixed failure metrics without publishing journey IDs or adding a public admin surface; true account retention remains intentionally unavailable without accounts |
 | Account-free browser isolation | Implemented | Three simultaneous production browser contexts retain distinct personal B-roll shelves; the test explicitly does not claim future authenticated tenant isolation |
+| Local backend load gate | Implemented, distributed gate pending | A repeatable built-server test covers 200 concurrent public page requests, exact same-client throttling, ten independent client buckets, and pre-provider rejection of cross-site paid-endpoint traffic; the measured local baseline is 291.4 ms p95 with no 5xx responses. Distributed Vercel/WAF load remains an owner-approved non-production gate. |
 | Web performance and sustained export | Implemented, real-device gate pending | Three deployed Chrome journeys pass import, ingestion, Studio transition, playback, timeline-seek and exact-MP4 budgets; a 512 MB-heap Chrome fixture exports a verified 181-second MP4 |
 | Offline local-media export | Implemented | After Studio is loaded, forced network loss does not prevent an imported local WAV from rendering to a verified MP4; network-backed sources remain explicitly out of scope |
 | Damaged and unsupported import recovery | Implemented | The deployed Import screen rejects corrupt WAV and non-media input, keeps creation disabled, and accepts a valid replacement without requiring a reload |
@@ -76,7 +77,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 ### 4. Production platform
 
 - Finalise authentication, account deletion, data export, rate limits, abuse controls, audit logs, and secrets management.
-- Prove tenant isolation and concurrency behaviour with integration/load tests.
+- **Completed for the account-free warm-instance architecture:** browser isolation plus the local production-server load gate cover independent local stores, parallel public reads, deterministic throttling, independent client buckets, and cross-site paid-endpoint rejection. Future authenticated tenant isolation and distributed Vercel/WAF load remain separate pre-launch gates.
 - Add observability for imports, recognition, alignment, rendering, exports, and failed jobs.
 - Build admin analytics around activation, successful first export, retention, failure rates, and support operations.
 - Treat gated Quranic audio datasets according to their research-only terms; do not ship or redistribute restricted recordings.
