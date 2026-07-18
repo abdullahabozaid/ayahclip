@@ -19,7 +19,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | --- | --- | --- |
 | Desktop editor shell | Implemented, continuing polish | Compact preview/inspector/timeline architecture and browser QA; the phone inspector now has a visible 44px close control inside the drawer, distinct from its backdrop dismissal target, so closing it cannot accidentally activate a preset underneath |
 | Quran navigation | Implemented, polished | Long Surahs use passage-first selection; individual ayahs stay bounded; mobile preview precedes the grid; Browse and Surah requests expose an inline retry instead of leaving permanent skeletons, and invalid Surah routes avoid unnecessary API calls. |
-| Reciter breadth | Implemented, search UX pending | 62 verified recordings: 46 EveryAyah verse files plus 16 complete MP3Quran timed reads; 248/248 source probes and exact-duration browser export matrix |
+| Reciter breadth and discovery | Implemented | 62 verified recordings: 46 EveryAyah verse files plus 16 complete MP3Quran timed reads; English/Arabic search also matches place and style, a word-synchronised filter makes capability explicit, and local favourites plus five recent voices keep the catalog usable. Source evidence includes 248/248 probes, the exact-duration browser export matrix, discovery unit tests, and direct phone/desktop browser coverage. |
 | Word-level timing | Implemented for supported subset | 12 Quran.com timing-capable recitations, labelled honestly |
 | Whole-verse captions | Implemented | Unsupported word-timing voices no longer inherit another reciter's timings |
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
@@ -47,7 +47,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 
 - **Completed:** reciters use an explicit EveryAyah verse-file or MP3Quran chapter-cue source descriptor with shared, provenance-aware preview and export resolution.
 - **Completed for the admitted catalog:** source records carry attribution/removal contacts, representative live probes verify audio and CORS, provider audits record coverage and rights evidence, and a weekly GitHub workflow retains machine-readable health reports. Keep the same admission gate for every new recording.
-- Build searchable English/Arabic reciter selection with recent, favourite, place, style, and timing-capability organization after the resolver is proven.
+- **Completed:** English/Arabic reciter search matches names, place and style; a word-synchronised capability filter, persistent local favourites, and a de-duplicated five-voice recent group keep the 62-recording catalog scannable without introducing accounts or server tracking.
 - **Completed for the curated starter catalogue:** people-free motion coverage now includes water, waterfall, coast, mountains, trails, clouds, dark drives, architecture, night sky, forest and abstract footage. Keep future additions behind the same provenance, sampled-frame and browser-size gates.
 - Add a reviewable ingestion pipeline before exposing dynamic stock search.
 - Add saved style presets for split composition, reciter portrait, rotating B-roll, image sequences, and restrained glow typography.

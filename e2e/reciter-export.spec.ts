@@ -71,7 +71,7 @@ test("timed MP3Quran chapters survive selection, save/reopen, preview and MP4 ex
   await expect(page).toHaveURL(/\/studio/);
   await page.getByRole("button", { name: "Toggle settings", exact: true }).click();
   await page.getByRole("button", { name: "Clip", exact: true }).click();
-  await expect(page.getByLabel("Reciter")).toHaveValue("mansour-salimi");
+  await expect(page.getByLabel("Reciter", { exact: true })).toHaveValue("mansour-salimi");
 
   const play = page.getByRole("button", { name: "Play", exact: true }).first();
   await play.click();
