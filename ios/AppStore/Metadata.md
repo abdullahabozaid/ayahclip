@@ -81,11 +81,11 @@ Version 0.1.0 is an iPhone portrait beta. Build 4 mounts the complete ayahclip.c
 
 - **Version/build:** 0.1.0 (4)
 - **Uploaded:** 18 July 2026
-- **App Store Connect state:** Release candidate pending upload
+- **App Store Connect state:** Upload accepted; Apple processing
 - **Internal group:** AyahClip Internal (1 tester, iPhone 14 Pro)
 - **Main bundle ID:** `app.ayahclip.mobile`
 - **Share extension bundle ID:** `app.ayahclip.mobile.share`
 - **Signing:** Apple Distribution with dedicated App Store profiles for both executables
-- **Validation:** 73 unit tests and 4 end-to-end UI journeys pass; web tests, lint, TypeScript, production build, archive identity, embedded profiles, application groups, and strict code signatures are release gates
+- **Validation:** Focused unit and UI suites for product navigation, real media import, bridge/export, watermark processing, and identity pass; web tests, lint, TypeScript, production build, archive identity, embedded profiles, application groups, and strict code signatures are release gates
 
 Build 4 replaces the disconnected native dashboard with the complete AyahClip web product, keeps a dedicated native MP4 export bridge, and adds permission-gated on-device watermark concealment for an existing file the tester owns or has permission to reuse. It intentionally does not download TikTok, Instagram, or YouTube posts. Physical iPhone validation of recognition, long imports, memory pressure, backgrounding, every template, watermark quality on varied footage, and export/save recovery remains required before any public-release claim.
