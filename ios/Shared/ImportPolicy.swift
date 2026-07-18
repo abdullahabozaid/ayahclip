@@ -44,8 +44,27 @@ enum MediaImportPolicyError: LocalizedError {
 enum SocialReferencePolicy {
     static func normalizedURL(from value: String) -> URL? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.utf8.count <= 2_048,
-              var components = URLComponents(string: trimmed),
+        guard !trimmed.isEmpty, trimmed.utf8.count <= 16_384 else { return nil }
+
+        if let direct = normalizeCandidate(trimmed) {
+            return direct
+        }
+
+        guard let detector = try? NSDataDetector(
+            types: NSTextCheckingResult.CheckingType.link.rawValue
+        ) else { return nil }
+        let range = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
+        for match in detector.matches(in: trimmed, options: [], range: range) {
+            guard let url = match.url,
+                  let normalized = normalizeCandidate(url.absoluteString) else { continue }
+            return normalized
+        }
+        return nil
+    }
+
+    private static func normalizeCandidate(_ value: String) -> URL? {
+        guard value.utf8.count <= 2_048,
+              var components = URLComponents(string: value),
               let scheme = components.scheme?.lowercased(),
               scheme == "https" || scheme == "http",
               components.user == nil, components.password == nil,

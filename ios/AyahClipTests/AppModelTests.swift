@@ -446,6 +446,42 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(AppModel().pendingLink, "https://youtu.be/xyz789")
     }
 
+    func testSocialReferenceCanBeExtractedFromPlatformShareText() throws {
+        UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
+        defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }
+        let sharedText = [
+            (
+                "A beautiful reminder 🤍\nhttps://vm.tiktok.com/ZM123/?_r=1#watch",
+                "https://vm.tiktok.com/ZM123/?_r=1"
+            ),
+            (
+                "Watch this reel from @ayahclip https://www.instagram.com/reel/ABC123/?igsh=share",
+                "https://www.instagram.com/reel/ABC123/?igsh=share"
+            ),
+            (
+                "Surah Maryam — YouTube Shorts\nhttps://youtube.com/shorts/xyz789?feature=share",
+                "https://youtube.com/shorts/xyz789?feature=share"
+            )
+        ]
+
+        for (text, expected) in sharedText {
+            let model = AppModel()
+            model.pendingLink = text
+            XCTAssertTrue(model.referenceLink(), text)
+            XCTAssertEqual(model.pendingLink, expected)
+        }
+    }
+
+    func testSocialReferenceExtractionSkipsUnsupportedAndSpoofedLinks() {
+        UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
+        defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }
+        let model = AppModel()
+        model.pendingLink = "Read https://example.com first, then https://tiktok.com.evil.example/video/123"
+
+        XCTAssertFalse(model.referenceLink())
+        XCTAssertNil(UserDefaults.standard.string(forKey: "ayahclip.lastReference.v1"))
+    }
+
     func testReferenceValidationRejectsUnsafeOrUnsupportedURLs() {
         UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
         defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }

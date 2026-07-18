@@ -25,7 +25,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
 | Curated stock B-roll | Implemented, expansion pending | 20 Pexels photos and 11 Pexels videos visually reviewed as people-free; two provenance-free copied social videos were removed from the public bundle |
 | Multi-clip B-roll timeline | Implemented | Audio-led sequence, split/reorder/trim workflow |
-| Native iOS beta | Implemented, distribution signing pending | 31 unit and 8 UI tests pass, including maximum Dynamic Type, debounced draft autosave/background flush, bounded Undo/Redo, enforced import limits, ordered multi-movie Share Sheet delivery, supported-link validation, and project-owned cancellable exports; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
+| Native iOS beta | Implemented, distribution signing pending | 33 unit and 8 UI tests pass, including maximum Dynamic Type, debounced draft autosave/background flush, bounded Undo/Redo, enforced import limits, ordered multi-movie Share Sheet delivery, direct and caption-wrapped TikTok/Instagram/YouTube reference validation, and project-owned cancellable exports; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
 | TestFlight distribution | Blocked by account configuration | The Mac has a valid Apple Distribution certificate but no AyahClip provisioning profiles or registered iPhone; a signed archive and App Store Connect record for `app.ayahclip.mobile` are still required |
 | Public production readiness | Not complete | Remaining gates below |
 | Security/backend baseline | Implemented, distributed WAF pending | Zero production dependency advisories; no tracked secrets; headers, local-filesystem isolation, request limits and API boundary tests documented in `docs/2026-07-18-security-backend-audit.md` |
@@ -55,6 +55,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 
 - Audit every native page and interaction at small and large Dynamic Type sizes.
 - Finish import, edit, export, save-to-library, and platform share flows for TikTok, Instagram Reels, and YouTube Shorts.
+- **Completed for the reference handoff:** the Share extension and Import page accept direct URLs plus the caption-wrapped text commonly emitted by TikTok, Instagram, and YouTube share sheets, normalize the first supported reference, reject credentials/spoofed domains, and store only the reference while the creator supplies an original file they may edit.
 - Verify cancellation, permissions, low storage, backgrounding, interrupted exports, and offline behaviour.
 - Create the App Store Connect record, upload the signed build, run TestFlight smoke tests, and prepare store metadata/privacy disclosures.
 
