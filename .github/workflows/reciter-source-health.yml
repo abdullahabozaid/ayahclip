@@ -1,0 +1,45 @@
+name: Reciter source health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reciter-source-health
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - id: health
+        continue-on-error: true
+        run: npm run check:reciter-sources -- --output reciter-source-health.json
+      - if: always()
+        run: |
+          if [ -f reciter-source-health.json ]; then
+            echo "## Reciter source health" >> "$GITHUB_STEP_SUMMARY"
+            jq -r '"- Catalog: \(.catalogSize)\n- Checks: \(.checks)\n- Passed: \(.passed)\n- Failed: \(.failed)\n- Healthy: \(.healthy)"' reciter-source-health.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Reciter source health\n\nThe probe ended before it could write a report." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reciter-source-health-${{ github.run_id }}
+          path: reciter-source-health.json
+          if-no-files-found: warn
+          retention-days: 30
+      - if: steps.health.outcome == 'failure'
+        run: exit 1

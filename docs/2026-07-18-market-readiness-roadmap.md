@@ -44,7 +44,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 ### 1. Desktop content and creation breadth
 
 - **Completed:** reciters use an explicit EveryAyah verse-file or MP3Quran chapter-cue source descriptor with shared, provenance-aware preview and export resolution.
-- Add source health checks, provenance, coverage, CORS, and rights evidence for every enabled recitation.
+- **Completed for the admitted catalog:** source records carry attribution/removal contacts, representative live probes verify audio and CORS, provider audits record coverage and rights evidence, and a weekly GitHub workflow retains machine-readable health reports. Keep the same admission gate for every new recording.
 - Build searchable English/Arabic reciter selection with recent, favourite, place, style, and timing-capability organization after the resolver is proven.
 - **Completed for the curated starter catalogue:** people-free motion coverage now includes water, waterfall, coast, mountains, trails, clouds, dark drives, architecture, night sky, forest and abstract footage. Keep future additions behind the same provenance, sampled-frame and browser-size gates.
 - Add a reviewable ingestion pipeline before exposing dynamic stock search.

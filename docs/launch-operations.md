@@ -107,3 +107,13 @@ Application throttles protect a warm function instance. Before spending against 
 As of 2026-07-18, the production Vercel project does not contain `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`. The deployed Google readiness suite proves crawl/index metadata, but Search Console ownership and sitemap submission remain an owner action until Google supplies that token.
 
 Browser profiles are not physical phones. Before announcing broad availability, repeat a short import, final-preview, Save Video and camera-roll playback check on current iPhone Safari and Android Chrome hardware. Record the operating-system version, browser version, source format, clip duration, output type and result. Do not call the physical-device gate complete from emulation alone.
+
+## Reciter source health
+
+Every enabled recording depends on an upstream audio host. `.github/workflows/reciter-source-health.yml` runs each Monday and can also be started manually from GitHub Actions. It probes 1:1, 2:255, 55:13, and 114:6 for every admitted reciter, requires an audio response with browser CORS, publishes the pass/fail totals in the run summary, and retains the complete machine-readable report for 30 days even when a probe fails.
+
+Treat a red source-health run as an availability incident, not as permission to silently swap reciters or providers. Inspect the JSON artifact, confirm the upstream failure from a second network, hide only the affected recording if the failure persists, and preserve its source attribution and removal record. Run the same gate locally before restoring it:
+
+```bash
+npm run check:reciter-sources -- --output /tmp/reciter-source-health.json
+```
