@@ -138,6 +138,45 @@ final class AppModelTests: XCTestCase {
         model.projects.forEach(model.delete)
     }
 
+    func testImportRejectsMoreThanEightTotalClips() async {
+        let model = AppModel()
+        model.createProject()
+        let sources = (0..<9).map { index in
+            FileManager.default.temporaryDirectory.appendingPathComponent("source-\(index).mov")
+        }
+
+        let imported = await model.importMedia(from: sources)
+
+        XCTAssertFalse(imported)
+        XCTAssertFalse(model.isImporting)
+        XCTAssertEqual(
+            model.notice,
+            "A project can contain up to 8 media clips. Remove a clip before adding more."
+        )
+        XCTAssertTrue(model.importedMediaURLs.isEmpty)
+    }
+
+    func testImportRejectsSourceLargerThanFourGigabytesBeforeCopying() async throws {
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("oversized-\(UUID().uuidString).mov")
+        XCTAssertTrue(FileManager.default.createFile(atPath: source.path, contents: Data()))
+        let handle = try FileHandle(forWritingTo: source)
+        try handle.truncate(atOffset: 4 * 1_024 * 1_024 * 1_024 + 1)
+        try handle.close()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let model = AppModel()
+        model.createProject()
+
+        let imported = await model.importMedia(from: source)
+
+        XCTAssertFalse(imported)
+        XCTAssertEqual(
+            model.notice,
+            "Could not import that file: That source is larger than the 4 GB per-clip limit. Trim or compress it, then try again."
+        )
+        XCTAssertTrue(model.importedMediaURLs.isEmpty)
+    }
+
     func testNewClipDeepLinkOpensEditor() throws {
         let model = AppModel()
         XCTAssertNil(model.activeProject)

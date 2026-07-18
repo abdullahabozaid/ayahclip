@@ -30,6 +30,9 @@ final class AppModel {
     private let projectsKey = "ayahclip.projects.v2"
     private let referenceKey = "ayahclip.lastReference.v1"
     private let historyLimit = 100
+    private let maxMediaCount = 8
+    private let maxSingleMediaBytes: Int64 = 4 * 1_024 * 1_024 * 1_024
+    private let storageReserveBytes: Int64 = 1_024 * 1_024 * 1_024
     private var undoStack: [ClipProject] = []
     private var redoStack: [ClipProject] = []
     @ObservationIgnored private var autosaveTask: Task<Void, Never>?
@@ -159,6 +162,11 @@ final class AppModel {
     @discardableResult
     func importMedia(from sourceURLs: [URL]) async -> Bool {
         guard !sourceURLs.isEmpty else { return false }
+        let attachedCount = activeProject?.allMediaFilenames.count ?? 0
+        guard attachedCount + sourceURLs.count <= maxMediaCount else {
+            notice = "A project can contain up to 8 media clips. Remove a clip before adding more."
+            return false
+        }
         isImporting = true
         defer { isImporting = false }
 
@@ -169,6 +177,19 @@ final class AppModel {
             let directory = try mediaDirectory()
             for sourceURL in sourceURLs {
                 if sourceURL.startAccessingSecurityScopedResource() { accessedURLs.append(sourceURL) }
+                let sourceBytes = Int64(
+                    try sourceURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                )
+                guard sourceBytes <= maxSingleMediaBytes else {
+                    throw MediaImportError.fileTooLarge
+                }
+                let availableBytes = try directory.resourceValues(
+                    forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+                ).volumeAvailableCapacityForImportantUsage
+                if let availableBytes,
+                   sourceBytes > max(0, availableBytes - storageReserveBytes) {
+                    throw MediaImportError.insufficientStorage
+                }
                 let extensionName = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
                 let destination = directory.appendingPathComponent("\(UUID().uuidString).\(extensionName)")
                 try FileManager.default.copyItem(at: sourceURL, to: destination)
@@ -428,5 +449,19 @@ final class AppModel {
         components.host = host
         components.fragment = nil
         return components.url
+    }
+}
+
+private enum MediaImportError: LocalizedError {
+    case fileTooLarge
+    case insufficientStorage
+
+    var errorDescription: String? {
+        switch self {
+        case .fileTooLarge:
+            "That source is larger than the 4 GB per-clip limit. Trim or compress it, then try again."
+        case .insufficientStorage:
+            "This iPhone does not have enough free space to copy that source safely. Free some storage, then try again."
+        }
     }
 }
