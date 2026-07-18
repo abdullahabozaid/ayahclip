@@ -90,6 +90,13 @@ describe("reciter audio sources", () => {
       ["peshawa-qadr-kurdi", 268, "https://server16.mp3quran.net/peshawa/Rewayat-Hafs-A-n-Assem/"],
       ["abdulaziz-turki", 282, "https://server16.mp3quran.net/a_turki/Rewayat-Hafs-A-n-Assem/"],
       ["anas-emadi", 314, "https://server16.mp3quran.net/a_alemadi/Rewayat-Hafs-A-n-Assem/"],
+      ["ahmad-hawashi", 6, "https://server11.mp3quran.net/hawashi/"],
+      ["abdulaziz-al-ahmad", 55, "https://server11.mp3quran.net/a_ahmed/"],
+      ["abdullah-al-mousa", 243, "https://server14.mp3quran.net/mousa/Rewayat-Hafs-A-n-Assem/"],
+      ["abdulrahman-al-oosi", 225, "https://server6.mp3quran.net/aloosi/"],
+      ["haitham-al-dokhin", 273, "https://server16.mp3quran.net/h_dukhain/Rewayat-Hafs-A-n-Assem/"],
+      ["tawfeeq-as-sayegh", 17, "https://server6.mp3quran.net/twfeeq/"],
+      ["abdulrasheed-soufi", 258, "https://server16.mp3quran.net/soufi/Rewayat-Hafs-A-n-Assem/"],
     ] as const;
 
     const chapterReciters = reciters.filter((item) => item.audioSource.kind === "chapter-cues");
