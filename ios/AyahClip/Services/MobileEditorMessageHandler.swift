@@ -6,6 +6,7 @@ import Foundation
 /// message; all later updates are decoded before reaching application state.
 final class MobileEditorMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     static let name = "ayahclipBridge"
+    static let exportName = "ayahclipExportBridge"
     static let maxMessageBytes = 2 * 1_024 * 1_024
 
     enum MessageError: LocalizedError, Equatable {

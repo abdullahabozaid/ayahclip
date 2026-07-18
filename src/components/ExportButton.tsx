@@ -15,7 +15,7 @@ import {
   telemetryErrorCode,
   trackProductEvent,
 } from "@/lib/telemetry";
-import { nativeMobileBridgeAvailable } from "@/lib/mobile-bridge";
+import { nativeExportBridgeAvailable } from "@/lib/mobile-bridge";
 
 export function ExportButton() {
   const store = useAppStore();
@@ -93,7 +93,7 @@ export function ExportButton() {
       // devices we park the file behind a "Save to Photos" button.
       const isTouch =
         typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
-      if (nativeMobileBridgeAvailable()
+      if (nativeExportBridgeAvailable()
         || (isTouch && navigator.canShare?.({ files: [file] }))) {
         setPendingFile(file);
       } else {

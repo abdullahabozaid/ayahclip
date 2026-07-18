@@ -75,17 +75,17 @@ The beta intentionally does not download content from TikTok, Instagram, or YouT
 
 ## Current beta scope
 
-Version 0.1.0 is an iPhone portrait beta. Build 3 mounts the shared AyahClip web Studio in the native app, including its import, passage-review, timeline, template, B-roll, caption, and export controls. Recognition results still require creator confirmation and physical-device quality testing; they must not be treated as authoritative Quran text without review.
+Version 0.1.0 is an iPhone portrait beta. Build 4 mounts the complete ayahclip.com product in the native app, including Quran browsing, reciter and imported-media journeys, project library, templates, Studio, timeline, B-roll, captions, and native export. Recognition results still require creator confirmation and physical-device quality testing; they must not be treated as authoritative Quran text without review.
 
 ## Latest internal TestFlight build
 
-- **Version/build:** 0.1.0 (3)
+- **Version/build:** 0.1.0 (4)
 - **Uploaded:** 18 July 2026
-- **App Store Connect state:** Upload succeeded; Apple processing
+- **App Store Connect state:** Release candidate pending upload
 - **Internal group:** AyahClip Internal (1 tester, iPhone 14 Pro)
 - **Main bundle ID:** `app.ayahclip.mobile`
 - **Share extension bundle ID:** `app.ayahclip.mobile.share`
 - **Signing:** Apple Distribution with dedicated App Store profiles for both executables
 - **Validation:** 73 unit tests and 4 end-to-end UI journeys pass; web tests, lint, TypeScript, production build, archive identity, embedded profiles, application groups, and strict code signatures are release gates
 
-Build 3 replaces the disconnected prototype editor with the shared AyahClip Studio, adds native Photos/Files transfer inside Studio, and adds rights-safe on-device watermark cleanup for an existing file the tester owns or has permission to reuse. It intentionally does not download TikTok, Instagram, or YouTube posts. Physical iPhone validation of recognition, long imports, memory pressure, backgrounding, every template, and export/save recovery remains required before any public-release claim.
+Build 4 replaces the disconnected native dashboard with the complete AyahClip web product, keeps a dedicated native MP4 export bridge, and adds permission-gated on-device watermark concealment for an existing file the tester owns or has permission to reuse. It intentionally does not download TikTok, Instagram, or YouTube posts. Physical iPhone validation of recognition, long imports, memory pressure, backgrounding, every template, watermark quality on varied footage, and export/save recovery remains required before any public-release claim.

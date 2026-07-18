@@ -119,11 +119,21 @@ export function nativeMobileBridgeAvailable(
   return Boolean(handler);
 }
 
+export function nativeExportBridgeAvailable(
+  handler: NativeMobileBridgeHandler | undefined = typeof window === "undefined"
+    ? undefined
+    : window.webkit?.messageHandlers?.ayahclipExportBridge
+      ?? window.webkit?.messageHandlers?.ayahclipBridge,
+): boolean {
+  return Boolean(handler);
+}
+
 declare global {
   interface Window {
     webkit?: {
       messageHandlers?: {
         ayahclipBridge?: NativeMobileBridgeHandler;
+        ayahclipExportBridge?: NativeMobileBridgeHandler;
       };
     };
   }
@@ -189,7 +199,8 @@ export async function sendNativeExport(
   onProgress?: (sentBytes: number, totalBytes: number) => void,
   handler: NativeMobileBridgeHandler | undefined = typeof window === "undefined"
     ? undefined
-    : window.webkit?.messageHandlers?.ayahclipBridge,
+    : window.webkit?.messageHandlers?.ayahclipExportBridge
+      ?? window.webkit?.messageHandlers?.ayahclipBridge,
 ): Promise<MobileExportReadyPayload | null> {
   if (!handler) return null;
   if (file.size <= 0 || file.size > 500 * 1_024 * 1_024

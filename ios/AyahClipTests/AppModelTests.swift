@@ -408,9 +408,17 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(MobileEditorBridgeContract.allowsNavigation(
             to: try XCTUnwrap(URL(string: "http://ayahclip.com/studio"))
         ))
-        XCTAssertFalse(MobileEditorBridgeContract.allowsNavigation(
+        XCTAssertTrue(MobileEditorBridgeContract.allowsNavigation(
             to: try XCTUnwrap(URL(string: "https://ayahclip.com/privacy"))
         ))
+        XCTAssertEqual(MobileEditorBridgeContract.productURL().path, "")
+        XCTAssertEqual(
+            URLComponents(
+                url: MobileEditorBridgeContract.productURL(),
+                resolvingAgainstBaseURL: false
+            )?.queryItems?.first(where: { $0.name == "app" })?.value,
+            "ios"
+        )
     }
 
     func testMobileDetectionEnvelopeRoundTripsWithoutLosingReviewState() throws {
@@ -778,7 +786,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(environment.hydrateEnvelope.payload.id, model.activeProject?.id.uuidString)
     }
 
-    func testMobileEditorNavigationPolicyConfinesTopLevelStudio() {
+    func testMobileEditorNavigationPolicyConfinesTopLevelProductToAyahClip() {
         XCTAssertTrue(MobileEditorNavigationPolicy.allows(
             url: URL(string: "https://ayahclip.com/studio?native=ios&bridge=1"),
             isMainFrame: true
@@ -791,7 +799,7 @@ final class AppModelTests: XCTestCase {
             url: URL(string: "https://ayahclip.com/import"),
             isMainFrame: true
         ))
-        XCTAssertFalse(MobileEditorNavigationPolicy.allows(
+        XCTAssertTrue(MobileEditorNavigationPolicy.allows(
             url: URL(string: "https://ayahclip.com/styles"),
             isMainFrame: true
         ))

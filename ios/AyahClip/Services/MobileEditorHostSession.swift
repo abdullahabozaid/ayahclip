@@ -12,10 +12,10 @@ final class MobileEditorHostSession {
     private(set) var webView: WKWebView?
     private var isClosed = false
 
-    init(model: AppModel) throws {
+    init(model: AppModel, entryPoint: MobileEditorEntryPoint = .editor) throws {
         let mediaImports = NativeMediaImportCoordinator()
         self.mediaImports = mediaImports
-        environment = try model.makeMobileEditorEnvironment { payload in
+        environment = try model.makeMobileEditorEnvironment(entryPoint: entryPoint) { payload in
             try await mediaImports.request(payload)
         }
     }

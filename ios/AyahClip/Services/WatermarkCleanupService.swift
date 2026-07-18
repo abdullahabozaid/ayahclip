@@ -17,8 +17,10 @@ enum WatermarkCleanupService {
         }
     }
 
-    /// Blurs both zones used by TikTok's moving watermark. The operation is
-    /// intentionally local-only and accepts an existing user-selected file;
+    /// Conceals both zones used by TikTok's moving watermark using pixels from
+    /// the adjacent frame area. Unlike the previous broad Gaussian blur, this
+    /// keeps text and faces outside the watermark regions sharp. The operation
+    /// is intentionally local-only and accepts an existing user-selected file;
     /// it never downloads or resolves third-party post URLs.
     static func cleanCommonTikTokZones(sourceURL: URL) async throws -> URL {
         let asset = AVURLAsset(url: sourceURL)
@@ -31,12 +33,9 @@ enum WatermarkCleanupService {
             applyingCIFiltersWithHandler: { request in
                 let source = request.sourceImage
                 let extent = source.extent
-                let blurRadius = max(12, min(extent.width, extent.height) * 0.018)
-                let blurred = source
-                    .clampedToExtent()
-                    .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: blurRadius])
                 let output = watermarkRegions(in: extent).reduce(source) { image, region in
-                    blurred.cropped(to: region).composited(over: image)
+                    concealedPatch(from: source, over: region, in: extent)
+                        .composited(over: image)
                 }
                 request.finish(with: output.cropped(to: extent), context: nil)
             }
@@ -94,6 +93,43 @@ enum WatermarkCleanupService {
                 height: height
             )
         ].map { $0.intersection(extent) }
+    }
+
+    /// Stretches a narrow strip immediately beside a watermark over the marked
+    /// area, then softens only the patch boundary. This is deterministic and
+    /// avoids the conspicuous translucent logo left by blurring the watermark
+    /// itself.
+    nonisolated static func concealedPatch(
+        from source: CIImage,
+        over region: CGRect,
+        in extent: CGRect
+    ) -> CIImage {
+        let sampleWidth = max(4, region.width * 0.08)
+        let isLeftZone = region.midX < extent.midX
+        let proposedSample = CGRect(
+            x: isLeftZone ? region.maxX : region.minX - sampleWidth,
+            y: region.minY,
+            width: sampleWidth,
+            height: region.height
+        ).intersection(extent)
+        guard proposedSample.width > 0, proposedSample.height > 0 else {
+            return source.cropped(to: region)
+        }
+
+        let transform = CGAffineTransform(
+            a: region.width / proposedSample.width,
+            b: 0,
+            c: 0,
+            d: region.height / proposedSample.height,
+            tx: region.minX - proposedSample.minX * (region.width / proposedSample.width),
+            ty: region.minY - proposedSample.minY * (region.height / proposedSample.height)
+        )
+        return source
+            .cropped(to: proposedSample)
+            .transformed(by: transform)
+            .cropped(to: region)
+            .applyingFilter("CIMedianFilter")
+            .cropped(to: region)
     }
 }
 

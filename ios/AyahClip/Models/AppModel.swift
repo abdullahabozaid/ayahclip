@@ -231,6 +231,7 @@ final class AppModel {
     }
 
     func makeMobileEditorEnvironment(
+        entryPoint: MobileEditorEntryPoint = .editor,
         mediaImporter: @escaping NativeMediaImporter = { _ in
             throw MobileEditorSession.SessionError.unsupportedMessage
         }
@@ -241,6 +242,7 @@ final class AppModel {
         return try MobileEditorEnvironment(
             project: project,
             mediaURLs: importedMediaURLs,
+            entryPoint: entryPoint,
             allowedMediaRoots: [try mediaDirectory()],
             onProjectChange: { [weak self] envelope, session in
                 guard let self else { throw CancellationError() }

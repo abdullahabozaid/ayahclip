@@ -1,133 +1,60 @@
+import Photos
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// AyahClip has one product surface. The website owns navigation, Quran
+/// selection, imports, templates, Studio and the project library; iOS adds a
+/// secure native export bridge underneath it. This avoids a second mobile UI
+/// drifting behind the working product at ayahclip.com.
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var selections: [PhotosPickerItem] = []
-    @State private var watermarkSelections: [PhotosPickerItem] = []
-    @State private var showFileImporter = false
-    @State private var showWatermarkDisclosure = false
-    @State private var showWatermarkPicker = false
     @AppStorage("ayahclip.onboarding.complete") private var onboardingComplete = false
+    @State private var showWatermarkCleanup = false
 
     var body: some View {
-        @Bindable var model = model
-
-        TabView(selection: $model.selectedTab) {
-            NavigationStack {
-                ProjectsView()
-            }
-            .tag(AppModel.AppTab.projects)
-            .tabItem { Label("Projects", systemImage: "rectangle.stack") }
-
-            NavigationStack {
-                ImportView(
-                    selections: $selections,
-                    showFileImporter: $showFileImporter,
-                    cleanWatermark: { showWatermarkDisclosure = true }
-                )
-            }
-            .tag(AppModel.AppTab.import)
-            .tabItem { Label("Import", systemImage: "plus.circle") }
-
-            NavigationStack {
-                SettingsView()
-            }
-            .tag(AppModel.AppTab.settings)
-            .tabItem { Label("Settings", systemImage: "gearshape") }
-        }
-        .tint(AyahTheme.gold)
-        .background(AyahTheme.ink)
-        .fullScreenCover(item: $model.activeProject) { _ in
-            MobileEditorHostView(model: model)
-                .environment(model)
-        }
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.movie, .video, .audio, .image, .mpeg4Movie, .quickTimeMovie],
-            allowsMultipleSelection: true
-        ) { result in
-            if case let .success(urls) = result {
-                Task { await model.importMedia(from: urls) }
-            }
-        }
-        .onChange(of: selections) { _, items in
-            guard !items.isEmpty else { return }
-            Task {
-                var temporaryURLs: [URL] = []
-                defer { temporaryURLs.forEach { try? FileManager.default.removeItem(at: $0) } }
-                do {
-                    var urls: [URL] = []
-                    for item in items {
-                        guard let imported = try await item.loadTransferable(type: ImportedMedia.self) else {
-                            throw CocoaError(.fileReadUnknown)
-                        }
-                        urls.append(imported.url)
-                        temporaryURLs.append(imported.url)
-                    }
-                    await model.importMedia(from: urls)
-                } catch {
-                    model.notice = "Could not load that media: \(error.localizedDescription)"
-                }
-                selections = []
-            }
-        }
-        .confirmationDialog(
-            "Clean a watermark",
-            isPresented: $showWatermarkDisclosure,
-            titleVisibility: .visible
-        ) {
-            Button("I own it or have permission") { showWatermarkPicker = true }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("AyahClip can blur the two common moving TikTok watermark zones on a video already in your library. Only edit media you own or are allowed to reuse.")
-        }
-        .photosPicker(
-            isPresented: $showWatermarkPicker,
-            selection: $watermarkSelections,
-            maxSelectionCount: 1,
-            matching: .videos
-        )
-        .onChange(of: watermarkSelections) { _, items in
-            guard let item = items.first else { return }
-            Task {
-                defer { watermarkSelections = [] }
-                do {
-                    guard let imported = try await item.loadTransferable(type: ImportedMedia.self) else {
-                        throw CocoaError(.fileReadUnknown)
-                    }
-                    defer { try? FileManager.default.removeItem(at: imported.url) }
-                    let cleaned = try await WatermarkCleanupService.cleanCommonTikTokZones(
-                        sourceURL: imported.url
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if model.activeProject != nil {
+                    MobileEditorHostView(
+                        model: model,
+                        entryPoint: .product,
+                        showsCloseButton: false
                     )
-                    defer { try? FileManager.default.removeItem(at: cleaned) }
-                    if await model.importMedia(from: cleaned) {
-                        model.notice = "Watermark zones cleaned on device. Review the result in Studio before exporting."
+                    .environment(model)
+                } else {
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        ProgressView("Opening AyahClip…")
+                            .tint(AyahTheme.gold)
+                            .foregroundStyle(.white)
                     }
-                } catch {
-                    model.notice = "Could not clean that video: \(error.localizedDescription)"
+                    .task {
+                        if model.activeProject == nil {
+                            model.createProject()
+                        }
+                    }
                 }
             }
-        }
-        .alert("AyahClip", isPresented: Binding(
-            get: { model.notice != nil },
-            set: { if !$0 { model.notice = nil } }
-        )) {
-            Button("OK", role: .cancel) { model.notice = nil }
-        } message: {
-            Text(model.notice ?? "")
-        }
-        .task { await model.consumeSharedInbox() }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                Task { await model.consumeSharedInbox() }
-            } else {
-                // Flush the current draft before suspension; the regular editor
-                // path also debounces writes while the user is actively editing.
-                model.saveActiveProject()
+
+            Button {
+                showWatermarkCleanup = true
+            } label: {
+                Image(systemName: "eraser.line.dashed")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Color.black)
+                    .frame(width: 48, height: 48)
+                    .background(AyahTheme.gold, in: Circle())
+                    .shadow(color: .black.opacity(0.35), radius: 12, y: 5)
             }
+            .accessibilityLabel("Clean watermark")
+            .padding(.trailing, 16)
+            .padding(.bottom, 18)
+        }
+        .sheet(isPresented: $showWatermarkCleanup) {
+            WatermarkCleanupView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: Binding(
             get: { !onboardingComplete },
@@ -138,24 +65,143 @@ struct RootView: View {
     }
 }
 
-private struct ImportedMedia: Transferable {
+private struct WatermarkCleanupView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var selection: PhotosPickerItem?
+    @State private var ownsMedia = false
+    @State private var isProcessing = false
+    @State private var outputURL: URL?
+    @State private var message: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Clean an owned video")
+                            .font(.system(size: 28, weight: .semibold, design: .serif))
+                            .foregroundStyle(AyahTheme.parchment)
+                        Text("Conceals the common moving TikTok watermark zones on device. Review the result before publishing.")
+                            .font(.subheadline)
+                            .foregroundStyle(AyahTheme.muted)
+                    }
+
+                    Toggle("I own this video or have permission to edit it", isOn: $ownsMedia)
+                        .tint(AyahTheme.gold)
+                        .foregroundStyle(AyahTheme.parchment)
+
+                    PhotosPicker(selection: $selection, matching: .videos) {
+                        Label(outputURL == nil ? "Choose a video" : "Choose another video", systemImage: "photo.on.rectangle")
+                            .frame(maxWidth: .infinity, minHeight: 50)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AyahTheme.gold)
+                    .foregroundStyle(.black)
+                    .disabled(!ownsMedia || isProcessing)
+
+                    if isProcessing {
+                        HStack(spacing: 12) {
+                            ProgressView().tint(AyahTheme.gold)
+                            Text("Cleaning locally…")
+                        }
+                        .foregroundStyle(AyahTheme.muted)
+                    }
+
+                    if let outputURL {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Cleaned MP4 ready for review", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(Color.green)
+                            Button("Save to Photos") {
+                                Task { await saveToPhotos(outputURL) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(AyahTheme.gold)
+                            .foregroundStyle(.black)
+                            ShareLink(item: outputURL) {
+                                Label("Share or open in another app", systemImage: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(16)
+                        .background(AyahTheme.inkDeep, in: RoundedRectangle(cornerRadius: 16))
+                    }
+
+                    if let message {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(message.hasPrefix("Saved") ? Color.green : Color.red)
+                    }
+                }
+                .padding(20)
+            }
+            .background(AyahTheme.ink.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onChange(of: selection) { _, item in
+            guard let item else { return }
+            Task { await clean(item) }
+        }
+        .onDisappear {
+            if let outputURL { try? FileManager.default.removeItem(at: outputURL) }
+        }
+    }
+
+    @MainActor
+    private func clean(_ item: PhotosPickerItem) async {
+        isProcessing = true
+        message = nil
+        if let outputURL { try? FileManager.default.removeItem(at: outputURL) }
+        outputURL = nil
+        defer {
+            isProcessing = false
+            selection = nil
+        }
+        do {
+            guard let imported = try await item.loadTransferable(type: CleanupVideo.self) else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            defer { try? FileManager.default.removeItem(at: imported.url) }
+            outputURL = try await WatermarkCleanupService.cleanCommonTikTokZones(
+                sourceURL: imported.url
+            )
+        } catch {
+            message = "Could not clean that video: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func saveToPhotos(_ url: URL) async {
+        do {
+            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard status == .authorized || status == .limited else {
+                message = "Allow Photos access in Settings to save the cleaned video."
+                return
+            }
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            }
+            message = "Saved to Photos."
+        } catch {
+            message = "Could not save to Photos: \(error.localizedDescription)"
+        }
+    }
+}
+
+private struct CleanupVideo: Transferable {
     let url: URL
 
     static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(contentType: .movie) { movie in
-            SentTransferredFile(movie.url)
+        FileRepresentation(contentType: .movie) { video in
+            SentTransferredFile(video.url)
         } importing: { received in
+            let extensionName = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
             let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("photos-\(UUID().uuidString).\(received.file.pathExtension)")
-            try FileManager.default.copyItem(at: received.file, to: destination)
-            return Self(url: destination)
-        }
-        FileRepresentation(contentType: .image) { image in
-            SentTransferredFile(image.url)
-        } importing: { received in
-            let fileExtension = received.file.pathExtension.isEmpty ? "jpg" : received.file.pathExtension
-            let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent("photos-\(UUID().uuidString).\(fileExtension)")
+                .appendingPathComponent("watermark-source-\(UUID().uuidString).\(extensionName)")
             try FileManager.default.copyItem(at: received.file, to: destination)
             return Self(url: destination)
         }
