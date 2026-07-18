@@ -121,8 +121,11 @@ Quran text & translations: [Quran.com](https://quran.com) · Verse audio:
 [MP3Quran](https://mp3quran.net) · Stock media: [Pexels](https://www.pexels.com) ·
 ASR model: FastConformer (CC-BY-4.0).
 
-Public TikTok and Instagram post links are resolved on the self-hosted VPS with
+Public TikTok and Instagram post links, plus bounded segments from a creator's
+own or permitted YouTube videos, are resolved on the self-hosted VPS with
 [yt-dlp](https://github.com/yt-dlp/yt-dlp). The resolver accepts only exact
-platform hosts, never playlists, caps source size and runtime, and prefers the
-platform's clean H.264 playback source. Creators remain responsible for using
-media they own or have permission to edit.
+platform hosts, never playlists, caps source size and runtime, and normalizes
+YouTube segments to H.264/AAC MP4 before browser editing. YouTube imports require
+an explicit start/end range of no more than eight minutes and a rights
+confirmation. Private or restricted creator uploads should be downloaded with
+YouTube Studio and added through local file import instead.

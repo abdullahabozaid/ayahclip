@@ -5,47 +5,76 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import {
+  validateSourceLink,
+  youtubeRangeError,
+  type SourcePlatform,
+} from "@/lib/source-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const execFileAsync = promisify(execFile);
 const MAX_FILE_BYTES = 750 * 1024 * 1024;
-const DOWNLOAD_TIMEOUT_MS = 150_000;
+const DOWNLOAD_TIMEOUT_MS = 300_000;
 const RATE_WINDOW_MS = 10 * 60_000;
 const RATE_LIMIT = 6;
 const requestWindows = new Map<string, number[]>();
-const SUPPORTED_HOSTS = new Set([
-  "tiktok.com",
-  "www.tiktok.com",
-  "m.tiktok.com",
-  "vm.tiktok.com",
-  "vt.tiktok.com",
-  "instagram.com",
-  "www.instagram.com",
-]);
-
-function validatedPostURL(value: unknown): URL | null {
-  if (typeof value !== "string" || value.length > 2_048) return null;
-  try {
-    const url = new URL(value.trim());
-    if (url.protocol !== "https:" || !SUPPORTED_HOSTS.has(url.hostname.toLowerCase())) return null;
-    url.hash = "";
-    return url;
-  } catch {
-    return null;
-  }
-}
-
-function downloadErrorMessage(stderr: string): string {
+function downloadErrorMessage(stderr: string, platform: SourcePlatform): string {
   const lower = stderr.toLowerCase();
   if (lower.includes("login") || lower.includes("private") || lower.includes("not available")) {
-    return "That post is private, restricted, or unavailable. Try a public TikTok or Instagram post.";
+    return platform === "youtube"
+      ? "That YouTube video is private, restricted, or unavailable. You can download your upload in YouTube Studio and add the file instead."
+      : "That post is private, restricted, or unavailable. Try a public TikTok or Instagram post.";
   }
   if (lower.includes("unsupported url")) {
-    return "That link is not a supported TikTok or Instagram post.";
+    return "That link is not a supported YouTube, TikTok, or Instagram video.";
   }
-  return "AyahClip could not resolve that post right now. Check the link and try again.";
+  return platform === "youtube"
+    ? "AyahClip could not import that segment. Check the times, or download your upload in YouTube Studio and add the file instead."
+    : "AyahClip could not resolve that post right now. Check the link and try again.";
+}
+
+export function buildSourceDownloadArgs({
+  platform,
+  url,
+  outputTemplate,
+  startSeconds,
+  endSeconds,
+}: {
+  platform: SourcePlatform;
+  url: string;
+  outputTemplate: string;
+  startSeconds?: number;
+  endSeconds?: number;
+}): string[] {
+  const args = [
+    "--no-playlist",
+    "--no-warnings",
+    "--no-progress",
+    "--restrict-filenames",
+    "--socket-timeout", "25",
+    "--retries", "2",
+  ];
+  if (platform === "youtube") {
+    args.push(
+      "--download-sections", `*${startSeconds}-${endSeconds}`,
+      "--force-keyframes-at-cuts",
+      "--merge-output-format", "mp4",
+      "--recode-video", "mp4",
+      "--format", "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/b[height<=1080][vcodec^=avc1]",
+    );
+  } else {
+    // Prefer an iPhone-compatible, non-watermarked platform source. TikTok's
+    // explicit `download` format is labelled watermarked by its extractor;
+    // the H.264 playback variants are the clean source Repost-style tools use.
+    args.push(
+      "--max-filesize", String(MAX_FILE_BYTES),
+      "--format", "b[format_note!*=watermarked][vcodec^=h264]/b[format_note!*=watermarked]/b",
+    );
+  }
+  args.push("--output", outputTemplate, url);
+  return args;
 }
 
 function isRateLimited(request: Request): boolean {
@@ -78,32 +107,45 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "Paste a complete TikTok or Instagram link." }, { status: 400 });
+    return Response.json({ error: "Paste a complete YouTube, TikTok, or Instagram video link." }, { status: 400 });
   }
 
-  const postURL = validatedPostURL((body as { url?: unknown })?.url);
-  if (!postURL) {
-    return Response.json({ error: "Paste a public TikTok or Instagram post link." }, { status: 400 });
+  const input = body as {
+    url?: unknown;
+    startSeconds?: unknown;
+    endSeconds?: unknown;
+    attestedRights?: unknown;
+  };
+  const source = validateSourceLink(input?.url);
+  if (!source) {
+    return Response.json({ error: "Paste a supported YouTube, TikTok, or Instagram video link." }, { status: 400 });
+  }
+
+  let startSeconds: number | undefined;
+  let endSeconds: number | undefined;
+  if (source.platform === "youtube") {
+    if (input.attestedRights !== true) {
+      return Response.json(
+        { error: "Confirm that you own this YouTube video or have permission to edit it." },
+        { status: 400 },
+      );
+    }
+    startSeconds = typeof input.startSeconds === "number" ? input.startSeconds : NaN;
+    endSeconds = typeof input.endSeconds === "number" ? input.endSeconds : NaN;
+    const rangeError = youtubeRangeError(startSeconds, endSeconds);
+    if (rangeError) return Response.json({ error: rangeError }, { status: 400 });
   }
 
   const workDirectory = await mkdtemp(join(tmpdir(), "ayahclip-social-"));
   const outputTemplate = join(workDirectory, "%(extractor)s-%(id)s.%(ext)s");
   try {
-    await execFileAsync("yt-dlp", [
-      "--no-playlist",
-      "--no-warnings",
-      "--no-progress",
-      "--restrict-filenames",
-      "--socket-timeout", "25",
-      "--retries", "2",
-      "--max-filesize", String(MAX_FILE_BYTES),
-      // Prefer an iPhone-compatible, non-watermarked platform source. TikTok's
-      // explicit `download` format is labelled watermarked by its extractor;
-      // the H.264 playback variants are the clean source SnapTik-style tools use.
-      "--format", "b[format_note!*=watermarked][vcodec^=h264]/b[format_note!*=watermarked]/b",
-      "--output", outputTemplate,
-      postURL.toString(),
-    ], {
+    await execFileAsync(process.env.AYAHCLIP_YTDLP_PATH || "yt-dlp", buildSourceDownloadArgs({
+      platform: source.platform,
+      url: source.url.toString(),
+      outputTemplate,
+      startSeconds,
+      endSeconds,
+    }), {
       timeout: DOWNLOAD_TIMEOUT_MS,
       maxBuffer: 2 * 1024 * 1024,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
@@ -135,6 +177,6 @@ export async function POST(request: Request) {
     const stderr = typeof error === "object" && error && "stderr" in error
       ? String((error as { stderr?: unknown }).stderr ?? "")
       : error instanceof Error ? error.message : "";
-    return Response.json({ error: downloadErrorMessage(stderr) }, { status: 422 });
+    return Response.json({ error: downloadErrorMessage(stderr, source.platform) }, { status: 422 });
   }
 }

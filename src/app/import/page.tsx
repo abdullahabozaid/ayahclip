@@ -47,6 +47,12 @@ import {
   type MobileProjectSnapshotV1,
 } from "@/lib/mobile-bridge";
 import { snapshotFromRecognition } from "@/lib/mobile-project-adapter";
+import {
+  formatTimecode,
+  parseTimecode,
+  sourcePlatform,
+  youtubeRangeError,
+} from "@/lib/source-link";
 
 export default function ImportPage() {
   const router = useRouter();
@@ -57,6 +63,7 @@ export default function ImportPage() {
   const [sourceAudio, setSourceAudio] = useState<Blob | null>(null); // audio used for the clip (extracted for video)
   const [videoUrl, setVideoUrl] = useState<string | null>(null); // original video, to optionally use as background
   const [videoMode, setVideoMode] = useState<"replace-visuals" | "keep-video">("replace-visuals");
+  const [videoFit, setVideoFit] = useState<"cover" | "contain">("contain");
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [decoding, setDecoding] = useState(false);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
@@ -65,7 +72,21 @@ export default function ImportPage() {
   const [socialURL, setSocialURL] = useState("");
   const [socialDownloading, setSocialDownloading] = useState(false);
   const [socialError, setSocialError] = useState<string | null>(null);
+  const [segmentStart, setSegmentStart] = useState("0:00");
+  const [segmentEnd, setSegmentEnd] = useState("3:00");
+  const [youtubeRightsConfirmed, setYoutubeRightsConfirmed] = useState(false);
   const socialImportStartedRef = useRef(false);
+
+  const detectedSourcePlatform = sourcePlatform(socialURL);
+  const isYouTubeSource = detectedSourcePlatform === "youtube";
+  const segmentStartSeconds = parseTimecode(segmentStart);
+  const segmentEndSeconds = parseTimecode(segmentEnd);
+  const segmentProblem = isYouTubeSource
+    ? youtubeRangeError(segmentStartSeconds, segmentEndSeconds)
+    : null;
+  const segmentDuration = segmentStartSeconds !== null && segmentEndSeconds !== null
+    ? Math.max(0, segmentEndSeconds - segmentStartSeconds)
+    : 0;
 
   const [surahId, setSurahId] = useState(1);
   const [from, setFrom] = useState("1");
@@ -237,6 +258,7 @@ export default function ImportPage() {
     const isVideo = isSupportedVideoFile(f);
     setVideoUrl(isVideo ? URL.createObjectURL(f) : null);
     setVideoMode("replace-visuals");
+    setVideoFit("contain");
     setDecoding(true);
     try {
       let audioBlob: Blob = f;
@@ -287,13 +309,34 @@ export default function ImportPage() {
   const importSocialPost = useCallback(async (value = socialURL) => {
     const url = value.trim();
     if (!url || socialDownloading) return;
+    const platform = sourcePlatform(url);
+    const startSeconds = parseTimecode(segmentStart);
+    const endSeconds = parseTimecode(segmentEnd);
+    if (platform === "youtube") {
+      const rangeError = youtubeRangeError(startSeconds, endSeconds);
+      if (rangeError) {
+        setSocialError(rangeError);
+        return;
+      }
+      if (!youtubeRightsConfirmed) {
+        setSocialError("Confirm that you own this YouTube video or have permission to edit it.");
+        return;
+      }
+    }
     setSocialDownloading(true);
     setSocialError(null);
     try {
       const response = await fetch("/api/social-download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({
+          url,
+          ...(platform === "youtube" ? {
+            startSeconds,
+            endSeconds,
+            attestedRights: youtubeRightsConfirmed,
+          } : {}),
+        }),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null) as { error?: string } | null;
@@ -309,18 +352,20 @@ export default function ImportPage() {
       const resolvedFile = new File([blob], name, { type: "video/mp4" });
       await handleFile(resolvedFile);
       setVideoMode("keep-video");
+      if (platform === "youtube") setVideoFit("cover");
       setSocialURL(url);
     } catch (reason) {
       setSocialError(reason instanceof Error ? reason.message : "AyahClip could not download that post.");
     } finally {
       setSocialDownloading(false);
     }
-  }, [handleFile, socialDownloading, socialURL]);
+  }, [handleFile, segmentEnd, segmentStart, socialDownloading, socialURL, youtubeRightsConfirmed]);
 
   const pasteSocialLink = async () => {
     try {
       const pasted = await navigator.clipboard.readText();
       setSocialURL(pasted.trim());
+      setYoutubeRightsConfirmed(false);
       setSocialError(null);
     } catch {
       setSocialError("Clipboard access was blocked. Press and hold the field to paste the link.");
@@ -425,15 +470,15 @@ export default function ImportPage() {
       store.setCurrentVerseIndex(0);
       store.setImportedAudio(url, file?.name ?? "Imported audio", timings);
       if (nativeSnapshot) store.setProjectId(nativeSnapshot.id);
-      // Use the uploaded video itself as the clip background, if requested — shown
-      // whole (contain) so it isn't cropped/zoomed to fill the 9:16 frame.
+      // Use the uploaded video itself as the clip background, with the creator's
+      // chosen initial 9:16 fit. Studio keeps crop, position, and scale editable.
       if (videoUrl && videoMode === "keep-video") {
         store.setBackground({
           type: "video",
           value: nativeSourceURL ?? videoUrl,
           label: file?.name ?? "Uploaded video",
         });
-        store.setBackgroundFit("contain");
+        store.setBackgroundFit(videoFit);
         store.setBackgroundVideoSync(true); // lip-sync the video to the recitation
       }
       if (videoUrl && videoMode === "replace-visuals") {
@@ -556,8 +601,11 @@ export default function ImportPage() {
           </div>
           <div className="mb-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-3">
             <label htmlFor="social-post-url" className="text-xs font-medium text-parchment">
-              Import a TikTok or Instagram post
+              Import from a link
             </label>
+            <p className="mt-1 text-xs leading-4 text-[var(--muted-deep)]">
+              Your YouTube video, or a permitted TikTok or Instagram post.
+            </p>
             <div className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row">
               <input
                 id="social-post-url"
@@ -566,38 +614,120 @@ export default function ImportPage() {
                 autoCapitalize="none"
                 autoCorrect="off"
                 value={socialURL}
-                onChange={(event) => setSocialURL(event.target.value)}
+                onChange={(event) => {
+                  setSocialURL(event.target.value);
+                  setSocialError(null);
+                }}
                 onKeyDown={(event) => event.key === "Enter" && void importSocialPost()}
-                placeholder="https://www.tiktok.com/@user/video/…"
+                placeholder="https://youtube.com/watch?v=…"
                 className="field min-h-11 min-w-0 flex-1 px-3 text-base sm:text-sm"
               />
-              <div className="grid grid-cols-2 gap-2 sm:flex">
-                <button
-                  type="button"
-                  onClick={pasteSocialLink}
-                  disabled={socialDownloading}
-                  className="min-h-11 rounded-lg border border-[var(--hairline)] px-3 text-xs text-parchment disabled:opacity-50"
-                >
-                  Paste
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void importSocialPost()}
-                  disabled={!socialURL.trim() || socialDownloading}
-                  className="btn-gold min-h-11 rounded-lg px-4 text-xs disabled:opacity-50"
-                >
-                  {socialDownloading ? "Downloading…" : "Import link"}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={pasteSocialLink}
+                disabled={socialDownloading}
+                className="min-h-11 rounded-lg border border-[var(--hairline)] px-3 text-xs text-parchment disabled:opacity-50"
+              >
+                Paste
+              </button>
             </div>
+            {isYouTubeSource && (
+              <div className="mt-3 border-t border-[var(--hairline-soft)] pt-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="min-w-0 flex-1 text-xs text-[var(--muted)]">
+                    Start
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={segmentStart}
+                      onChange={(event) => setSegmentStart(event.target.value)}
+                      onBlur={() => segmentStartSeconds !== null && setSegmentStart(formatTimecode(segmentStartSeconds))}
+                      aria-describedby="youtube-range-help"
+                      className="field mt-1 min-h-10 w-full px-3 text-base tabular-nums sm:text-sm"
+                    />
+                  </label>
+                  <span className="pb-3 text-[var(--muted-deep)]" aria-hidden="true">→</span>
+                  <label className="min-w-0 flex-1 text-xs text-[var(--muted)]">
+                    End
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={segmentEnd}
+                      onChange={(event) => setSegmentEnd(event.target.value)}
+                      onBlur={() => segmentEndSeconds !== null && setSegmentEnd(formatTimecode(segmentEndSeconds))}
+                      aria-describedby="youtube-range-help"
+                      className="field mt-1 min-h-10 w-full px-3 text-base tabular-nums sm:text-sm"
+                    />
+                  </label>
+                  <span className="pb-2.5 text-xs tabular-nums text-gold-soft">
+                    {!segmentProblem && segmentDuration > 0 ? `${formatTimecode(segmentDuration)} selected` : "Max 8:00"}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Quick segment length">
+                  {[1, 3, 5].map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      onClick={() => {
+                        const start = parseTimecode(segmentStart) ?? 0;
+                        setSegmentStart(formatTimecode(start));
+                        setSegmentEnd(formatTimecode(start + minutes * 60));
+                        setSocialError(null);
+                      }}
+                      className="rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 text-xs text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment"
+                    >
+                      {minutes} min
+                    </button>
+                  ))}
+                  <span id="youtube-range-help" className="ml-auto text-xs text-[var(--muted-deep)]">Use m:ss or h:mm:ss</span>
+                </div>
+                {segmentProblem && <p className="mt-2 text-xs text-red-300">{segmentProblem}</p>}
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs leading-4 text-[var(--muted)]">
+                  <input
+                    type="checkbox"
+                    checked={youtubeRightsConfirmed}
+                    onChange={(event) => setYoutubeRightsConfirmed(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--gold)]"
+                  />
+                  <span>I own this video or have permission from its rights holder to download and edit it.</span>
+                </label>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => void importSocialPost()}
+              disabled={
+                !socialURL.trim()
+                || socialDownloading
+                || (isYouTubeSource && (Boolean(segmentProblem) || !youtubeRightsConfirmed))
+              }
+              className="btn-gold mt-3 min-h-11 w-full rounded-lg px-4 text-xs disabled:opacity-50"
+            >
+              {socialDownloading
+                ? isYouTubeSource ? "Importing segment…" : "Downloading…"
+                : isYouTubeSource && !segmentProblem
+                  ? `Import ${formatTimecode(segmentDuration)} segment`
+                  : "Import video"}
+            </button>
             {socialDownloading && (
               <p role="status" className="mt-2 text-xs text-gold-soft">
-                Resolving the source video. Keep AyahClip open; public posts usually take a few seconds.
+                {isYouTubeSource
+                  ? "Fetching and trimming this segment. Keep AyahClip open; long source videos can take a minute."
+                  : "Resolving the source video. Keep AyahClip open; public posts usually take a few seconds."}
               </p>
             )}
             {socialError && <p role="alert" className="mt-2 text-xs leading-4 text-red-300">{socialError}</p>}
             <p className="mt-2 hidden text-xs leading-4 text-[var(--muted-deep)] sm:block">
-              Only import media you own or have permission to edit. Private and restricted posts are not supported.
+              Private and restricted videos are not supported. For your own restricted upload, download it in{" "}
+              <a
+                href="https://studio.youtube.com/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-gold-soft underline decoration-gold/40 underline-offset-2 hover:text-parchment"
+              >
+                YouTube Studio
+              </a>{" "}
+              and add the file below.
             </p>
           </div>
           {/* Defensive uploader: explicit ref + button.click() — iOS WebKit
@@ -669,13 +799,35 @@ export default function ImportPage() {
                   description="Use the uploaded video intact and keep it lip-synced in Studio."
                 />
               </div>
-              <p className="mt-3 hidden text-[11px] leading-4 text-[var(--muted-deep)] sm:block">
-                Using your own YouTube upload? Download it from{" "}
-                <a href="https://support.google.com/youtube/answer/56100" target="_blank" rel="noopener noreferrer" className="text-gold-soft underline-offset-2 hover:underline">
-                  YouTube Studio or Google Takeout
-                </a>
-                , then upload the permitted file here. AyahClip does not download other people&apos;s videos.
-              </p>
+              {videoMode === "keep-video" && (
+                <div className="mt-3 flex flex-col gap-2 border-t border-[var(--hairline-soft)] pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-parchment">Mobile framing</p>
+                    <p className="mt-0.5 text-xs sm:text-[10px] text-[var(--muted-deep)]">You can fine-tune crop, position, and scale in Studio.</p>
+                  </div>
+                  <div className="flex shrink-0 gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1" role="radiogroup" aria-label="Initial mobile framing">
+                    {([
+                      ["cover", "Fill 9:16 (crop)"],
+                      ["contain", "Show whole"],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={videoFit === value}
+                        onClick={() => setVideoFit(value)}
+                        className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                          videoFit === value
+                            ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                            : "text-[var(--muted)] hover:text-parchment"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </fieldset>
           )}
         </section>

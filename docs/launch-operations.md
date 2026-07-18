@@ -100,6 +100,16 @@ After the production deployment is ready, verify the deployed routes, security h
 npm run test:production-google
 ```
 
+For a release that changes the link resolver, run its validation/UI suite and a
+live segment smoke using a disposable upload owned by the release operator. Do
+not put an unpublished or third-party URL in committed files or CI logs:
+
+```bash
+npx playwright test e2e/social-source-import.spec.ts --project=google-chrome --workers=1
+YOUTUBE_SOURCE_SMOKE_URL="https://www.youtube.com/watch?v=<owned-test-upload>" \
+  npx playwright test e2e/social-source-import.spec.ts --project=google-chrome --workers=1 -g "permitted YouTube"
+```
+
 Also run the public API and local-filesystem isolation checks:
 
 ```bash
