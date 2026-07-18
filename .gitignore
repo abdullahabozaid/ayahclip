@@ -59,3 +59,8 @@ public/asr/*.onnx
 .env*.local
 .superpowers/
 .superdesign/tmp/
+
+# Xcode local build products
+/ios/DerivedData/
+**/xcuserdata/
+*.xcuserstate

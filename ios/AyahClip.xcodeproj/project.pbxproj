@@ -1,0 +1,762 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		11AEF5791BFEFF520B58A781 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561F2B99968082698392C47B /* ProjectsView.swift */; };
+		123D1C4D68F856337C982E74 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4327B53EAD20575F8F2644FC /* Assets.xcassets */; };
+		20D7827FA6971421100DE8D6 /* AyahTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61922DB54168A48678B7457D /* AyahTheme.swift */; };
+		267A7381E0A2635C2CAD1799 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = F046E5E8ECDA6F8A946998FF /* PrivacyInfo.xcprivacy */; };
+		26F6DA2716F7244A0AE98AB2 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 975F2415C9ED5D5D1146481A /* OnboardingView.swift */; };
+		2D59A3F74A57116315B160A7 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EAF34BB4FE6B64FF5A06E6B /* RootView.swift */; };
+		408D85AA7F430D4BB736E920 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A43E7B39917DA60AE46A85 /* EditorView.swift */; };
+		45EF8D8B7CB403748466D75C /* VideoExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25E9C1DCA52A394EAE426B3 /* VideoExportService.swift */; };
+		562DD0475C936BE6D2D2D283 /* ClipProject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A134191131CC037D7EDFEAE /* ClipProject.swift */; };
+		6645FDD5C187D1206F8FD116 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E3A9EA9F165064212185BB49 /* PrivacyInfo.xcprivacy */; };
+		711E63BF9C20C293057B8DEF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3E09647E3D3A59A2BDAACF /* AppModel.swift */; };
+		7D87D1AC05DC9D287C35BE97 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C4A362C08918BA7A1DACC7 /* AppModelTests.swift */; };
+		821B06CAA6697FB287E28D27 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622BA8E6624825D55A04DAB8 /* SettingsView.swift */; };
+		8FCC71577BE126BA19A4B65D /* AyahClipUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB8C45FE09072DE78783BF8 /* AyahClipUITests.swift */; };
+		B64DB59B23B39B1E52AD64F6 /* UthmanicHafs1Ver18.ttf in Resources */ = {isa = PBXBuildFile; fileRef = EC350CC9CE5E681E281B8F03 /* UthmanicHafs1Ver18.ttf */; };
+		C7C6AA357409BFDF41322897 /* ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88E650A7A336F5BEB953F372 /* ImportView.swift */; };
+		DD629E491AD677B7EBF3C198 /* AyahClipShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 77C869BB69E26926D78613AF /* AyahClipShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E2C65AE6EC062E1E94369C14 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96AA9820895C2AEEA0D288A /* ShareViewController.swift */; };
+		FFBEEC8C28897B0B0D85E442 /* AyahClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E89336E43AA96C601DD95A8 /* AyahClipApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0C8188A1CD09721858BBF111 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67B0463F96FE2B5BD8B14663 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C5221EF52C7D90D5C41B9563;
+			remoteInfo = AyahClip;
+		};
+		1B4B327D430FEA77F8571F0D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67B0463F96FE2B5BD8B14663 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C5221EF52C7D90D5C41B9563;
+			remoteInfo = AyahClip;
+		};
+		4164FBB08B09DB8B08BA2778 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 67B0463F96FE2B5BD8B14663 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 82E24E80AFC968881C2CBC0E;
+			remoteInfo = AyahClipShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F436FFA4E887B16058BAB646 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DD629E491AD677B7EBF3C198 /* AyahClipShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0E89336E43AA96C601DD95A8 /* AyahClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahClipApp.swift; sourceTree = "<group>"; };
+		4327B53EAD20575F8F2644FC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		447AB318F1DC4DE2CBF5B82D /* AyahClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AyahClip.entitlements; sourceTree = "<group>"; };
+		45C4A362C08918BA7A1DACC7 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		522173E4C0D4B3C5F37609BC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		561F2B99968082698392C47B /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
+		61922DB54168A48678B7457D /* AyahTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahTheme.swift; sourceTree = "<group>"; };
+		622BA8E6624825D55A04DAB8 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		77C869BB69E26926D78613AF /* AyahClipShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AyahClipShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		7EAF34BB4FE6B64FF5A06E6B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		88E650A7A336F5BEB953F372 /* ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportView.swift; sourceTree = "<group>"; };
+		975F2415C9ED5D5D1146481A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		9964BB5AF61634A90C7EBE5A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9A134191131CC037D7EDFEAE /* ClipProject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipProject.swift; sourceTree = "<group>"; };
+		9B3E09647E3D3A59A2BDAACF /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		A25E9C1DCA52A394EAE426B3 /* VideoExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExportService.swift; sourceTree = "<group>"; };
+		A96AA9820895C2AEEA0D288A /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		AA630B17CCDEC4799E9517A6 /* AyahClipTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AyahClipTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF0451B62C22FD0B3E33DF68 /* AyahClipUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AyahClipUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C35B4C9C6E64263F5DE64A79 /* AyahClip.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AyahClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CEB8C45FE09072DE78783BF8 /* AyahClipUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahClipUITests.swift; sourceTree = "<group>"; };
+		E3A9EA9F165064212185BB49 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		EC350CC9CE5E681E281B8F03 /* UthmanicHafs1Ver18.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = UthmanicHafs1Ver18.ttf; sourceTree = "<group>"; };
+		F046E5E8ECDA6F8A946998FF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		F5A43E7B39917DA60AE46A85 /* EditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorView.swift; sourceTree = "<group>"; };
+		F87C3568383F351B021F3B8F /* AyahClipShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AyahClipShare.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		09FBB134B5C21A6575A32B76 /* AyahClipUITests */ = {
+			isa = PBXGroup;
+			children = (
+				CEB8C45FE09072DE78783BF8 /* AyahClipUITests.swift */,
+			);
+			path = AyahClipUITests;
+			sourceTree = "<group>";
+		};
+		1482DBB154BF0FAE6F525B0E /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				9B3E09647E3D3A59A2BDAACF /* AppModel.swift */,
+				9A134191131CC037D7EDFEAE /* ClipProject.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		28363A9017022B5E8AFDE050 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A25E9C1DCA52A394EAE426B3 /* VideoExportService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		3249DE8FC8CB445C10461B83 /* AyahClip */ = {
+			isa = PBXGroup;
+			children = (
+				7D5F9632593BB270F244D372 /* App */,
+				448C3AD91CDB4A0E7F4816A5 /* Design */,
+				1482DBB154BF0FAE6F525B0E /* Models */,
+				FD8689EC4FDA97908091E8B4 /* Resources */,
+				28363A9017022B5E8AFDE050 /* Services */,
+				716E2335FDCA1BF7C20FCEE8 /* Views */,
+			);
+			path = AyahClip;
+			sourceTree = "<group>";
+		};
+		448C3AD91CDB4A0E7F4816A5 /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				61922DB54168A48678B7457D /* AyahTheme.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+		716E2335FDCA1BF7C20FCEE8 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				F5A43E7B39917DA60AE46A85 /* EditorView.swift */,
+				88E650A7A336F5BEB953F372 /* ImportView.swift */,
+				975F2415C9ED5D5D1146481A /* OnboardingView.swift */,
+				561F2B99968082698392C47B /* ProjectsView.swift */,
+				7EAF34BB4FE6B64FF5A06E6B /* RootView.swift */,
+				622BA8E6624825D55A04DAB8 /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		7B7989808BC288DBE27469C4 /* AyahClipShare */ = {
+			isa = PBXGroup;
+			children = (
+				F87C3568383F351B021F3B8F /* AyahClipShare.entitlements */,
+				9964BB5AF61634A90C7EBE5A /* Info.plist */,
+				E3A9EA9F165064212185BB49 /* PrivacyInfo.xcprivacy */,
+				A96AA9820895C2AEEA0D288A /* ShareViewController.swift */,
+			);
+			path = AyahClipShare;
+			sourceTree = "<group>";
+		};
+		7D5F9632593BB270F244D372 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				0E89336E43AA96C601DD95A8 /* AyahClipApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		7F2A8E491A42E1AAAA60A766 /* AyahClipTests */ = {
+			isa = PBXGroup;
+			children = (
+				45C4A362C08918BA7A1DACC7 /* AppModelTests.swift */,
+			);
+			path = AyahClipTests;
+			sourceTree = "<group>";
+		};
+		907AB05F6309555C9B44527D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C35B4C9C6E64263F5DE64A79 /* AyahClip.app */,
+				77C869BB69E26926D78613AF /* AyahClipShare.appex */,
+				AA630B17CCDEC4799E9517A6 /* AyahClipTests.xctest */,
+				BF0451B62C22FD0B3E33DF68 /* AyahClipUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BE60AE0DD3EB7155FAE0E8DD /* fonts */ = {
+			isa = PBXGroup;
+			children = (
+				EC350CC9CE5E681E281B8F03 /* UthmanicHafs1Ver18.ttf */,
+			);
+			name = fonts;
+			path = ../public/fonts;
+			sourceTree = "<group>";
+		};
+		C4F53479E76243540F417F10 = {
+			isa = PBXGroup;
+			children = (
+				3249DE8FC8CB445C10461B83 /* AyahClip */,
+				7B7989808BC288DBE27469C4 /* AyahClipShare */,
+				7F2A8E491A42E1AAAA60A766 /* AyahClipTests */,
+				09FBB134B5C21A6575A32B76 /* AyahClipUITests */,
+				BE60AE0DD3EB7155FAE0E8DD /* fonts */,
+				907AB05F6309555C9B44527D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FD8689EC4FDA97908091E8B4 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4327B53EAD20575F8F2644FC /* Assets.xcassets */,
+				447AB318F1DC4DE2CBF5B82D /* AyahClip.entitlements */,
+				522173E4C0D4B3C5F37609BC /* Info.plist */,
+				F046E5E8ECDA6F8A946998FF /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		62A27D635DB1F50C61DC9D55 /* AyahClipTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0866DAA6D3A06ABE2993EBAC /* Build configuration list for PBXNativeTarget "AyahClipTests" */;
+			buildPhases = (
+				EC79C7C71C90FA68E2662ADD /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E1DEF39FD5B08F223E0AF3A6 /* PBXTargetDependency */,
+			);
+			name = AyahClipTests;
+			packageProductDependencies = (
+			);
+			productName = AyahClipTests;
+			productReference = AA630B17CCDEC4799E9517A6 /* AyahClipTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		82E24E80AFC968881C2CBC0E /* AyahClipShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 078C5C1190ABBF3FAFFC488B /* Build configuration list for PBXNativeTarget "AyahClipShare" */;
+			buildPhases = (
+				7E50DFFD2FD8A1B25DFC6854 /* Sources */,
+				2507EC0D4EE66C8D4F8A12BC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AyahClipShare;
+			packageProductDependencies = (
+			);
+			productName = AyahClipShare;
+			productReference = 77C869BB69E26926D78613AF /* AyahClipShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C5221EF52C7D90D5C41B9563 /* AyahClip */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 43E0902389537BB462065BCF /* Build configuration list for PBXNativeTarget "AyahClip" */;
+			buildPhases = (
+				56F1AF58FC4309C66E18535F /* Sources */,
+				C23D5617EB1D5417906A5E64 /* Resources */,
+				F436FFA4E887B16058BAB646 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				873E74C8D3C4D332D63BCF99 /* PBXTargetDependency */,
+			);
+			name = AyahClip;
+			packageProductDependencies = (
+			);
+			productName = AyahClip;
+			productReference = C35B4C9C6E64263F5DE64A79 /* AyahClip.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E64D2C07ABAD03313DE33C19 /* AyahClipUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3947A3895B878B3BB2F8FA94 /* Build configuration list for PBXNativeTarget "AyahClipUITests" */;
+			buildPhases = (
+				13E0BC6A0E738E3300483AA3 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				97664DC4CCC36DE447AD9F6A /* PBXTargetDependency */,
+			);
+			name = AyahClipUITests;
+			packageProductDependencies = (
+			);
+			productName = AyahClipUITests;
+			productReference = BF0451B62C22FD0B3E33DF68 /* AyahClipUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		67B0463F96FE2B5BD8B14663 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					62A27D635DB1F50C61DC9D55 = {
+						DevelopmentTeam = PUV357QJL4;
+						ProvisioningStyle = Automatic;
+					};
+					82E24E80AFC968881C2CBC0E = {
+						DevelopmentTeam = PUV357QJL4;
+						ProvisioningStyle = Automatic;
+					};
+					C5221EF52C7D90D5C41B9563 = {
+						DevelopmentTeam = PUV357QJL4;
+						ProvisioningStyle = Automatic;
+					};
+					E64D2C07ABAD03313DE33C19 = {
+						DevelopmentTeam = PUV357QJL4;
+						ProvisioningStyle = Automatic;
+						TestTargetID = C5221EF52C7D90D5C41B9563;
+					};
+				};
+			};
+			buildConfigurationList = DC581016D3D6EAAA86AD3057 /* Build configuration list for PBXProject "AyahClip" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = C4F53479E76243540F417F10;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 907AB05F6309555C9B44527D /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C5221EF52C7D90D5C41B9563 /* AyahClip */,
+				62A27D635DB1F50C61DC9D55 /* AyahClipTests */,
+				E64D2C07ABAD03313DE33C19 /* AyahClipUITests */,
+				82E24E80AFC968881C2CBC0E /* AyahClipShare */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2507EC0D4EE66C8D4F8A12BC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6645FDD5C187D1206F8FD116 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C23D5617EB1D5417906A5E64 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				123D1C4D68F856337C982E74 /* Assets.xcassets in Resources */,
+				267A7381E0A2635C2CAD1799 /* PrivacyInfo.xcprivacy in Resources */,
+				B64DB59B23B39B1E52AD64F6 /* UthmanicHafs1Ver18.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		13E0BC6A0E738E3300483AA3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8FCC71577BE126BA19A4B65D /* AyahClipUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		56F1AF58FC4309C66E18535F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				711E63BF9C20C293057B8DEF /* AppModel.swift in Sources */,
+				FFBEEC8C28897B0B0D85E442 /* AyahClipApp.swift in Sources */,
+				20D7827FA6971421100DE8D6 /* AyahTheme.swift in Sources */,
+				562DD0475C936BE6D2D2D283 /* ClipProject.swift in Sources */,
+				408D85AA7F430D4BB736E920 /* EditorView.swift in Sources */,
+				C7C6AA357409BFDF41322897 /* ImportView.swift in Sources */,
+				26F6DA2716F7244A0AE98AB2 /* OnboardingView.swift in Sources */,
+				11AEF5791BFEFF520B58A781 /* ProjectsView.swift in Sources */,
+				2D59A3F74A57116315B160A7 /* RootView.swift in Sources */,
+				821B06CAA6697FB287E28D27 /* SettingsView.swift in Sources */,
+				45EF8D8B7CB403748466D75C /* VideoExportService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7E50DFFD2FD8A1B25DFC6854 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E2C65AE6EC062E1E94369C14 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EC79C7C71C90FA68E2662ADD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D87D1AC05DC9D287C35BE97 /* AppModelTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		873E74C8D3C4D332D63BCF99 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 82E24E80AFC968881C2CBC0E /* AyahClipShare */;
+			targetProxy = 4164FBB08B09DB8B08BA2778 /* PBXContainerItemProxy */;
+		};
+		97664DC4CCC36DE447AD9F6A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C5221EF52C7D90D5C41B9563 /* AyahClip */;
+			targetProxy = 0C8188A1CD09721858BBF111 /* PBXContainerItemProxy */;
+		};
+		E1DEF39FD5B08F223E0AF3A6 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C5221EF52C7D90D5C41B9563 /* AyahClip */;
+			targetProxy = 1B4B327D430FEA77F8571F0D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0977578302441286B5BAD8A6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AyahClipShare/AyahClipShare.entitlements;
+				INFOPLIST_FILE = AyahClipShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile.share;
+				PRODUCT_NAME = AyahClipShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		3E3DD25FCE09854CC21070F0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AyahClipShare/AyahClipShare.entitlements;
+				INFOPLIST_FILE = AyahClipShare/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile.share;
+				PRODUCT_NAME = AyahClipShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		4E8BDAD427E6672CB803DED6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AyahClip/Resources/AyahClip.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = AyahClip/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile;
+				PRODUCT_NAME = AyahClip;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5CDB2D81017A7D32B83DB894 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = PUV357QJL4;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		6DA7046BA26AE846D64F37C4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AyahClip.app/AyahClip";
+			};
+			name = Release;
+		};
+		7A718CA7FB3572B989F5232E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AyahClip/Resources/AyahClip.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = AyahClip/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile;
+				PRODUCT_NAME = AyahClip;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		85EBEA2D0153EAA7D29EA1E7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = PUV357QJL4;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		8CA43E5B745D942F1F66CE90 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = AyahClip;
+			};
+			name = Debug;
+		};
+		B161F5CA492A16C86413CA5A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = AyahClip;
+			};
+			name = Release;
+		};
+		F3954C8E0468DD9A6DA82AD9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AyahClip.app/AyahClip";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		078C5C1190ABBF3FAFFC488B /* Build configuration list for PBXNativeTarget "AyahClipShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3E3DD25FCE09854CC21070F0 /* Debug */,
+				0977578302441286B5BAD8A6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		0866DAA6D3A06ABE2993EBAC /* Build configuration list for PBXNativeTarget "AyahClipTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F3954C8E0468DD9A6DA82AD9 /* Debug */,
+				6DA7046BA26AE846D64F37C4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		3947A3895B878B3BB2F8FA94 /* Build configuration list for PBXNativeTarget "AyahClipUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8CA43E5B745D942F1F66CE90 /* Debug */,
+				B161F5CA492A16C86413CA5A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		43E0902389537BB462065BCF /* Build configuration list for PBXNativeTarget "AyahClip" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A718CA7FB3572B989F5232E /* Debug */,
+				4E8BDAD427E6672CB803DED6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DC581016D3D6EAAA86AD3057 /* Build configuration list for PBXProject "AyahClip" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				85EBEA2D0153EAA7D29EA1E7 /* Debug */,
+				5CDB2D81017A7D32B83DB894 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 67B0463F96FE2B5BD8B14663 /* Project object */;
+}
