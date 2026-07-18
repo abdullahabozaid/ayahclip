@@ -87,6 +87,87 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(size.height, VideoExportService.outputSize.height, accuracy: 1)
     }
 
+    func testBrollSequenceRotatesVisualsAtVerseBoundary() async throws {
+        let blue = try await makeTestVideo(
+            color: CIColor(red: 0.02, green: 0.08, blue: 0.92),
+            frameCount: 60
+        )
+        let red = try await makeTestVideo(
+            color: CIColor(red: 0.92, green: 0.04, blue: 0.03),
+            frameCount: 60
+        )
+        var project = ClipProject.starter
+        project.overlayOpacity = 0
+        project.segments = [
+            VerseSegment(verse: 1, start: 0, end: 1, arabic: "", translation: ""),
+            VerseSegment(verse: 2, start: 1, end: 2, arabic: "", translation: "")
+        ]
+
+        let output = try await VideoExportService.render(
+            sourceURLs: [blue, red],
+            project: project
+        )
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: output))
+        generator.appliesPreferredTrackTransform = true
+        let firstFrame = try await generator.image(
+            at: CMTime(seconds: 0.25, preferredTimescale: 600)
+        ).image
+        let secondFrame = try await generator.image(
+            at: CMTime(seconds: 1.25, preferredTimescale: 600)
+        ).image
+        let firstColor = averageRGB(image: firstFrame)
+        let secondColor = averageRGB(image: secondFrame)
+
+        XCTAssertGreaterThan(firstColor.blue, firstColor.red * 3)
+        XCTAssertGreaterThan(secondColor.red, secondColor.blue * 3)
+    }
+
+    func testAudioLedBrollExportPreservesPrimaryAudio() async throws {
+        let recitation = try makeSilentAudio(duration: 2)
+        let firstVisual = try await makeTestVideo(frameCount: 60)
+        let secondVisual = try await makeTestVideo(
+            color: CIColor(red: 0.30, green: 0.08, blue: 0.02),
+            frameCount: 60
+        )
+        var project = ClipProject.starter
+        project.segments = [
+            VerseSegment(verse: 1, start: 0, end: 1),
+            VerseSegment(verse: 2, start: 1, end: 2)
+        ]
+
+        let output = try await VideoExportService.render(
+            sourceURLs: [recitation, firstVisual, secondVisual],
+            project: project
+        )
+        let asset = AVURLAsset(url: output)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        let duration = try await asset.load(.duration).seconds
+
+        XCTAssertEqual(audioTracks.count, 1)
+        XCTAssertEqual(videoTracks.count, 1)
+        XCTAssertEqual(duration, 2, accuracy: 0.08)
+    }
+
+    func testAudioAndBrollImportCreatesEditableSequence() async throws {
+        let recitation = try makeSilentAudio(duration: 2)
+        let visual = try await makeTestVideo(frameCount: 60)
+        let model = AppModel()
+        model.projects = []
+        model.activeProject = nil
+
+        await model.importMedia(from: [recitation, visual])
+
+        XCTAssertEqual(model.importedMediaURLs.count, 2)
+        XCTAssertNotNil(model.activeProject?.mediaFilename)
+        XCTAssertEqual(model.activeProject?.bRollFilenames?.count, 1)
+        XCTAssertEqual(try XCTUnwrap(model.activeProject?.segments.last?.end), 2, accuracy: 0.08)
+
+        model.saveActiveProject()
+        if let saved = model.projects.first { model.delete(saved) }
+        model.activeProject = nil
+    }
+
     func testSideFadePresetDarkensCaptionSideAndExports() async throws {
         let source = try await makeTestVideo()
         var project = ClipProject.starter
@@ -106,12 +187,19 @@ final class AppModelTests: XCTestCase {
         var project = ClipProject.starter
         project.layout = .lowerThird
         project.captionStyle = .crispOutline
+        project.mediaFilename = "recitation.mp4"
+        project.bRollFilenames = ["ocean.mp4", "masjid.mp4"]
         let decoded = try JSONDecoder().decode(
             ClipProject.self,
             from: JSONEncoder().encode(project)
         )
         XCTAssertEqual(decoded.layout, .lowerThird)
         XCTAssertEqual(decoded.captionStyle, .crispOutline)
+        XCTAssertEqual(decoded.allMediaFilenames, ["recitation.mp4", "ocean.mp4", "masjid.mp4"])
+        var reordered = decoded
+        reordered.setMediaFilenames(["masjid.mp4", "recitation.mp4"])
+        XCTAssertEqual(reordered.mediaFilename, "masjid.mp4")
+        XCTAssertEqual(reordered.bRollFilenames, ["recitation.mp4"])
     }
 
     func testSharedLinkInboxOpensImportWorkflow() async throws {
@@ -177,7 +265,41 @@ final class AppModelTests: XCTestCase {
         return total / Double(max(1, count))
     }
 
-    private func makeTestVideo() async throws -> URL {
+    private func averageRGB(image: CGImage) -> (red: Double, green: Double, blue: Double) {
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+        context?.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var red = 0.0
+        var green = 0.0
+        var blue = 0.0
+        var count = 0.0
+        for y in 0..<(height / 4) {
+            for x in 0..<width {
+                let offset = (y * width + x) * 4
+                red += Double(pixels[offset])
+                green += Double(pixels[offset + 1])
+                blue += Double(pixels[offset + 2])
+                count += 1
+            }
+        }
+        return (red / count, green / count, blue / count)
+    }
+
+    private func makeTestVideo(
+        color: CIColor = CIColor(red: 0.04, green: 0.14, blue: 0.24),
+        frameCount: Int = 30
+    ) async throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("ayahclip-export-source-\(UUID().uuidString).mp4")
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
@@ -203,10 +325,10 @@ final class AppModelTests: XCTestCase {
         writer.startSession(atSourceTime: .zero)
 
         let context = CIContext()
-        let frame = CIImage(color: CIColor(red: 0.04, green: 0.14, blue: 0.24))
+        let frame = CIImage(color: color)
             .cropped(to: CGRect(x: 0, y: 0, width: 360, height: 640))
 
-        for index in 0..<30 {
+        for index in 0..<frameCount {
             while !input.isReadyForMoreMediaData { await Task.yield() }
             var pixelBuffer: CVPixelBuffer?
             CVPixelBufferCreate(
@@ -227,6 +349,26 @@ final class AppModelTests: XCTestCase {
         if writer.status != .completed {
             throw writer.error ?? CocoaError(.fileWriteUnknown)
         }
+        return url
+    }
+
+    private func makeSilentAudio(duration: Double) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ayahclip-recitation-\(UUID().uuidString).wav")
+        let sampleRate = 44_100.0
+        let format = try XCTUnwrap(
+            AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)
+        )
+        let frameCount = AVAudioFrameCount(sampleRate * duration)
+        let buffer = try XCTUnwrap(
+            AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)
+        )
+        buffer.frameLength = frameCount
+        if let channel = buffer.floatChannelData?.pointee {
+            channel.initialize(repeating: 0, count: Int(frameCount))
+        }
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        try file.write(from: buffer)
         return url
     }
 }

@@ -59,6 +59,7 @@ struct ClipProject: Identifiable, Codable, Equatable {
     var arabic: String
     var translation: String
     var mediaFilename: String?
+    var bRollFilenames: [String]?
     var createdAt = Date()
     var updatedAt = Date()
     var arabicSize: Double = 36
@@ -98,6 +99,19 @@ struct ClipProject: Identifiable, Codable, Equatable {
         arabic: "تَبَارَكَ الَّذِي بِيَدِهِ الْمُلْكُ وَهُوَ عَلَىٰ كُلِّ شَيْءٍ قَدِيرٌ",
         translation: "Blessed is He in whose hand is dominion, and He is over all things competent."
     )
+
+    var allMediaFilenames: [String] {
+        ([mediaFilename].compactMap { $0 } + (bRollFilenames ?? []))
+            .reduce(into: []) { filenames, filename in
+                if !filenames.contains(filename) { filenames.append(filename) }
+            }
+    }
+
+    mutating func setMediaFilenames(_ filenames: [String]) {
+        mediaFilename = filenames.first
+        let bRoll = Array(filenames.dropFirst())
+        bRollFilenames = bRoll.isEmpty ? nil : bRoll
+    }
 
     func captions(at seconds: Double) -> CaptionContent? {
         guard !segments.isEmpty else {

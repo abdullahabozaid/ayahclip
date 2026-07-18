@@ -109,4 +109,31 @@ final class AyahClipUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+
+    @MainActor
+    func testMultiSourceImportAndMediaGuidanceAreClear() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ayahclip.onboarding.complete", "true"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["New Quran clip"].waitForExistence(timeout: 5))
+        app.buttons["New Quran clip"].tap()
+        XCTAssertTrue(app.buttons["Media"].waitForExistence(timeout: 3))
+        app.buttons["Media"].tap()
+        XCTAssertTrue(app.staticTexts["No media attached"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Add media from the Import tab"].exists)
+        app.buttons["Done"].tap()
+        app.buttons["Close editor"].tap()
+
+        let importTab = app.tabBars.buttons["Import"]
+        XCTAssertTrue(importTab.waitForExistence(timeout: 3))
+        importTab.tap()
+        XCTAssertTrue(app.buttons["Choose videos, Select up to 8 original or B-roll clips"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Browse Files, Recitation audio plus B-roll videos"].exists)
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Multi-source import"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
 }

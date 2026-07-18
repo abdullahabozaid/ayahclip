@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selection: PhotosPickerItem?
+    @State private var selections: [PhotosPickerItem] = []
     @State private var showFileImporter = false
     @AppStorage("ayahclip.onboarding.complete") private var onboardingComplete = false
 
@@ -20,7 +20,7 @@ struct RootView: View {
             .tabItem { Label("Projects", systemImage: "rectangle.stack") }
 
             NavigationStack {
-                ImportView(selection: $selection, showFileImporter: $showFileImporter)
+                ImportView(selections: $selections, showFileImporter: $showFileImporter)
             }
             .tag(AppModel.AppTab.import)
             .tabItem { Label("Import", systemImage: "plus.circle") }
@@ -39,25 +39,32 @@ struct RootView: View {
         }
         .fileImporter(
             isPresented: $showFileImporter,
-            allowedContentTypes: [.movie, .video, .audio, .mpeg4Movie, .quickTimeMovie]
+            allowedContentTypes: [.movie, .video, .audio, .mpeg4Movie, .quickTimeMovie],
+            allowsMultipleSelection: true
         ) { result in
-            if case let .success(url) = result {
-                Task { await model.importMedia(from: url) }
+            if case let .success(urls) = result {
+                Task { await model.importMedia(from: urls) }
             }
         }
-        .onChange(of: selection) { _, item in
-            guard let item else { return }
+        .onChange(of: selections) { _, items in
+            guard !items.isEmpty else { return }
             Task {
+                var temporaryURLs: [URL] = []
+                defer { temporaryURLs.forEach { try? FileManager.default.removeItem(at: $0) } }
                 do {
-                    guard let imported = try await item.loadTransferable(type: ImportedMovie.self) else {
-                        model.notice = "That Photos item could not be loaded."
-                        return
+                    var urls: [URL] = []
+                    for item in items {
+                        guard let imported = try await item.loadTransferable(type: ImportedMovie.self) else {
+                            throw CocoaError(.fileReadUnknown)
+                        }
+                        urls.append(imported.url)
+                        temporaryURLs.append(imported.url)
                     }
-                    await model.importMedia(from: imported.url)
+                    await model.importMedia(from: urls)
                 } catch {
-                    model.notice = "Could not load that video: \(error.localizedDescription)"
+                    model.notice = "Could not load those videos: \(error.localizedDescription)"
                 }
-                selection = nil
+                selections = []
             }
         }
         .alert("AyahClip", isPresented: Binding(

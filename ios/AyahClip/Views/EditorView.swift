@@ -11,6 +11,7 @@ struct EditorView: View {
     @State private var showCaptionEditor = false
     @State private var selectedSegmentID: UUID?
     @State private var presentedTool: EditorTool?
+    @State private var playerLoadID = UUID()
 
     var body: some View {
         @Bindable var model = model
@@ -29,7 +30,7 @@ struct EditorView: View {
             preparePlayer()
             selectedSegmentID = selectedSegmentID ?? project.segments.first?.id
         }
-        .onChange(of: model.importedMediaURL) { _, _ in preparePlayer() }
+        .onChange(of: model.importedMediaURLs) { _, _ in preparePlayer() }
         .task { await trackPlayback() }
         .sheet(item: $presentedTool) { tool in
             EditorToolPanel(
@@ -210,15 +211,23 @@ struct EditorView: View {
     }
 
     private func preparePlayer() {
-        guard let url = model.importedMediaURL else {
+        let urls = model.importedMediaURLs
+        guard !urls.isEmpty else {
             player = nil
             return
         }
-        let newPlayer = AVPlayer(url: url)
-        player = newPlayer
+        let loadID = UUID()
+        playerLoadID = loadID
+        player = nil
         Task {
-            if let loaded = try? await AVURLAsset(url: url).load(.duration).seconds,
-               loaded.isFinite, loaded > 0 {
+            guard let asset = try? await VideoExportService.makeTimelineAsset(
+                sourceURLs: urls,
+                project: project
+            ), playerLoadID == loadID else { return }
+            let loaded = (try? await asset.load(.duration).seconds) ?? 0
+            guard playerLoadID == loadID else { return }
+            player = AVPlayer(playerItem: AVPlayerItem(asset: asset))
+            if loaded.isFinite, loaded > 0 {
                 duration = loaded
                 playhead = 0
             }
@@ -545,7 +554,7 @@ private struct EditorToolPanel: View {
         case .edit: 245
         case .captions: 250
         case .style: 285
-        case .media: 190
+        case .media: 300
         case .export: 220
         }
     }
@@ -872,20 +881,86 @@ private struct MediaControls: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: model.importedMediaURL == nil ? "film.stack" : "checkmark.circle.fill")
-                .font(.title2)
-                .foregroundStyle(model.importedMediaURL == nil ? AyahTheme.muted : Color.green)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.importedMediaURL == nil ? "No background media" : "Original media attached")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AyahTheme.parchment)
-                Text(model.importedMediaURL == nil ? "Close the editor and use Import to add a video." : "Stored privately on this device")
+        let count = model.importedMediaURLs.count
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: count == 0 ? "film.stack" : "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(count == 0 ? AyahTheme.muted : Color.green)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mediaTitle(count: count))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AyahTheme.parchment)
+                    Text(count == 0
+                        ? "Add media from the Import tab"
+                        : count > 1
+                            ? "Visuals rotate at verse boundaries"
+                            : "Stored privately on this device")
+                        .font(.caption)
+                        .foregroundStyle(AyahTheme.muted)
+                }
+            }
+
+            if count > 0 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(model.importedMediaURLs.indices), id: \.self) { index in
+                            mediaCard(index: index, count: count)
+                        }
+                    }
+                }
+            } else {
+                Text("Close the editor and use Import to add a recitation or video sequence.")
                     .font(.caption)
                     .foregroundStyle(AyahTheme.muted)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func mediaTitle(count: Int) -> String {
+        switch count {
+        case 0: "No media attached"
+        case 1: "Primary media attached"
+        default: "\(count)-source B-roll sequence"
+        }
+    }
+
+    private func mediaCard(index: Int, count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: index == 0 ? "waveform" : "film")
+                    .foregroundStyle(index == 0 ? AyahTheme.goldSoft : AyahTheme.muted)
+                Text(index == 0 ? "Primary" : "B-roll \(index)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AyahTheme.parchment)
+            }
+            HStack(spacing: 4) {
+                Button { Task { await model.moveMedia(from: index, to: index - 1) } } label: {
+                    Image(systemName: "chevron.left")
+                }
+                .disabled(index == 0)
+                Button { Task { await model.moveMedia(from: index, to: index + 1) } } label: {
+                    Image(systemName: "chevron.right")
+                }
+                .disabled(index >= count - 1)
+                Button(role: .destructive) {
+                    Task { await model.removeMedia(at: index) }
+                } label: {
+                    Image(systemName: "trash")
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .buttonStyle(.borderless)
+        }
+        .padding(10)
+        .frame(width: 116, alignment: .leading)
+        .background(AyahTheme.inkDeep)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(index == 0 ? AyahTheme.gold.opacity(0.55) : AyahTheme.hairline)
+        }
     }
 }
 

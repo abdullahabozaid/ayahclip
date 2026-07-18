@@ -14,12 +14,14 @@ enum VideoExportService {
 
     enum ExportError: LocalizedError {
         case noVideoTrack
+        case noMedia
         case cannotCreateExporter
         case exportFailed(String)
 
         var errorDescription: String? {
             switch self {
             case .noVideoTrack: "The selected file has no video track."
+            case .noMedia: "Add a recitation or video before exporting."
             case .cannotCreateExporter: "This video format cannot be exported on this device."
             case let .exportFailed(message): message
             }
@@ -27,7 +29,11 @@ enum VideoExportService {
     }
 
     static func render(sourceURL: URL, project: ClipProject) async throws -> URL {
-        let asset = AVURLAsset(url: sourceURL)
+        try await render(sourceURLs: [sourceURL], project: project)
+    }
+
+    static func render(sourceURLs: [URL], project: ClipProject) async throws -> URL {
+        let asset = try await makeTimelineAsset(sourceURLs: sourceURLs, project: project)
         guard try await asset.loadTracks(withMediaType: .video).first != nil else {
             throw ExportError.noVideoTrack
         }
@@ -100,6 +106,83 @@ enum VideoExportService {
             )
         }
         return destination
+    }
+
+    static func makeTimelineAsset(sourceURLs: [URL], project: ClipProject) async throws -> AVAsset {
+        guard let primaryURL = sourceURLs.first else { throw ExportError.noMedia }
+        let assets = sourceURLs.map(AVURLAsset.init(url:))
+        let primary = assets[0]
+        let primaryDuration = try await primary.load(.duration)
+        let durationSeconds = primaryDuration.seconds
+        guard durationSeconds.isFinite, durationSeconds > 0 else {
+            throw ExportError.exportFailed("The primary media has no usable duration.")
+        }
+
+        var videoSources: [(track: AVAssetTrack, duration: CMTime)] = []
+        for asset in assets {
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else { continue }
+            let timeRange = try await track.load(.timeRange)
+            guard timeRange.duration.seconds > 0 else { continue }
+            videoSources.append((track, timeRange.duration))
+        }
+        guard !videoSources.isEmpty else { throw ExportError.noVideoTrack }
+
+        if assets.count == 1, try await !primary.loadTracks(withMediaType: .video).isEmpty {
+            return primary
+        }
+
+        let composition = AVMutableComposition()
+        if let sourceAudio = try await primary.loadTracks(withMediaType: .audio).first,
+           let audioTrack = composition.addMutableTrack(
+               withMediaType: .audio,
+               preferredTrackID: kCMPersistentTrackID_Invalid
+           ) {
+            let sourceRange = try await sourceAudio.load(.timeRange)
+            let audioDuration = CMTimeMinimum(sourceRange.duration, primaryDuration)
+            try audioTrack.insertTimeRange(
+                CMTimeRange(start: sourceRange.start, duration: audioDuration),
+                of: sourceAudio,
+                at: .zero
+            )
+        }
+
+        guard let compositionVideo = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else { throw ExportError.noVideoTrack }
+        compositionVideo.preferredTransform = try await videoSources[0].track.load(.preferredTransform)
+
+        let boundaries = timelineBoundaries(project: project, duration: durationSeconds)
+        var cursor = CMTime.zero
+        for index in 0..<(boundaries.count - 1) {
+            let intervalDuration = boundaries[index + 1] - boundaries[index]
+            let source = videoSources[index % videoSources.count]
+            var remaining = intervalDuration
+            while remaining > 0.001 {
+                let piece = min(remaining, source.duration.seconds)
+                let sourceRange = try await source.track.load(.timeRange)
+                try compositionVideo.insertTimeRange(
+                    CMTimeRange(
+                        start: sourceRange.start,
+                        duration: CMTime(seconds: piece, preferredTimescale: 600)
+                    ),
+                    of: source.track,
+                    at: cursor
+                )
+                cursor = cursor + CMTime(seconds: piece, preferredTimescale: 600)
+                remaining -= piece
+            }
+        }
+        return composition
+    }
+
+    private static func timelineBoundaries(project: ClipProject, duration: Double) -> [Double] {
+        var values = [0.0]
+        values.append(contentsOf: project.segments.map(\.end).filter { $0 > 0 && $0 < duration })
+        values.append(duration)
+        return values.sorted().reduce(into: []) { result, value in
+            if result.last.map({ abs($0 - value) > 0.001 }) ?? true { result.append(value) }
+        }
     }
 
     private static func makeCaptionPlate(

@@ -15,7 +15,8 @@ final class AppModel {
     var projects: [ClipProject] = []
     var selectedTab: AppTab = .projects
     var activeProject: ClipProject?
-    var importedMediaURL: URL?
+    var importedMediaURLs: [URL] = []
+    var importedMediaURL: URL? { importedMediaURLs.first }
     var pendingLink = ""
     var notice: String?
     var isImporting = false
@@ -30,12 +31,12 @@ final class AppModel {
 
     func createProject() {
         activeProject = .starter
-        importedMediaURL = nil
+        importedMediaURLs = []
     }
 
     func open(_ project: ClipProject) {
         activeProject = project
-        importedMediaURL = project.mediaFilename.flatMap(mediaURL(for:))
+        importedMediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
     }
 
     func duplicate(_ project: ClipProject) {
@@ -50,10 +51,11 @@ final class AppModel {
 
     func delete(_ project: ClipProject) {
         projects.removeAll { $0.id == project.id }
-        if let filename = project.mediaFilename,
-           !projects.contains(where: { $0.mediaFilename == filename }),
-           let url = mediaURL(for: filename) {
-            try? FileManager.default.removeItem(at: url)
+        for filename in project.allMediaFilenames where
+            !projects.contains(where: { $0.allMediaFilenames.contains(filename) }) {
+            if let url = mediaURL(for: filename) {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
         persistProjects()
     }
@@ -68,7 +70,6 @@ final class AppModel {
         }
         activeProject = project
         persistProjects()
-        notice = "Saved on this device"
     }
 
     func closeEditor() {
@@ -84,28 +85,94 @@ final class AppModel {
         activeProject = project
     }
 
+    func moveMedia(from sourceIndex: Int, to destinationIndex: Int) async {
+        guard var project = activeProject else { return }
+        var filenames = project.allMediaFilenames
+        guard filenames.indices.contains(sourceIndex), filenames.indices.contains(destinationIndex) else { return }
+        let filename = filenames.remove(at: sourceIndex)
+        filenames.insert(filename, at: destinationIndex)
+        project.setMediaFilenames(filenames)
+        project.updatedAt = Date()
+        activeProject = project
+        importedMediaURLs = filenames.compactMap(mediaURL(for:))
+        exportURL = nil
+        if let primaryURL = importedMediaURLs.first,
+           let duration = try? await AVURLAsset(url: primaryURL).load(.duration).seconds {
+            updateActive { $0.fitSegments(to: duration) }
+        }
+    }
+
+    func removeMedia(at index: Int) async {
+        guard var project = activeProject else { return }
+        var filenames = project.allMediaFilenames
+        guard filenames.indices.contains(index) else { return }
+        let removed = filenames.remove(at: index)
+        project.setMediaFilenames(filenames)
+        project.updatedAt = Date()
+        activeProject = project
+        importedMediaURLs = filenames.compactMap(mediaURL(for:))
+        exportURL = nil
+
+        let referencedElsewhere = projects.contains {
+            $0.id != project.id && $0.allMediaFilenames.contains(removed)
+        }
+        if !referencedElsewhere, let url = mediaURL(for: removed) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        if let primaryURL = importedMediaURLs.first,
+           let duration = try? await AVURLAsset(url: primaryURL).load(.duration).seconds {
+            updateActive { $0.fitSegments(to: duration) }
+        }
+    }
+
     func importMedia(from sourceURL: URL) async {
+        await importMedia(from: [sourceURL])
+    }
+
+    func importMedia(from sourceURLs: [URL]) async {
+        guard !sourceURLs.isEmpty else { return }
         isImporting = true
         defer { isImporting = false }
 
-        let didAccess = sourceURL.startAccessingSecurityScopedResource()
-        defer { if didAccess { sourceURL.stopAccessingSecurityScopedResource() } }
-
+        var destinations: [URL] = []
+        var accessedURLs: [URL] = []
+        defer { accessedURLs.forEach { $0.stopAccessingSecurityScopedResource() } }
         do {
             let directory = try mediaDirectory()
-            let extensionName = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
-            let destination = directory.appendingPathComponent("\(UUID().uuidString).\(extensionName)")
-            try FileManager.default.copyItem(at: sourceURL, to: destination)
-            importedMediaURL = destination
-            if activeProject == nil { activeProject = .starter }
-            let asset = AVURLAsset(url: destination)
-            let duration = try await asset.load(.duration).seconds
-            updateActive {
-                $0.mediaFilename = destination.lastPathComponent
-                $0.fitSegments(to: duration)
+            for sourceURL in sourceURLs {
+                if sourceURL.startAccessingSecurityScopedResource() { accessedURLs.append(sourceURL) }
+                let extensionName = sourceURL.pathExtension.isEmpty ? "mov" : sourceURL.pathExtension
+                let destination = directory.appendingPathComponent("\(UUID().uuidString).\(extensionName)")
+                try FileManager.default.copyItem(at: sourceURL, to: destination)
+                destinations.append(destination)
+                let asset = AVURLAsset(url: destination)
+                let hasVideo = try await !asset.loadTracks(withMediaType: .video).isEmpty
+                let hasAudio = try await !asset.loadTracks(withMediaType: .audio).isEmpty
+                guard hasVideo || hasAudio else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
             }
-            notice = "Media imported locally"
+
+            if activeProject == nil { activeProject = .starter }
+            let isAddingPrimary = activeProject?.mediaFilename == nil
+            updateActive { project in
+                var filenames = destinations.map(\.lastPathComponent)
+                if project.mediaFilename == nil, let primary = filenames.first {
+                    project.mediaFilename = primary
+                    filenames.removeFirst()
+                }
+                var bRoll = project.bRollFilenames ?? []
+                bRoll.append(contentsOf: filenames)
+                project.bRollFilenames = bRoll
+            }
+            importedMediaURLs = activeProject?.allMediaFilenames.compactMap(mediaURL(for:)) ?? []
+
+            if isAddingPrimary, let primaryURL = importedMediaURLs.first {
+                let duration = try await AVURLAsset(url: primaryURL).load(.duration).seconds
+                updateActive { $0.fitSegments(to: duration) }
+            }
         } catch {
+            destinations.forEach { try? FileManager.default.removeItem(at: $0) }
             notice = "Could not import that file: \(error.localizedDescription)"
         }
     }
@@ -170,15 +237,14 @@ final class AppModel {
     }
 
     func exportActiveProject() async {
-        guard let project = activeProject, let sourceURL = importedMediaURL else {
+        guard let project = activeProject, !importedMediaURLs.isEmpty else {
             notice = "Import a video before exporting."
             return
         }
         isExporting = true
         defer { isExporting = false }
         do {
-            exportURL = try await VideoExportService.render(sourceURL: sourceURL, project: project)
-            notice = "Your captioned MP4 is ready to share."
+            exportURL = try await VideoExportService.render(sourceURLs: importedMediaURLs, project: project)
         } catch {
             notice = "Export failed: \(error.localizedDescription)"
         }

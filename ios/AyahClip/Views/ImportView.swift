@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ImportView: View {
     @Environment(AppModel.self) private var model
-    @Binding var selection: PhotosPickerItem?
+    @Binding var selections: [PhotosPickerItem]
     @Binding var showFileImporter: Bool
 
     var body: some View {
@@ -15,17 +15,17 @@ struct ImportView: View {
                     Text("Bring your media")
                         .font(.system(size: 30, weight: .semibold, design: .serif))
                         .foregroundStyle(AyahTheme.parchment)
-                    Text("Choose an original video or audio file you own. Processing stays on device.")
+                    Text("Start with your recitation or original video, then add B-roll. Processing stays on device.")
                         .font(.subheadline)
                         .foregroundStyle(AyahTheme.muted)
                 }
 
                 VStack(spacing: 12) {
-                    PhotosPicker(selection: $selection, matching: .videos) {
-                        ImportAction(title: "Choose from Photos", detail: "Videos in your library", icon: "photo.on.rectangle")
+                    PhotosPicker(selection: $selections, maxSelectionCount: 8, matching: .videos) {
+                        ImportAction(title: "Choose videos", detail: "Select up to 8 original or B-roll clips", icon: "photo.on.rectangle")
                     }
                     Button { showFileImporter = true } label: {
-                        ImportAction(title: "Browse Files", detail: "Video or recitation audio", icon: "folder")
+                        ImportAction(title: "Browse Files", detail: "Recitation audio plus B-roll videos", icon: "folder")
                     }
                 }
                 .buttonStyle(.plain)
@@ -98,4 +98,3 @@ private struct ImportAction: View {
         .ayahPanel()
     }
 }
-
