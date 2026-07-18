@@ -74,6 +74,8 @@ private struct WatermarkCleanupView: View {
     @State private var message: String?
 
     var body: some View {
+        let pickerTitle = outputURL == nil ? "Choose a video" : "Choose another video"
+
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -91,7 +93,7 @@ private struct WatermarkCleanupView: View {
                         .foregroundStyle(AyahTheme.parchment)
 
                     PhotosPicker(selection: $selection, matching: .videos) {
-                        Label(outputURL == nil ? "Choose a video" : "Choose another video", systemImage: "photo.on.rectangle")
+                        Label(pickerTitle, systemImage: "photo.on.rectangle")
                             .frame(maxWidth: .infinity, minHeight: 50)
                     }
                     .buttonStyle(.borderedProminent)
