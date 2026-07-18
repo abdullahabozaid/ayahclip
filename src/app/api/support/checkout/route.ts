@@ -83,8 +83,13 @@ export async function POST(req: NextRequest) {
     const { url } = await createCheckoutSession(params);
     return NextResponse.json({ url });
   } catch (err) {
+    // Provider messages can contain request identifiers or configuration
+    // details. Keep a coarse server-side category and return fixed public copy.
+    console.error("[support-checkout] Stripe session creation failed", {
+      errorType: err instanceof Error ? err.name : "unknown",
+    });
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Could not start checkout" },
+      { error: "Could not start checkout. Please try again." },
       { status: 502 }
     );
   }
