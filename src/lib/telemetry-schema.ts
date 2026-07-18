@@ -43,6 +43,15 @@ const JOURNEY_ID = /^[a-zA-Z0-9-]{12,64}$/;
 const SAFE_PATH = /^\/[a-zA-Z0-9_/:.-]{0,80}$/;
 const SAFE_CODE = /^[a-z0-9_]{2,40}$/;
 
+function addDurationBucket(
+  payload: ProductEventPayload,
+  value: Record<string, unknown>
+): void {
+  if (typeof value.durationBucket === "string" && DURATION_SET.has(value.durationBucket)) {
+    payload.durationBucket = value.durationBucket as DurationBucket;
+  }
+}
+
 /** Strictly accept the small, documented event vocabulary. Unknown keys are
  * discarded so future UI mistakes cannot leak file names, Quran text, URLs,
  * transcripts, free-form error messages, or any other creator content. */
@@ -62,22 +71,66 @@ export function parseProductEvent(input: unknown): ProductEventPayload | null {
     deviceClass: value.deviceClass as DeviceClass,
     browserFamily: value.browserFamily as BrowserFamily,
   };
-  if (typeof value.firstVisit === "boolean") payload.firstVisit = value.firstVisit;
-  if (value.sourceKind === "audio" || value.sourceKind === "video") payload.sourceKind = value.sourceKind;
-  if (typeof value.durationBucket === "string" && DURATION_SET.has(value.durationBucket)) {
-    payload.durationBucket = value.durationBucket as DurationBucket;
-  }
-  if (typeof value.exportPath === "string" && EXPORT_PATH_SET.has(value.exportPath)) {
-    payload.exportPath = value.exportPath as ExportPath;
-  }
-  if (typeof value.exportAction === "string" && EXPORT_ACTION_SET.has(value.exportAction)) {
-    payload.exportAction = value.exportAction as ExportAction;
-  }
-  if (typeof value.errorCode === "string" && SAFE_CODE.test(value.errorCode)) {
-    payload.errorCode = value.errorCode;
-  }
-  if (value.outcome === "without_help" || value.outcome === "needed_help") {
-    payload.outcome = value.outcome;
+  switch (payload.event) {
+    case "journey_started":
+      if (typeof value.firstVisit === "boolean") payload.firstVisit = value.firstVisit;
+      break;
+    case "source_loaded":
+      if (value.sourceKind !== "audio" && value.sourceKind !== "video") return null;
+      payload.sourceKind = value.sourceKind;
+      addDurationBucket(payload, value);
+      break;
+    case "range_confirmed":
+      addDurationBucket(payload, value);
+      break;
+    case "export_started":
+      if (typeof value.exportAction !== "string" || !EXPORT_ACTION_SET.has(value.exportAction)) return null;
+      payload.exportAction = value.exportAction as ExportAction;
+      addDurationBucket(payload, value);
+      break;
+    case "export_succeeded":
+      if (typeof value.exportAction !== "string" || !EXPORT_ACTION_SET.has(value.exportAction)) return null;
+      if (typeof value.exportPath !== "string" || !EXPORT_PATH_SET.has(value.exportPath)) return null;
+      payload.exportAction = value.exportAction as ExportAction;
+      payload.exportPath = value.exportPath as ExportPath;
+      addDurationBucket(payload, value);
+      break;
+    case "export_failed":
+      if (typeof value.exportAction !== "string" || !EXPORT_ACTION_SET.has(value.exportAction)) return null;
+      if (typeof value.errorCode !== "string" || !SAFE_CODE.test(value.errorCode)) return null;
+      payload.exportAction = value.exportAction as ExportAction;
+      payload.errorCode = value.errorCode;
+      addDurationBucket(payload, value);
+      break;
+    case "journey_feedback":
+      if (value.outcome !== "without_help" && value.outcome !== "needed_help") return null;
+      payload.outcome = value.outcome;
+      break;
+    case "client_error":
+      if (typeof value.errorCode !== "string" || !SAFE_CODE.test(value.errorCode)) return null;
+      payload.errorCode = value.errorCode;
+      break;
+    case "template_chosen":
+    case "studio_opened":
+      break;
   }
   return payload;
+}
+
+export interface ProductEventLog extends ProductEventPayload {
+  type: "ayahclip_product_event";
+  schemaVersion: 1;
+  receivedAt: string;
+}
+
+export function buildProductEventLog(
+  event: ProductEventPayload,
+  receivedAt = new Date()
+): ProductEventLog {
+  return {
+    type: "ayahclip_product_event",
+    schemaVersion: 1,
+    receivedAt: receivedAt.toISOString(),
+    ...event,
+  };
 }

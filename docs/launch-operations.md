@@ -16,7 +16,7 @@ The measurable path is:
 6. `export_succeeded`, after the exact MP4 or fallback WebM is rendered.
 7. `journey_feedback`, when a first-export creator answers whether they reached the final preview without help.
 
-Each event carries one random browser-session journey ID. To calculate the first-run funnel, filter Vercel Runtime Logs for `ayahclip_product_event`, group by `journeyId`, and count distinct journeys reaching each ordered milestone. The unassisted completion measure is:
+Each event carries one random browser-session journey ID and `schemaVersion: 1`. To calculate the first-run funnel, filter Vercel Runtime Logs for `ayahclip_product_event`, restrict analysis to one schema version, group by `journeyId`, and count distinct journeys reaching each ordered milestone. The unassisted completion measure is:
 
 `without_help feedback / all journey_feedback responses`
 
@@ -33,6 +33,8 @@ The telemetry route accepts only the fields defined in `src/lib/telemetry-schema
 - IP addresses, advertising identifiers, or persistent user identifiers.
 
 The client honours Do Not Track and the preference on `/privacy`. Diagnostics must never block editing or export.
+
+Event fields are event-specific. Export path is accepted only for successful exports; error category only for failures and client errors; assistance outcome only for journey feedback. Invalid required dimensions reject the event instead of creating misleading dashboard rows.
 
 ## Error monitoring
 

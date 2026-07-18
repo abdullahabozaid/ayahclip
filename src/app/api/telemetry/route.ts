@@ -1,4 +1,4 @@
-import { parseProductEvent } from "@/lib/telemetry-schema";
+import { buildProductEventLog, parseProductEvent } from "@/lib/telemetry-schema";
 import { checkRateLimit, rateLimitHeaders } from "@/lib/server-rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -36,10 +36,6 @@ export async function POST(request: Request): Promise<Response> {
 
   // Vercel captures structured stdout in Runtime Logs. Do not add request IP,
   // headers, user-agent, referrer, free-form messages, or creator content here.
-  console.info(JSON.stringify({
-    type: "ayahclip_product_event",
-    receivedAt: new Date().toISOString(),
-    ...event,
-  }));
+  console.info(JSON.stringify(buildProductEventLog(event)));
   return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
 }
