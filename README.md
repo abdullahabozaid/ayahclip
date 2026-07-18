@@ -120,3 +120,9 @@ Quran text & translations: [Quran.com](https://quran.com) · Verse audio:
 [EveryAyah](https://everyayah.com) · Timed chapter audio:
 [MP3Quran](https://mp3quran.net) · Stock media: [Pexels](https://www.pexels.com) ·
 ASR model: FastConformer (CC-BY-4.0).
+
+Public TikTok and Instagram post links are resolved on the self-hosted VPS with
+[yt-dlp](https://github.com/yt-dlp/yt-dlp). The resolver accepts only exact
+platform hosts, never playlists, caps source size and runtime, and prefers the
+platform's clean H.264 playback source. Creators remain responsible for using
+media they own or have permission to edit.

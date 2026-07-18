@@ -134,7 +134,7 @@ export function ReciterSelect({
           <optgroup key={group.id} label={group.label} className="bg-[var(--surface)]">
             {group.reciters.map((reciter) => (
               <option key={reciter.id} value={reciter.id} className="bg-[var(--surface)]">
-                {reciter.name} · {reciter.style}{supportsWordTimings(reciter) ? " · Word synced" : ""}
+                {reciter.name}{supportsWordTimings(reciter) ? " · Word synced" : ""}
               </option>
             ))}
           </optgroup>

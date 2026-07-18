@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 /// drifting behind the working product at ayahclip.com.
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("ayahclip.onboarding.complete") private var onboardingComplete = false
     @State private var showWatermarkCleanup = false
 
@@ -21,6 +22,7 @@ struct RootView: View {
                         entryPoint: .product,
                         showsCloseButton: false
                     )
+                    .id(model.sharedLinkToImport)
                     .environment(model)
                 } else {
                     ZStack {
@@ -55,6 +57,14 @@ struct RootView: View {
             WatermarkCleanupView()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .task {
+            await model.consumeSharedInbox()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await model.consumeSharedInbox() }
+            }
         }
         .fullScreenCover(isPresented: Binding(
             get: { !onboardingComplete },

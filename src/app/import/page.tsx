@@ -62,6 +62,10 @@ export default function ImportPage() {
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detectError, setDetectError] = useState<string | null>(null);
+  const [socialURL, setSocialURL] = useState("");
+  const [socialDownloading, setSocialDownloading] = useState(false);
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const socialImportStartedRef = useRef(false);
 
   const [surahId, setSurahId] = useState(1);
   const [from, setFrom] = useState("1");
@@ -264,6 +268,58 @@ export default function ImportPage() {
       }
     }
   }, [videoUrl]);
+
+  const importSocialPost = useCallback(async (value = socialURL) => {
+    const url = value.trim();
+    if (!url || socialDownloading) return;
+    setSocialDownloading(true);
+    setSocialError(null);
+    try {
+      const response = await fetch("/api/social-download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || "AyahClip could not download that post.");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="([^"]+)"/i)?.[1];
+      const name = encodedName
+        ? decodeURIComponent(encodedName)
+        : plainName || `social-source-${Date.now()}.mp4`;
+      const resolvedFile = new File([blob], name, { type: "video/mp4" });
+      await handleFile(resolvedFile);
+      setVideoMode("keep-video");
+      setSocialURL(url);
+    } catch (reason) {
+      setSocialError(reason instanceof Error ? reason.message : "AyahClip could not download that post.");
+    } finally {
+      setSocialDownloading(false);
+    }
+  }, [handleFile, socialDownloading, socialURL]);
+
+  const pasteSocialLink = async () => {
+    try {
+      const pasted = await navigator.clipboard.readText();
+      setSocialURL(pasted.trim());
+      setSocialError(null);
+    } catch {
+      setSocialError("Clipboard access was blocked. Press and hold the field to paste the link.");
+    }
+  };
+
+  useEffect(() => {
+    if (socialImportStartedRef.current) return;
+    const sharedURL = new URLSearchParams(window.location.search).get("social");
+    if (!sharedURL) return;
+    socialImportStartedRef.current = true;
+    setSocialURL(sharedURL);
+    void importSocialPost(sharedURL);
+  }, [importSocialPost]);
 
   useEffect(() => {
     if (!isNativeMobileEditor(window.location.search) || nativeHydrationStartedRef.current) return;
@@ -482,6 +538,55 @@ export default function ImportPage() {
             {buffer && (
               <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-xs sm:text-[10px] text-emerald-soft">Ready</span>
             )}
+          </div>
+          <div className="mb-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-3">
+            <label htmlFor="social-post-url" className="text-xs font-medium text-parchment">
+              Import a TikTok or Instagram post
+            </label>
+            <p className="mt-1 text-xs leading-4 text-[var(--muted)]">
+              Paste or share a public post link. AyahClip resolves the clean source video and imports it here.
+            </p>
+            <div className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row">
+              <input
+                id="social-post-url"
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={socialURL}
+                onChange={(event) => setSocialURL(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && void importSocialPost()}
+                placeholder="https://www.tiktok.com/@user/video/…"
+                className="field min-h-11 min-w-0 flex-1 px-3 text-base sm:text-sm"
+              />
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <button
+                  type="button"
+                  onClick={pasteSocialLink}
+                  disabled={socialDownloading}
+                  className="min-h-11 rounded-lg border border-[var(--hairline)] px-3 text-xs text-parchment disabled:opacity-50"
+                >
+                  Paste
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void importSocialPost()}
+                  disabled={!socialURL.trim() || socialDownloading}
+                  className="btn-gold min-h-11 rounded-lg px-4 text-xs disabled:opacity-50"
+                >
+                  {socialDownloading ? "Downloading…" : "Import link"}
+                </button>
+              </div>
+            </div>
+            {socialDownloading && (
+              <p role="status" className="mt-2 text-xs text-gold-soft">
+                Resolving the source video. Keep AyahClip open; public posts usually take a few seconds.
+              </p>
+            )}
+            {socialError && <p role="alert" className="mt-2 text-xs leading-4 text-red-300">{socialError}</p>}
+            <p className="mt-2 text-xs leading-4 text-[var(--muted-deep)]">
+              Only import media you own or have permission to edit. Private and restricted posts are not supported.
+            </p>
           </div>
           {/* Defensive uploader: explicit ref + button.click() — iOS WebKit
               has historically refused to open the picker for label-wrapped

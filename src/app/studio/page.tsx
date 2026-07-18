@@ -492,8 +492,8 @@ export default function StudioPage() {
     <>
     <main data-testid="studio-shell" ref={stageRef} style={{ zoom }} className="studio-shell-layout flex h-dvh flex-col overflow-hidden bg-[var(--ink)] lg:grid lg:grid-cols-[56px_minmax(0,1fr)_304px] lg:grid-rows-[52px_minmax(0,1fr)_188px]">
       {/* Studio top bar — pad for the notch / status bar on mobile */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-3 pt-[env(safe-area-inset-top)] lg:col-span-3 lg:h-[52px] lg:px-4 lg:pt-0">
-        <div className="flex items-center gap-4">
+      <header className="flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-2 pt-[env(safe-area-inset-top)] sm:px-3 lg:col-span-3 lg:h-[52px] lg:px-4 lg:pt-0">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button
             onClick={() => router.push(`/surah/${surah.id}`)}
             className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment sm:w-auto sm:px-2 lg:h-8"
@@ -521,7 +521,7 @@ export default function StudioPage() {
         </div>
 
         {/* Preview-as frame selector */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <div className="hidden items-center gap-0.5 rounded-md border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-0.5 md:flex">
             {FRAME_MODES.map((m) => {
               const disabled = m.id !== "studio" && !framesAllowed;
@@ -660,7 +660,7 @@ export default function StudioPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 9V5a1 1 0 011-1h4M4 15v4a1 1 0 001 1h4m6-16h4a1 1 0 011 1v4m0 6v4a1 1 0 01-1 1h-4" />
                   <path d="M10 9.5v5l4.5-2.5z" fill="currentColor" stroke="none" />
                 </svg>
-                <span>Export MP4</span>
+                <span className="hidden sm:inline">Export MP4</span>
               </>
             )}
           </button>
@@ -780,7 +780,7 @@ export default function StudioPage() {
           Height is bounded so the preview above is always visible; collapse
           shrinks it to just this bar. */}
       {(store.audioSource.mode === "imported" || selectedVerseNumbers.length > 0) && (
-        <div data-testid="studio-timeline" className={`studio-timeline-dock shrink-0 overflow-x-hidden overflow-y-auto border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-3 py-1.5 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[260px]" : "h-12"}`}>
+        <div data-testid="studio-timeline" className={`studio-timeline-dock relative z-10 shrink-0 overflow-x-hidden overflow-y-auto border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-2 py-1.5 sm:px-3 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[min(232px,36dvh)]" : "h-12"}`}>
           <div className="flex items-center gap-2 lg:h-7">
             {/* Collapse / expand the dock */}
             <button
@@ -868,7 +868,7 @@ export default function StudioPage() {
         </div>
       )}
 
-      <nav data-testid="studio-mobile-tools" aria-label="Studio tools" className="flex h-14 shrink-0 items-center justify-around border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-1 pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <nav data-testid="studio-mobile-tools" aria-label="Studio tools" className="relative z-20 grid h-[calc(58px+env(safe-area-inset-bottom))] shrink-0 grid-cols-5 items-start border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden">
         {[
           ["Media", () => openSettings(true), false],
           ["Audio", () => openTimeline(true), false],
@@ -876,7 +876,7 @@ export default function StudioPage() {
           ["Captions", () => { setEditorView("timeline"); openTimeline(true); }, timelineOpen],
           ["Format", () => openSettings(!settingsOpen), settingsOpen],
         ].map(([label, action, active]) => (
-          <button key={label as string} type="button" onClick={action as () => void} aria-label={label === "Format" ? "Toggle settings" : undefined} aria-expanded={label === "Format" ? settingsOpen : undefined} className={`flex min-h-11 w-16 flex-col items-center justify-center gap-0.5 text-[10px] font-medium uppercase tracking-tight ${active ? "text-gold-soft" : "text-[var(--muted)]"}`}>
+          <button key={label as string} type="button" onClick={action as () => void} aria-label={label === "Format" ? "Toggle settings" : undefined} aria-expanded={label === "Format" ? settingsOpen : undefined} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[10px] font-medium uppercase tracking-tight ${active ? "bg-gold/[0.06] text-gold-soft" : "text-[var(--muted)]"}`}>
             <span className="text-base leading-none" aria-hidden>{label === "Media" ? "▣" : label === "Audio" ? "♫" : label === "Text" ? "T" : label === "Captions" ? "▤" : "↔"}</span>
             {label as string}
           </button>

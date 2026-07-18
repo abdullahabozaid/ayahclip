@@ -75,17 +75,17 @@ The beta intentionally does not download content from TikTok, Instagram, or YouT
 
 ## Current beta scope
 
-Version 0.1.0 is an iPhone portrait beta. Build 4 mounts the complete ayahclip.com product in the native app, including Quran browsing, reciter and imported-media journeys, project library, templates, Studio, timeline, B-roll, captions, and native export. Recognition results still require creator confirmation and physical-device quality testing; they must not be treated as authoritative Quran text without review.
+Version 0.1.0 is an iPhone portrait beta. Build 5 mounts the complete ayahclip.com product in the native app, including Quran browsing, reciter and imported-media journeys, project library, templates, Studio, timeline, B-roll, captions, source-link import, and native export. Recognition results still require creator confirmation and physical-device quality testing; they must not be treated as authoritative Quran text without review.
 
 ## Latest internal TestFlight build
 
-- **Version/build:** 0.1.0 (4)
+- **Version/build:** 0.1.0 (5)
 - **Uploaded:** 18 July 2026
-- **App Store Connect state:** Upload accepted; Apple processing
+- **App Store Connect state:** Release candidate pending upload
 - **Internal group:** AyahClip Internal (1 tester, iPhone 14 Pro)
 - **Main bundle ID:** `app.ayahclip.mobile`
 - **Share extension bundle ID:** `app.ayahclip.mobile.share`
 - **Signing:** Apple Distribution with dedicated App Store profiles for both executables
 - **Validation:** Focused unit and UI suites for product navigation, real media import, bridge/export, watermark processing, and identity pass; web tests, lint, TypeScript, production build, archive identity, embedded profiles, application groups, and strict code signatures are release gates
 
-Build 4 replaces the disconnected native dashboard with the complete AyahClip web product, keeps a dedicated native MP4 export bridge, and adds permission-gated on-device watermark concealment for an existing file the tester owns or has permission to reuse. It intentionally does not download TikTok, Instagram, or YouTube posts. Physical iPhone validation of recognition, long imports, memory pressure, backgrounding, every template, watermark quality on varied footage, and export/save recovery remains required before any public-release claim.
+Build 5 resolves public TikTok and Instagram share links to the platform's clean H.264 source on the AyahClip VPS, imports that video into the normal recognition workflow, and routes links received by the iOS Share Extension directly into that import. It also repairs multi-ayah passage selection, reciter labels, iOS input zoom, mobile canvas sizing, the bounded Verse Editor, the five-tool rail, and the compact export action. Physical iPhone validation of recognition, long imports, memory pressure, backgrounding, every template, link availability, and export/save recovery remains required before any public-release claim.

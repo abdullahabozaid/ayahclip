@@ -419,6 +419,19 @@ final class AppModelTests: XCTestCase {
             )?.queryItems?.first(where: { $0.name == "app" })?.value,
             "ios"
         )
+        let socialSource = "https://www.tiktok.com/@ayahclip/video/123"
+        let socialProductURL = MobileEditorBridgeContract.productURL(
+            sourceReferenceURL: socialSource
+        )
+        let socialComponents = try XCTUnwrap(URLComponents(
+            url: socialProductURL,
+            resolvingAgainstBaseURL: false
+        ))
+        XCTAssertEqual(socialProductURL.path, "/import")
+        XCTAssertEqual(
+            socialComponents.queryItems?.first(where: { $0.name == "social" })?.value,
+            socialSource
+        )
     }
 
     func testMobileDetectionEnvelopeRoundTripsWithoutLosingReviewState() throws {
@@ -1336,9 +1349,10 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.selectedTab, .import)
         XCTAssertEqual(model.pendingLink, "https://www.tiktok.com/@ayahclip/video/123")
+        XCTAssertEqual(model.sharedLinkToImport, "https://www.tiktok.com/@ayahclip/video/123")
         XCTAssertEqual(
             model.notice,
-            "Reference saved on this iPhone. Import the original file you own from Photos or Files to edit it."
+            "Link ready. AyahClip will resolve the source video when the import screen opens."
         )
         XCTAssertNil(defaults.string(forKey: "pendingSharedLink"))
         XCTAssertEqual(

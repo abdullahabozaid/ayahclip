@@ -33,7 +33,6 @@ export function filterReciters(
     const searchText = normalizeReciterSearch([
       reciter.name,
       reciter.arabicName,
-      reciter.style,
       region?.label,
       region?.description,
       reciter.quranComRecitationId == null ? "whole verse captions" : "word synced splitting",

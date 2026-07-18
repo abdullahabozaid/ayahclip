@@ -45,6 +45,7 @@ final class MobileEditorEnvironment {
         project: ClipProject,
         mediaURLs: [URL],
         entryPoint: MobileEditorEntryPoint = .editor,
+        sourceReferenceURL: String? = nil,
         allowedMediaRoots: [URL]? = nil,
         onProjectChange: @escaping @MainActor (
             MobileBridgeEnvelope<MobileProjectSnapshotV1>,
@@ -96,7 +97,7 @@ final class MobileEditorEnvironment {
         }
         self.configuration = configuration
         editorURL = entryPoint == .product
-            ? MobileEditorBridgeContract.productURL()
+            ? MobileEditorBridgeContract.productURL(sourceReferenceURL: sourceReferenceURL)
             : MobileEditorBridgeContract.editorURL(
                 projectID: project.id,
                 requiresPassageSelection: project.surahID == nil

@@ -294,14 +294,16 @@ enum MobileEditorBridgeContract {
     static let protocolVersion = 1
     static let productionOrigin = URL(string: "https://ayahclip.com")!
 
-    static func productURL() -> URL {
+    static func productURL(sourceReferenceURL: String? = nil) -> URL {
         var components = URLComponents(
-            url: productionOrigin,
+            url: sourceReferenceURL == nil ? productionOrigin : productionOrigin.appending(path: "import"),
             resolvingAgainstBaseURL: false
         )!
-        components.queryItems = [
-            URLQueryItem(name: "app", value: "ios")
-        ]
+        var items = [URLQueryItem(name: "app", value: "ios")]
+        if let sourceReferenceURL, !sourceReferenceURL.isEmpty {
+            items.append(URLQueryItem(name: "social", value: sourceReferenceURL))
+        }
+        components.queryItems = items
         return components.url!
     }
 

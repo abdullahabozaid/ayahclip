@@ -116,8 +116,10 @@ test("mobile Studio is preview-first with five thumb tools and no document overf
   const metrics = await layoutMetrics(page);
   expect(metrics.document).toEqual(metrics.viewport);
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
-  expect(metrics.timeline.height).toBeCloseTo(260, 0);
-  expect(metrics.canvas.width).toBeGreaterThanOrEqual(215);
-  expect(metrics.canvas.height).toBeGreaterThanOrEqual(382);
+  expect(metrics.timeline.height).toBeLessThanOrEqual(232);
+  expect(metrics.timeline.height).toBeGreaterThanOrEqual(200);
+  expect(metrics.canvas.width).toBeGreaterThanOrEqual(190);
+  expect(metrics.canvas.width).toBeLessThanOrEqual(225);
+  expect(metrics.canvas.height).toBeGreaterThanOrEqual(338);
   expect(metrics.canvas.bottom).toBeLessThanOrEqual(metrics.stage.bottom);
 });
