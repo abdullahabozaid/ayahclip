@@ -17,7 +17,13 @@ export const dynamic = "force-dynamic";
 
 const execFileAsync = promisify(execFile);
 const MAX_FILE_BYTES = 750 * 1024 * 1024;
+// The fast path temporarily holds both the source and the exact cut. Keep this
+// deliberately below the public import cap so concurrent requests cannot turn
+// the speed improvement into an avoidable disk-pressure spike.
+const FAST_PATH_MAX_SOURCE_BYTES = 150 * 1024 * 1024;
+const FAST_PATH_MAX_SOURCE_SECONDS = 15 * 60;
 const DOWNLOAD_TIMEOUT_MS = 300_000;
+const YOUTUBE_FORMAT = "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/b[height<=1080][vcodec^=avc1]";
 const SOURCE_IMPORT_RATE_LIMIT = {
   namespace: "source-import",
   limit: 12,
@@ -65,7 +71,8 @@ export function buildSourceDownloadArgs({
       "--force-keyframes-at-cuts",
       "--merge-output-format", "mp4",
       "--recode-video", "mp4",
-      "--format", "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/b[height<=1080][vcodec^=avc1]",
+      "--downloader-args", "ffmpeg_o:-preset veryfast",
+      "--format", YOUTUBE_FORMAT,
     );
   } else {
     // Prefer an iPhone-compatible, non-watermarked platform source. TikTok's
@@ -78,6 +85,82 @@ export function buildSourceDownloadArgs({
   }
   args.push("--output", outputTemplate, url);
   return args;
+}
+
+export function buildYoutubeProbeArgs(url: string): string[] {
+  return [
+    "--no-playlist",
+    "--no-warnings",
+    "--simulate",
+    "--socket-timeout", "25",
+    "--retries", "2",
+    "--format", YOUTUBE_FORMAT,
+    "--print", "%(duration)s|%(filesize_approx)s",
+    url,
+  ];
+}
+
+export function parseYoutubeProbe(stdout: string): { durationSeconds: number; sourceBytes: number } | null {
+  const [durationValue, sizeValue] = stdout.trim().split("|");
+  const durationSeconds = Number(durationValue);
+  const sourceBytes = Number(sizeValue);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return null;
+  if (!Number.isFinite(sourceBytes) || sourceBytes <= 0) return null;
+  return { durationSeconds, sourceBytes };
+}
+
+export function youtubeFastPathAllowed(probe: { durationSeconds: number; sourceBytes: number } | null): boolean {
+  return Boolean(
+    probe
+    && probe.durationSeconds <= FAST_PATH_MAX_SOURCE_SECONDS
+    && probe.sourceBytes <= FAST_PATH_MAX_SOURCE_BYTES,
+  );
+}
+
+export function buildYoutubeFullDownloadArgs(url: string, outputTemplate: string): string[] {
+  return [
+    "--no-playlist",
+    "--no-warnings",
+    "--no-progress",
+    "--restrict-filenames",
+    "--socket-timeout", "25",
+    "--retries", "2",
+    "--max-filesize", String(FAST_PATH_MAX_SOURCE_BYTES),
+    "--merge-output-format", "mp4",
+    "--remux-video", "mp4",
+    "--format", YOUTUBE_FORMAT,
+    "--output", outputTemplate,
+    url,
+  ];
+}
+
+export function buildExactCutArgs({
+  sourcePath,
+  outputPath,
+  startSeconds,
+  endSeconds,
+}: {
+  sourcePath: string;
+  outputPath: string;
+  startSeconds: number;
+  endSeconds: number;
+}): string[] {
+  return [
+    "-hide_banner",
+    "-loglevel", "error",
+    "-ss", String(startSeconds),
+    "-i", sourcePath,
+    "-t", String(endSeconds - startSeconds),
+    "-map", "0:v:0",
+    "-map", "0:a:0?",
+    "-c:v", "libx264",
+    "-preset", "veryfast",
+    "-crf", "23",
+    "-c:a", "aac",
+    "-b:a", "128k",
+    "-movflags", "+faststart",
+    outputPath,
+  ];
 }
 
 export async function POST(request: Request) {
@@ -129,17 +212,57 @@ export async function POST(request: Request) {
   const workDirectory = await mkdtemp(join(tmpdir(), "ayahclip-social-"));
   const outputTemplate = join(workDirectory, "%(extractor)s-%(id)s.%(ext)s");
   try {
-    await execFileAsync(process.env.AYAHCLIP_YTDLP_PATH || "yt-dlp", buildSourceDownloadArgs({
-      platform: source.platform,
-      url: source.url.toString(),
-      outputTemplate,
-      startSeconds,
-      endSeconds,
-    }), {
+    const ytDlpPath = process.env.AYAHCLIP_YTDLP_PATH || "yt-dlp";
+    const commandOptions = {
       timeout: DOWNLOAD_TIMEOUT_MS,
       maxBuffer: 2 * 1024 * 1024,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
-    });
+    };
+
+    let usedFastPath = false;
+    if (source.platform === "youtube" && startSeconds !== undefined && endSeconds !== undefined) {
+      try {
+        const probeResult = await execFileAsync(ytDlpPath, buildYoutubeProbeArgs(source.url.toString()), commandOptions);
+        if (youtubeFastPathAllowed(parseYoutubeProbe(probeResult.stdout))) {
+          const sourceTemplate = join(workDirectory, "source.%(ext)s");
+          await execFileAsync(
+            ytDlpPath,
+            buildYoutubeFullDownloadArgs(source.url.toString(), sourceTemplate),
+            commandOptions,
+          );
+          const sourceFiles = await readdir(workDirectory);
+          const sourceFilename = sourceFiles.find((item) => item.startsWith("source.") && item.endsWith(".mp4"));
+          if (!sourceFilename) throw new Error("No MP4 source was returned for the fast path");
+          await execFileAsync(
+            process.env.AYAHCLIP_FFMPEG_PATH || "ffmpeg",
+            buildExactCutArgs({
+              sourcePath: join(workDirectory, sourceFilename),
+              outputPath: join(workDirectory, "youtube-segment.mp4"),
+              startSeconds,
+              endSeconds,
+            }),
+            commandOptions,
+          );
+          await rm(join(workDirectory, sourceFilename), { force: true });
+          usedFastPath = true;
+        }
+      } catch {
+        // Metadata can be missing or a source can change between probing and
+        // download. The bounded range path below remains the safe fallback.
+        const partialFiles = await readdir(workDirectory);
+        await Promise.all(partialFiles.map((item) => rm(join(workDirectory, item), { force: true })));
+      }
+    }
+
+    if (!usedFastPath) {
+      await execFileAsync(ytDlpPath, buildSourceDownloadArgs({
+        platform: source.platform,
+        url: source.url.toString(),
+        outputTemplate,
+        startSeconds,
+        endSeconds,
+      }), commandOptions);
+    }
 
     const files = await readdir(workDirectory);
     const filename = files.find((item) => item.toLowerCase().endsWith(".mp4"));
