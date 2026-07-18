@@ -599,3 +599,27 @@ test("critical public routes do not overflow a phone viewport", async ({ page })
     );
   }
 });
+
+test("mobile import and template copy stays legible before interaction", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const route of ["/import", "/styles"]) {
+    await page.goto(route);
+    const undersizedText = await page.locator("main").evaluate((main) =>
+      Array.from(main.querySelectorAll("p, span, label, button"))
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0 && element.textContent?.trim();
+        })
+        .map((element) => ({
+          fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+          text: element.textContent?.trim().slice(0, 60),
+        }))
+        .filter((entry) => entry.fontSize < 12),
+    );
+    expect(undersizedText, `${route} renders text below 12px`).toEqual([]);
+  }
+
+  await page.goto("/import");
+  await expect(page.locator('[aria-labelledby="passage-heading"]')).toHaveCSS("opacity", "1");
+});

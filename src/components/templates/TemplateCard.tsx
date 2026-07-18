@@ -33,14 +33,14 @@ export function TemplateCard({
           renderWidth={270}
           className="relative z-[1] block h-full w-full"
         />
-        <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-white/70 backdrop-blur">
+        <span className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/55 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.14em] text-white/70 backdrop-blur sm:text-[10px]">
           {template.source === "user" ? "My template" : template.family}
         </span>
       </button>
       <div className="space-y-3 p-3.5">
         <div>
           <h2 className="truncate text-sm font-medium text-parchment">{template.name}</h2>
-          <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-4 text-[var(--muted)]">
+          <p className="mt-1 line-clamp-2 min-h-10 text-xs leading-5 text-[var(--muted)] sm:min-h-8 sm:text-[11px] sm:leading-4">
             {template.description}
           </p>
         </div>

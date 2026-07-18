@@ -553,7 +553,7 @@ export default function ImportPage() {
               Upload permitted audio or video, verify the Quran passage by ear, then refine every cut in Studio. Your media stays in this browser.
             </p>
           </div>
-          <ol className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--hairline-soft)] text-[11px] text-[var(--muted)]">
+          <ol className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--hairline-soft)] text-xs sm:text-[11px] text-[var(--muted)]">
           {[
             ["01", "Add media"],
             ["02", "Confirm verses"],
@@ -572,11 +572,11 @@ export default function ImportPage() {
         <section className="panel p-5 lg:sticky lg:top-[88px]" aria-labelledby="source-heading">
           <div className="mb-4 flex items-start justify-between gap-4 border-b border-[var(--hairline-soft)] pb-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/75">Step 1</p>
+              <p className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/75">Step 1</p>
               <h2 id="source-heading" className="mt-1 text-base font-medium text-parchment">Source media</h2>
             </div>
             {buffer && (
-              <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-[10px] text-emerald-soft">Ready</span>
+              <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-xs sm:text-[10px] text-emerald-soft">Ready</span>
             )}
           </div>
           {/* Defensive uploader: explicit ref + button.click() — iOS WebKit
@@ -609,7 +609,7 @@ export default function ImportPage() {
                   : "MP3, M4A, WAV, MP4, WebM or MOV · processed locally"}
             </span>
           </button>
-          <div className="mt-3 flex items-start justify-between gap-4 text-[10px] leading-4 text-[var(--muted-deep)]">
+          <div className="mt-3 flex items-start justify-between gap-4 text-xs sm:text-[10px] leading-4 text-[var(--muted-deep)]">
             <p>
               Best under 20 minutes or {Math.round(RECOMMENDED_IMPORT_BYTES / 1024 / 1024)} MB. Longer media can use substantial browser memory during decoding and export.
             </p>
@@ -621,7 +621,7 @@ export default function ImportPage() {
           </div>
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
           {(recognitionBlock || recognitionWarning) && (
-            <p className={`mt-3 rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+            <p className={`mt-3 rounded-lg border px-3 py-2 text-xs sm:text-[11px] leading-relaxed ${
               recognitionBlock
                 ? "border-red-400/25 bg-red-400/10 text-red-200"
                 : "border-amber-400/25 bg-amber-400/10 text-amber-100/85"
@@ -648,7 +648,7 @@ export default function ImportPage() {
                   description="Use the uploaded video intact and keep it lip-synced in Studio."
                 />
               </div>
-              <p className="mt-3 text-[11px] leading-4 text-[var(--muted-deep)]">
+              <p className="mt-3 text-xs sm:text-[11px] leading-4 text-[var(--muted-deep)]">
                 Using your own YouTube upload? Download it from{" "}
                 <a href="https://support.google.com/youtube/answer/56100" target="_blank" rel="noopener noreferrer" className="text-gold-soft underline-offset-2 hover:underline">
                   YouTube Studio or Google Takeout
@@ -660,15 +660,15 @@ export default function ImportPage() {
         </section>
 
         {/* Step 2 — verses */}
-        <section className={`panel min-w-0 p-5 transition-opacity lg:p-6 ${buffer ? "" : "pointer-events-none opacity-45"}`} aria-labelledby="passage-heading">
+        <section className="panel min-w-0 p-5 lg:p-6" aria-labelledby="passage-heading">
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--hairline-soft)] pb-4">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/75">Step 2</p>
+              <p className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/75">Step 2</p>
               <h2 id="passage-heading" className="mt-1 text-base font-medium text-parchment">Identify and verify the passage</h2>
-              <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">Recognition suggests a range. You listen, correct it if needed, then confirm.</p>
+              <p className="mt-1 text-xs sm:text-[11px] leading-4 text-[var(--muted)]">Recognition suggests a range. You listen, correct it if needed, then confirm.</p>
             </div>
             {rangeConfirmed && (
-              <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-[10px] text-emerald-soft">Range confirmed</span>
+              <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-xs sm:text-[10px] text-emerald-soft">Range confirmed</span>
             )}
           </div>
 
@@ -676,7 +676,7 @@ export default function ImportPage() {
             <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-parchment">Recognise and align locally</p>
-                <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">
+                <p className="mt-0.5 text-xs sm:text-[11px] leading-4 text-[var(--muted)]">
                   Finds the Quran range, then places editable ayah boundaries. Audio never leaves this browser.
                 </p>
               </div>
@@ -696,7 +696,7 @@ export default function ImportPage() {
                   <button
                     type="button"
                     onClick={cancelDetection}
-                    className="min-h-11 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-[var(--muted)] hover:border-gold hover:text-parchment"
+                    className="min-h-11 rounded-full border border-[var(--hairline)] px-3 text-xs sm:text-[11px] text-[var(--muted)] hover:border-gold hover:text-parchment"
                   >
                     Cancel
                   </button>
@@ -707,7 +707,7 @@ export default function ImportPage() {
             {detectProgress && <RecognitionProgressPanel progress={detectProgress} />}
 
             {detectError && (
-              <div role="alert" className="border-t border-amber-400/20 bg-amber-400/[0.08] px-4 py-3 text-[11px] leading-relaxed text-amber-100/90">
+              <div role="alert" className="border-t border-amber-400/20 bg-amber-400/[0.08] px-4 py-3 text-xs sm:text-[11px] leading-relaxed text-amber-100/90">
                 <span className="font-medium text-amber-100">Recognition needs your help.</span>{" "}
                 {detectError}
               </div>
@@ -715,10 +715,10 @@ export default function ImportPage() {
 
             {recognitionCandidates.length > 0 && (
               <div className="border-t border-[var(--hairline-soft)] px-4 py-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100/70">
+                <p className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-100/70">
                   Possible Quran ranges
                 </p>
-                <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">
+                <p className="mt-1 text-xs sm:text-[11px] leading-4 text-[var(--muted)]">
                   Tap a range to keep its prepared ayah cuts. Short verses can occur in more than one place, so use the editable Quran range below if yours is not listed.
                 </p>
                 <div role="group" aria-label="Possible Quran ranges" className="mt-3 grid gap-2">
@@ -730,7 +730,7 @@ export default function ImportPage() {
                       className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-[var(--hairline-soft)] bg-[var(--surface)] px-3 py-2.5 text-left transition-colors hover:border-gold/45 focus-visible:border-gold"
                     >
                       <span>
-                        <span className="block text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
+                        <span className="block text-xs sm:text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
                           {index === 0 ? "Closest match" : `Alternative ${index}`}
                         </span>
                         <span className="mt-0.5 block text-sm text-parchment">{candidate.ref}</span>
@@ -744,19 +744,19 @@ export default function ImportPage() {
 
             {detected && (
               <div className="border-t border-[var(--hairline-soft)] bg-[rgba(201,162,75,0.035)] px-4 py-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                <p className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
                   Suggested Quran range
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <p className="font-display text-xl text-parchment">{detected.ref}</p>
-                  <span aria-label="Quran range confidence" className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                  <span aria-label="Quran range confidence" className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-xs sm:text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
                     Range: {detected.confidence === "selected" ? "creator selected" : `${detected.confidence} confidence`}
                   </span>
-                  <span aria-label="Ayah cut method" className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                  <span aria-label="Ayah cut method" className="rounded-full border border-[var(--hairline)] px-2 py-0.5 text-xs sm:text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
                     Cuts: {detected.review.methodLabel}
                   </span>
                 </div>
-                <p className={`mt-3 rounded-lg border px-3 py-2.5 text-[11px] leading-relaxed ${
+                <p className={`mt-3 rounded-lg border px-3 py-2.5 text-xs sm:text-[11px] leading-relaxed ${
                   detected.review.reviewVerseNumbers.length
                     ? "border-amber-400/25 bg-amber-400/10 text-amber-100/85"
                     : "border-emerald-soft/20 bg-emerald-soft/10 text-emerald-soft"
@@ -768,7 +768,7 @@ export default function ImportPage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p id="listen-verify-heading" className="text-xs font-medium text-parchment">Listen and verify</p>
-                        <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Play the whole suggestion or check each ayah before confirming the range.</p>
+                        <p className="mt-0.5 text-xs sm:text-[10px] leading-4 text-[var(--muted)]">Play the whole suggestion or check each ayah before confirming the range.</p>
                       </div>
                       <button
                         type="button"
@@ -777,7 +777,7 @@ export default function ImportPage() {
                           detected.timings[0].start,
                           detected.timings[detected.timings.length - 1].end,
                         )}
-                        className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 text-[11px] font-medium transition-colors ${
+                        className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs sm:text-[11px] font-medium transition-colors ${
                           previewPlayingKey === "passage"
                             ? "border-gold bg-gold/10 text-gold-soft"
                             : "border-[var(--hairline)] text-parchment hover:border-gold"
@@ -816,14 +816,14 @@ export default function ImportPage() {
                             </button>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-semibold uppercase tracking-[0.13em] text-gold-soft/75">Ayah {timing.verseNumber}</span>
-                                <span className="ml-auto rounded border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-1.5 py-0.5 text-[10px] tabular-nums text-[var(--muted-deep)]">{fmt(timing.start)}–{fmt(timing.end)}</span>
+                                <span className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.13em] text-gold-soft/75">Ayah {timing.verseNumber}</span>
+                                <span className="ml-auto rounded border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-1.5 py-0.5 text-xs sm:text-[10px] tabular-nums text-[var(--muted-deep)]">{fmt(timing.start)}–{fmt(timing.end)}</span>
                               </div>
                               <p className="font-arabic mt-1 truncate text-right text-lg leading-9 text-parchment sm:text-xl" dir="rtl">
                                 {verse?.text_uthmani ?? "Quran text loads here for comparison"}
                               </p>
                               {verse?.translation && (
-                                <p className="truncate text-[11px] leading-4 text-[var(--muted)]">{verse.translation}</p>
+                                <p className="truncate text-xs sm:text-[11px] leading-4 text-[var(--muted)]">{verse.translation}</p>
                               )}
                               <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-white/[0.06]" aria-hidden="true">
                                 <div className="h-full bg-gold transition-[width] duration-100 ease-linear motion-reduce:transition-none" style={{ width: `${progress}%` }} />
@@ -839,25 +839,25 @@ export default function ImportPage() {
                       })}
                     </div>
                     {previewError && (
-                      <p role="alert" className="mt-2 text-[10px] leading-4 text-amber-100/85">{previewError}</p>
+                      <p role="alert" className="mt-2 text-xs sm:text-[10px] leading-4 text-amber-100/85">{previewError}</p>
                     )}
                   </section>
                 )}
                 {detected.review.reviewVerseNumbers.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-amber-100/70">
+                    <p className="text-xs sm:text-[10px] font-medium uppercase tracking-[0.14em] text-amber-100/70">
                       Listen to these transitions in Studio
                     </p>
                     <ul className="mt-2 flex flex-wrap gap-1.5">
                       {detected.review.reviewVerseNumbers.map((verseNumber) => (
-                        <li key={verseNumber} className="rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-1 text-[10px] text-amber-100/85">
+                        <li key={verseNumber} className="rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-1 text-xs sm:text-[10px] text-amber-100/85">
                           Before ayah {verseNumber}
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
-                <details className="mt-3 text-[11px] text-[var(--muted)]">
+                <details className="mt-3 text-xs sm:text-[11px] text-[var(--muted)]">
                   <summary className="flex min-h-10 cursor-pointer list-none items-center text-gold-soft/80 marker:hidden">
                     What recognition heard
                     <span className="ml-1 text-[var(--muted-deep)]">+</span>
@@ -872,7 +872,7 @@ export default function ImportPage() {
 
           <div className="mb-3">
             <p className="text-xs font-medium text-parchment">Correct the range</p>
-            <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">
+            <p className="mt-0.5 text-xs sm:text-[10px] leading-4 text-[var(--muted)]">
               Use the suggestion above, or enter the passage yourself when recognition is uncertain.
             </p>
           </div>
@@ -947,18 +947,18 @@ export default function ImportPage() {
             />
             <span>
               <span className="block text-xs font-medium text-parchment">I confirm this Quran range for Studio</span>
-              <span className="mt-0.5 block text-[11px] leading-4 text-[var(--muted)]">
+              <span className="mt-0.5 block text-xs sm:text-[11px] leading-4 text-[var(--muted)]">
                 Boundaries remain editable in Studio, and uncertain transitions stay marked for review.
               </span>
             </span>
           </label>
           {buildError && (
-            <p role="alert" className="mt-3 rounded-lg border border-red-400/25 bg-red-400/10 px-3 py-2 text-[11px] leading-4 text-red-200">
+            <p role="alert" className="mt-3 rounded-lg border border-red-400/25 bg-red-400/10 px-3 py-2 text-xs sm:text-[11px] leading-4 text-red-200">
               {buildError}
             </p>
           )}
           <div className="mt-5 flex flex-col gap-3 border-t border-[var(--hairline-soft)] pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="max-w-md text-[11px] leading-4 text-[var(--muted)]">
+            <p className="max-w-md text-xs sm:text-[11px] leading-4 text-[var(--muted)]">
               {rangeConfirmed
                 ? "Ready. Individual boundaries remain fully adjustable in the timeline."
                 : "Listen to the suggestion, check the range, then confirm to continue."}
@@ -1010,7 +1010,7 @@ function RecognitionProgressPanel({ progress }: { progress: RecognitionProgress 
           const active = index === activeIndex;
           return (
             <li key={stage.id} aria-current={active ? "step" : undefined}>
-              <span className={`block truncate text-[9px] font-semibold uppercase tracking-[0.12em] sm:text-[10px] ${
+              <span className={`block truncate text-xs font-semibold uppercase tracking-[0.12em] sm:text-[10px] ${
                 complete
                   ? "text-emerald-soft"
                   : active
@@ -1038,7 +1038,7 @@ function RecognitionProgressPanel({ progress }: { progress: RecognitionProgress 
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <p className="text-xs font-medium text-parchment">{progress.detail}</p>
               {hasDownloadProgress && (
-                <span className="text-[11px] tabular-nums text-gold-soft">{progress.percent}%</span>
+                <span className="text-xs sm:text-[11px] tabular-nums text-gold-soft">{progress.percent}%</span>
               )}
             </div>
             {hasDownloadProgress && (
@@ -1056,7 +1056,7 @@ function RecognitionProgressPanel({ progress }: { progress: RecognitionProgress 
                 />
               </div>
             )}
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--muted-deep)]">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs sm:text-[10px] text-[var(--muted-deep)]">
               <span>Private, on-device processing</span>
               {modelProgress && <span className="tabular-nums">{modelProgress}</span>}
             </div>
@@ -1117,7 +1117,7 @@ function VideoChoice({
       />
       <span>
         <span className="block text-sm font-medium text-parchment">{title}</span>
-        <span className="mt-1 block text-[11px] leading-4 text-[var(--muted)]">{description}</span>
+        <span className="mt-1 block text-xs sm:text-[11px] leading-4 text-[var(--muted)]">{description}</span>
       </span>
     </label>
   );
