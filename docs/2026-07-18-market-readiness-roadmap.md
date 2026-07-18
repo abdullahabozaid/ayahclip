@@ -18,8 +18,8 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Area | Status | Evidence |
 | --- | --- | --- |
 | Desktop editor shell | Implemented, continuing polish | Compact preview/inspector/timeline architecture and browser QA |
-| Quran navigation | Implemented | Surah → reciter → ayah → studio path |
-| Reciter breadth | Implemented for current audio architecture | 46 verified EveryAyah verse-level sources, grouped by region and style |
+| Quran navigation | Implemented, polished | Long Surahs use passage-first selection; individual ayahs stay bounded; mobile preview precedes the grid |
+| Reciter breadth | Implemented for current audio architecture | 46 verified EveryAyah verse-level recordings; source expansion contract documented in `docs/2026-07-18-reciter-source-audit.md` |
 | Word-level timing | Implemented for supported subset | 12 Quran.com timing-capable recitations, labelled honestly |
 | Whole-verse captions | Implemented | Unsupported word-timing voices no longer inherit another reciter's timings |
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
@@ -33,6 +33,9 @@ This is the working contract for the full product overhaul. “Implemented” me
 
 ### 1. Desktop content and creation breadth
 
+- Replace the EveryAyah-only folder field with a source descriptor and shared preview/export resolver before admitting another provider.
+- Add source health checks, provenance, coverage, CORS, and rights evidence for every enabled recitation.
+- Build searchable English/Arabic reciter selection with recent, favourite, place, style, and timing-capability organization after the resolver is proven.
 - Expand curated people-free B-roll by category: water, mountains, clouds, drives, architecture, night, and abstract shapes.
 - Add a reviewable ingestion pipeline before exposing dynamic stock search.
 - Add saved style presets for split composition, reciter portrait, rotating B-roll, image sequences, and restrained glow typography.
