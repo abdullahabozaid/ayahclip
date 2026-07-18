@@ -94,10 +94,18 @@ export default function RootLayout({
       className={`dark ${outfit.variable} ${marcellus.variable} ${cormorant.variable} ${cinzel.variable} ${lora.variable} ${playfair.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoNaskh.variable}`}
     >
       <body className="grain min-h-dvh text-parchment antialiased">
+        <a
+          href="#main-content"
+          className="sr-only z-[100] rounded-full bg-[var(--parchment)] px-5 py-3 text-sm font-medium text-[var(--ink)] focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-soft focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--ink)]"
+        >
+          Skip to main content
+        </a>
         <PreloadResources />
         <ClientOperations />
         <SiteNav />
-        {children}
+        <div id="main-content" tabIndex={-1}>
+          {children}
+        </div>
         <SiteFooter />
       </body>
     </html>
