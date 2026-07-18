@@ -24,6 +24,7 @@
     "benchmark:prepare-quranlab": "tsx scripts/prepare-quranlab-benchmark.ts",
     "benchmark:fixtures": "node scripts/fetch-alignment-fixtures.mjs",
     "check:reciter-sources": "tsx scripts/check-reciter-sources.ts",
+    "check:stock-media": "tsx scripts/check-stock-media.ts",
     "audit:mp3quran-provider": "tsx scripts/audit-mp3quran-provider.ts",
     "analytics:report": "tsx scripts/product-analytics-report.ts"
   },
