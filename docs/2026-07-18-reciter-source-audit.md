@@ -35,6 +35,30 @@ The public [QuranLab audio reference layer](https://huggingface.co/datasets/qura
 
 QuranLab can help validate names, riwayah, completeness, and source provenance. AyahClip must still verify the upstream source and rights for each recording before enabling it in production.
 
+### MP3Quran
+
+MP3Quran is the first additional provider to pass the legal-discovery and catalog-coverage parts of the admission gate, but it is not enabled yet.
+
+- The official [MP3Quran developer API](https://www.mp3quran.net/ar/api) publishes reciter, riwayah, complete-Surah, ayah-timing, and timed-read endpoints. It explicitly documents chapter audio servers and per-ayah start/end times.
+- The official [MP3Quran usage policy](https://www.mp3quran.net/privacy-en.html) says that visitors and developers may copy site material or use site links. AyahClip must still attribute MP3Quran and preserve the recorded reciter identity and removal contact.
+- The live API returned 115 timed reads on 2026-07-18. Joining those read IDs to the English catalog produced 96 complete 114-Surah Hafs recordings with official cue data.
+- Representative candidates missing from the current EveryAyah catalog include Mansour Al-Salimi, Ahmad Al-Nufais, Raad Al-Kurdi, Anas Al-Emadi, Khalid Al-Jileel, Idrees Abkr, Bandar Balilah, Abdullah Al-Buaijan, and Abdulaziz Al-Turki.
+- The catalog also explains why attractive names cannot be enabled uniformly: Hazza Al-Balushi currently advertises 83 Surahs, while Muhammad Al-Luhaidan has 114 Surahs but is absent from the official timed-read list.
+
+The audio servers support HTTPS, browser CORS, byte ranges, and stable three-digit chapter URLs. The timing endpoint returned complete cue counts for 1:1, 2:255, 55:13, and 114:6 for read 245 (Mansour Al-Salimi), including all 286 Al-Baqarah ayahs.
+
+The remaining blocker is export architecture. MP3Quran recordings are chapter files, not one file per ayah. Mansour Al-Salimi's Al-Baqarah file is roughly 268 MB; downloading and decoding the whole chapter to export one selected ayah would not be production-safe. A range prototype downloaded and decoded only the cue neighbourhood successfully, but the browser preview/export path must implement and verify the same chapter-cue range strategy before the voice is admitted.
+
+Run `npm run audit:mp3quran-provider -- --output /tmp/mp3quran-audit.json` to reproduce the catalog join, 114-Surah timing check, representative cue checks, CORS checks, and byte-range checks. Use `--read <id>` to evaluate another complete timed Hafs recording.
+
+Decision: **provider candidate, not yet production-admitted**. The next source implementation is a reusable `chapter-cues` engine, followed by real preview and MP4 export tests. Do not add MP3Quran names to the selector before those tests pass.
+
+### AQQD
+
+The [AQQD primary dataset paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC13285623/) describes a CC0 release with 24,183 short WAV clips from 309 reciters. It is valuable for Qira'at research and future recognition evaluation, but it fails the reciter-library coverage gate: the current release covers selected passages from 70 of 114 Surahs, only 19 of which are complete. It must not be presented as a complete reciter source.
+
+Decision: **reject for production reciter playback; retain as a research/evaluation candidate subject to its own provenance review**.
+
 ### Research datasets
 
 The gated benchmark requested by the owner is restricted to ASR research and evaluation. It must not supply production reciter audio, exports, voice cloning, TTS, or redistribution. Research access and product audio rights are separate concerns.
@@ -81,8 +105,9 @@ The shared resolver should return the audio URL, source attribution, timing capa
 1. **Completed:** introduce the source descriptor and resolver without changing current playback.
 2. **Completed:** add unit tests proving URL, attribution, and timing capability resolution for every current entry.
 3. **Completed:** add a source-health script that probes representative ayahs and emits a machine-readable report.
-4. Evaluate one additional, permission-compatible source against the production admission gate.
-5. Only then add modern reciters and ship the searchable catalog UI.
+4. **Completed:** evaluate MP3Quran and AQQD against the production admission gate.
+5. Implement MP3Quran chapter-cue playback and byte-range export, then admit only the recordings that pass the complete browser test.
+6. Add the admitted modern reciters and ship the searchable catalog UI.
 
 ### Verification checkpoint
 

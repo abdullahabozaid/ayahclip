@@ -20,7 +20,8 @@
     "benchmark:recognition-corpus": "tsx scripts/evaluate-recognition-corpus.ts",
     "benchmark:prepare-quranlab": "tsx scripts/prepare-quranlab-benchmark.ts",
     "benchmark:fixtures": "node scripts/fetch-alignment-fixtures.mjs",
-    "check:reciter-sources": "tsx scripts/check-reciter-sources.ts"
+    "check:reciter-sources": "tsx scripts/check-reciter-sources.ts",
+    "audit:mp3quran-provider": "tsx scripts/audit-mp3quran-provider.ts"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
