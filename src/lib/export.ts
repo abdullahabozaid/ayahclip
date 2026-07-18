@@ -1,6 +1,6 @@
 import { Verse, VideoFormat, Background, TextShadow, TextOutline, LetterboxConfig, SplitMaskConfig, type Reciter } from "@/types";
 import type { VerseEmphasis } from "./store";
-import { resolveReciterVerseAudio } from "./reciter-audio";
+import { decodeReciterVerseAudio } from "./reciter-audio-buffer";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { ensureFontsReady, SafeAreaTarget } from "./canvas-utils";
 import {
@@ -526,12 +526,15 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
         }
         renderWhilePlaying = true;
       } else {
-        const audioUrl = resolveReciterVerseAudio(options.reciter, options.surahNumber, verse.verse_number).url;
-        const response = await fetch(audioUrl);
-        const audioBuffer = await audioCtx.decodeAudioData(await response.arrayBuffer());
-        source.buffer = audioBuffer;
+        const decoded = await decodeReciterVerseAudio(
+          audioCtx,
+          options.reciter,
+          options.surahNumber,
+          verse.verse_number
+        );
+        source.buffer = decoded.buffer;
         source.connect(master);
-        source.start();
+        source.start(0, decoded.offsetSeconds, decoded.durationSeconds);
         scheduleAudioRamp();
       }
 
@@ -623,10 +626,17 @@ async function assembleAudio(
       }
     } else {
       for (const { verse } of options.rows) {
-        const audioUrl = resolveReciterVerseAudio(options.reciter, options.surahNumber, verse.verse_number).url;
-        const r = await fetch(audioUrl);
-        const b = await ac.decodeAudioData(await r.arrayBuffer());
-        slices.push({ buf: b, offset: 0, dur: b.duration });
+        const decoded = await decodeReciterVerseAudio(
+          ac,
+          options.reciter,
+          options.surahNumber,
+          verse.verse_number
+        );
+        slices.push({
+          buf: decoded.buffer,
+          offset: decoded.offsetSeconds,
+          dur: decoded.durationSeconds,
+        });
       }
     }
   } finally {

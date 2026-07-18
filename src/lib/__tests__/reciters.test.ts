@@ -42,18 +42,50 @@ describe("reciter audio sources", () => {
       const middle = resolveReciterVerseAudio(reciter, 55, 13);
       const end = resolveReciterVerseAudio(reciter, 114, 6);
 
-      expect(start.url).toMatch(/^https:\/\/everyayah\.com\/data\/.+\/001001\.mp3$/);
-      expect(middle.url).toMatch(/\/055013\.mp3$/);
-      expect(end.url).toMatch(/\/114006\.mp3$/);
-      expect(start.attribution).toMatchObject({
-        label: "EveryAyah.com",
-        url: "https://everyayah.com",
-      });
+      if (reciter.audioSource.kind === "everyayah") {
+        expect(start.url).toMatch(/^https:\/\/everyayah\.com\/data\/.+\/001001\.mp3$/);
+        expect(middle.url).toMatch(/\/055013\.mp3$/);
+        expect(end.url).toMatch(/\/114006\.mp3$/);
+        expect(start.attribution).toMatchObject({
+          label: "EveryAyah.com",
+          url: "https://everyayah.com",
+        });
+      } else {
+        expect(start.url).toMatch(/\/001\.mp3$/);
+        expect(middle.url).toMatch(/\/055\.mp3$/);
+        expect(end.url).toMatch(/\/114\.mp3$/);
+        expect(start.attribution).toMatchObject({
+          label: "MP3Quran.net",
+          url: "https://mp3quran.net",
+        });
+        expect(start.chapterCue).toEqual({
+          provider: "mp3quran",
+          readId: reciter.audioSource.readId,
+          surahNumber: 1,
+          ayahNumber: 1,
+        });
+      }
       expect(start.sourceKey).toBe(reciterSourceKey(reciter.audioSource));
       expect(start.timingCapability).toBe(
         supportsWordTimings(reciter) ? "word-synchronised" : "whole-ayah"
       );
     }
+  });
+
+  it("admits Mansour Al-Salimi through the verified MP3Quran timed read", () => {
+    const reciter = reciters.find((item) => item.id === "mansour-salimi");
+
+    expect(reciter?.audioSource).toMatchObject({
+      kind: "chapter-cues",
+      provider: "mp3quran",
+      readId: 245,
+      server: "https://server14.mp3quran.net/mansor/",
+    });
+    expect(resolveReciterVerseAudio(reciter!, 2, 255)).toMatchObject({
+      url: "https://server14.mp3quran.net/mansor/002.mp3",
+      sourceKind: "chapter-cues",
+      timingCapability: "whole-ayah",
+    });
   });
 
   it("returns a recoverable result for an invalid Quran reference", () => {

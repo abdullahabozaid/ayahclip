@@ -7,11 +7,28 @@ const EVERYAYAH_ATTRIBUTION = {
   removalContact: "https://everyayah.com",
 } as const;
 
+const MP3QURAN_ATTRIBUTION = {
+  label: "MP3Quran.net",
+  url: "https://mp3quran.net",
+  usageNote: "Chapter audio and ayah cues are streamed from MP3Quran under its published developer policy.",
+  removalContact: "https://www.mp3quran.net/ar/contact-us",
+} as const;
+
 function everyAyah(folder: string): ReciterAudioSource {
   return {
     kind: "everyayah",
     folder,
     attribution: EVERYAYAH_ATTRIBUTION,
+  };
+}
+
+function mp3QuranChapter(readId: number, server: string): ReciterAudioSource {
+  return {
+    kind: "chapter-cues",
+    provider: "mp3quran",
+    readId,
+    server,
+    attribution: MP3QURAN_ATTRIBUTION,
   };
 }
 
@@ -76,6 +93,7 @@ export const reciters: Reciter[] = [
   { id: "sahl-yassin", name: "Sahl Yassin", arabicName: "سهل ياسين", audioSource: everyAyah("Sahl_Yassin_128kbps"), region: "gulf", style: "Murattal" },
   { id: "salah-bukhatir", name: "Salah Bukhatir", arabicName: "صلاح بو خاطر", audioSource: everyAyah("Salaah_AbdulRahman_Bukhatir_128kbps"), region: "gulf", style: "Murattal" },
   { id: "yasser-dossary", name: "Yasser Al-Dosari", arabicName: "ياسر الدوسري", audioSource: everyAyah("Yasser_Ad-Dussary_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "mansour-salimi", name: "Mansour Al-Salimi", arabicName: "منصور السالمي", audioSource: mp3QuranChapter(245, "https://server14.mp3quran.net/mansor/"), region: "gulf", style: "Murattal" },
   { id: "khalifa-tunaiji", name: "Khalifa Al-Tunaiji", arabicName: "خليفة الطنيجي", audioSource: everyAyah("khalefa_al_tunaiji_64kbps"), region: "gulf", style: "Murattal" },
 
   { id: "ayman-suwayd", name: "Ayman Suwayd", arabicName: "أيمن سويد", audioSource: everyAyah("Ayman_Sowaid_64kbps"), region: "levant", style: "Muallim" },

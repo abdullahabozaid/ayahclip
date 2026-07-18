@@ -39,11 +39,19 @@ export interface ReciterSourceAttribution {
   removalContact: string;
 }
 
-export type ReciterAudioSource = {
-  kind: "everyayah";
-  folder: string;
-  attribution: ReciterSourceAttribution;
-};
+export type ReciterAudioSource =
+  | {
+      kind: "everyayah";
+      folder: string;
+      attribution: ReciterSourceAttribution;
+    }
+  | {
+      kind: "chapter-cues";
+      provider: "mp3quran";
+      readId: number;
+      server: string;
+      attribution: ReciterSourceAttribution;
+    };
 
 export interface Reciter {
   id: string;

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const CREDITS: { label: string; href: string }[] = [
   { label: "Quran text & translations: Quran.com", href: "https://quran.com" },
   { label: "Reciter audio: EveryAyah.com", href: "https://everyayah.com" },
+  { label: "Timed chapter audio: MP3Quran.net", href: "https://mp3quran.net" },
   { label: "Stock media: Pexels", href: "https://www.pexels.com" },
   {
     label: "Arabic speech recognition: FastConformer (CC-BY-4.0)",

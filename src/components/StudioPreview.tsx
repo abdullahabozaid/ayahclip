@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppStore } from "@/lib/store";
 import { getReciterOrDefault } from "@/lib/reciters";
-import { preloadVerseAudios } from "@/lib/audio";
+import { preloadVerseAudios, type LoadedVerseAudio } from "@/lib/audio";
 import { getTranslationLanguage } from "@/lib/translations";
 import {
   TextSegment,
@@ -71,9 +71,11 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   const size = FORMAT_SIZES[store.videoFormat];
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [audioMap, setAudioMap] = useState<Map<number, HTMLAudioElement>>(new Map());
+  const [audioMap, setAudioMap] = useState<Map<number, LoadedVerseAudio>>(new Map());
   const [audioLoading, setAudioLoading] = useState(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const currentAudioWindowRef = useRef<LoadedVerseAudio | null>(null);
+  const playbackResolveRef = useRef<(() => void) | null>(null);
   const stoppedRef = useRef(false);
   const [verseSegments, setVerseSegments] = useState<Map<number, TextSegment[]>>(new Map());
   const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
@@ -149,13 +151,16 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   }, [store.currentVerseIndex, store.activePartIndex, store.playbackSegmentArabic, store.verseIntro, store.verseIntroMs]);
 
   const reciter = getReciterOrDefault(store.reciterId);
+  const verseSelectionKey = store.selectedVerseNumbers.join(",");
 
   useEffect(() => {
+    playbackResolveRef.current?.();
     setAudioMap(new Map());
     currentAudioRef.current?.pause();
+    currentAudioWindowRef.current = null;
     stoppedRef.current = true;
     setIsPlaying(false);
-  }, [store.reciterId]);
+  }, [store.reciterId, store.surah?.id, verseSelectionKey]);
 
   useEffect(() => {
     return () => {
@@ -243,6 +248,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     if (isPlaying) {
       stoppedRef.current = true;
       currentAudioRef.current?.pause();
+      playbackResolveRef.current?.();
       cancelAnimationFrame(animFrameRef.current);
       useAppStore.getState().setPlaybackSegment(null, null);
       setIsPlaying(false);
@@ -304,12 +310,14 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       if (stoppedRef.current) break;
 
       const verse = selectedVerses[i];
-      const audio = map.get(verse.verse_number);
-      if (!audio) continue;
+      const loadedAudio = map.get(verse.verse_number);
+      if (!loadedAudio) continue;
+      const audio = loadedAudio.element;
 
       useAppStore.getState().setCurrentVerseIndex(i);
       currentAudioRef.current = audio;
-      audio.currentTime = 0;
+      currentAudioWindowRef.current = loadedAudio;
+      audio.currentTime = loadedAudio.startSeconds;
       prevSegmentRef.current = -1;
 
       const segments = segMap.get(verse.verse_number);
@@ -324,17 +332,31 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       }
 
       await new Promise<void>((resolve) => {
-        audio.onended = () => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          if (playbackResolveRef.current === finish) playbackResolveRef.current = null;
           cancelAnimationFrame(animFrameRef.current);
           resolve();
         };
+        playbackResolveRef.current = finish;
+        audio.onended = finish;
 
-        audio.play().catch(() => resolve());
+        audio.play().catch(finish);
 
-        if (segments && segments.length > 1) {
-          const animate = () => {
-            if (stoppedRef.current) return;
-            const timeMs = audio.currentTime * 1000;
+        const animate = () => {
+          if (stoppedRef.current || settled) return;
+          if (
+            loadedAudio.endSeconds != null &&
+            audio.currentTime >= loadedAudio.endSeconds - 0.01
+          ) {
+            audio.pause();
+            finish();
+            return;
+          }
+          if (segments && segments.length > 1) {
+            const timeMs = (audio.currentTime - loadedAudio.startSeconds) * 1000;
             const idx = findCurrentSegmentIndex(segments, timeMs);
 
             if (idx !== prevSegmentRef.current) {
@@ -347,10 +369,10 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
               );
             }
 
-            animFrameRef.current = requestAnimationFrame(animate);
-          };
+          }
           animFrameRef.current = requestAnimationFrame(animate);
-        }
+        };
+        animFrameRef.current = requestAnimationFrame(animate);
       });
     }
 
@@ -478,7 +500,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         const t0 = s.audioSource.timings[0]?.start ?? 0;
         clipFade = clipFadeProgress((importedPlayer.currentTime() - t0) * 1000, fadeMs);
       } else if (currentAudioRef.current && !currentAudioRef.current.paused) {
-        clipFade = clipFadeProgress(currentAudioRef.current.currentTime * 1000, fadeMs);
+        const start = currentAudioWindowRef.current?.startSeconds ?? 0;
+        clipFade = clipFadeProgress((currentAudioRef.current.currentTime - start) * 1000, fadeMs);
       }
     }
     // Optional audio fade-in, matched to the visual fade. Managed whenever a
@@ -517,10 +540,12 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         }
       } else if (playing) {
         for (let i = 0; i < s.currentVerseIndex; i++) {
-          const audio = audioMap.get(s.selectedVerseNumbers[i]);
-          clipTime += Number.isFinite(audio?.duration) ? audio!.duration : 5;
+          const loaded = audioMap.get(s.selectedVerseNumbers[i]);
+          const duration = loaded?.durationSeconds ?? loaded?.element.duration;
+          clipTime += Number.isFinite(duration) ? duration! : 5;
         }
-        clipTime += currentAudioRef.current?.currentTime ?? 0;
+        const currentStart = currentAudioWindowRef.current?.startSeconds ?? 0;
+        clipTime += Math.max(0, (currentAudioRef.current?.currentTime ?? 0) - currentStart);
       }
 
       const selectedScene = s.backgroundScenes.find((scene) => scene.id === s.activeBackgroundSceneId);
