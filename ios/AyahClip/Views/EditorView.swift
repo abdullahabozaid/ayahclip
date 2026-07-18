@@ -1143,11 +1143,17 @@ private struct ExportControls: View {
                 HStack(spacing: 10) {
                     ProgressView().tint(AyahTheme.gold)
                     Text("Rendering MP4…").font(.subheadline).foregroundStyle(AyahTheme.muted)
+                    Spacer()
+                    Button("Cancel") { model.cancelExport() }
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(AyahTheme.parchment)
+                        .frame(minWidth: 64, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .frame(minHeight: 44)
             } else {
                 Button(model.importedMediaURL == nil ? "Add media" : "Render MP4") {
-                    Task { await model.exportActiveProject() }
+                    model.startExport()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AyahTheme.gold)

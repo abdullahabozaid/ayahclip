@@ -230,6 +230,40 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(size.height, VideoExportService.outputSize.height, accuracy: 1)
     }
 
+    func testActiveExportCanBeCancelledWithoutShowingAnError() async throws {
+        let source = try await makeTestVideo(frameCount: 120)
+        let model = AppModel()
+        model.createProject()
+        model.importedMediaURLs = [source]
+
+        model.startExport()
+        XCTAssertTrue(model.isExporting)
+        model.cancelExport()
+        try await Task.sleep(for: .milliseconds(250))
+
+        XCTAssertFalse(model.isExporting)
+        XCTAssertNil(model.exportURL)
+        XCTAssertNil(model.notice)
+    }
+
+    func testOpeningAnotherProjectCannotReceiveStaleExport() async throws {
+        let source = try await makeTestVideo(frameCount: 120)
+        let model = AppModel()
+        model.createProject()
+        let exportingProjectID = try XCTUnwrap(model.activeProject?.id)
+        model.importedMediaURLs = [source]
+        model.startExport()
+
+        model.createProject()
+        let replacementProjectID = try XCTUnwrap(model.activeProject?.id)
+        try await Task.sleep(for: .milliseconds(350))
+
+        XCTAssertNotEqual(exportingProjectID, replacementProjectID)
+        XCTAssertEqual(model.activeProject?.id, replacementProjectID)
+        XCTAssertFalse(model.isExporting)
+        XCTAssertNil(model.exportURL)
+    }
+
     func testBrollSequenceRotatesVisualsAtVerseBoundary() async throws {
         let blue = try await makeTestVideo(
             color: CIColor(red: 0.02, green: 0.08, blue: 0.92),

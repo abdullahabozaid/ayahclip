@@ -36,6 +36,8 @@ final class AppModel {
     private var undoStack: [ClipProject] = []
     private var redoStack: [ClipProject] = []
     @ObservationIgnored private var autosaveTask: Task<Void, Never>?
+    @ObservationIgnored private var exportTask: Task<Void, Never>?
+    private var exportRequestID: UUID?
 
     init() {
         loadProjects()
@@ -43,6 +45,7 @@ final class AppModel {
     }
 
     func createProject() {
+        cancelExport()
         resetHistory()
         activeProject = .freshStarter()
         importedMediaURLs = []
@@ -50,6 +53,7 @@ final class AppModel {
     }
 
     func open(_ project: ClipProject) {
+        cancelExport()
         resetHistory()
         activeProject = project
         importedMediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
@@ -90,6 +94,7 @@ final class AppModel {
     }
 
     func closeEditor() {
+        cancelExport()
         autosaveTask?.cancel()
         saveActiveProject()
         activeProject = nil
@@ -311,18 +316,51 @@ final class AppModel {
         }
     }
 
-    func exportActiveProject() async {
+    func startExport() {
         guard let project = activeProject, !importedMediaURLs.isEmpty else {
             notice = "Import a video before exporting."
             return
         }
+        guard exportTask == nil else { return }
+        let sourceURLs = importedMediaURLs
+        let projectID = project.id
+        let requestID = UUID()
+        exportRequestID = requestID
+        exportURL = nil
         isExporting = true
-        defer { isExporting = false }
-        do {
-            exportURL = try await VideoExportService.render(sourceURLs: importedMediaURLs, project: project)
-        } catch {
-            notice = "Export failed: \(error.localizedDescription)"
+        exportTask = Task { [weak self] in
+            do {
+                let output = try await VideoExportService.render(
+                    sourceURLs: sourceURLs,
+                    project: project
+                )
+                try Task.checkCancellation()
+                guard let self,
+                      self.exportRequestID == requestID,
+                      self.activeProject?.id == projectID else {
+                    try? FileManager.default.removeItem(at: output)
+                    return
+                }
+                self.exportURL = output
+            } catch is CancellationError {
+                // Cancellation is an expected editor action, not an alert.
+            } catch {
+                guard let self, self.exportRequestID == requestID else { return }
+                self.notice = "Export failed: \(error.localizedDescription)"
+            }
+            guard let self, self.exportRequestID == requestID else { return }
+            self.exportRequestID = nil
+            self.exportTask = nil
+            self.isExporting = false
         }
+    }
+
+    func cancelExport() {
+        exportRequestID = nil
+        exportTask?.cancel()
+        exportTask = nil
+        isExporting = false
+        exportURL = nil
     }
 
     func saveExportToPhotos() async {
@@ -390,6 +428,7 @@ final class AppModel {
     }
 
     private func restoreActiveProject(_ project: ClipProject) {
+        cancelExport()
         activeProject = project
         importedMediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
         exportURL = nil

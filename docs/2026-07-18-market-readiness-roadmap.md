@@ -25,7 +25,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
 | Curated stock B-roll | Implemented, expansion pending | 20 photos and 11 videos visually reviewed as people-free |
 | Multi-clip B-roll timeline | Implemented | Audio-led sequence, split/reorder/trim workflow |
-| Native iOS beta | Implemented, distribution signing pending | 28 unit and 8 UI tests pass, including maximum Dynamic Type, debounced draft autosave/background flush, bounded Undo/Redo, and enforced media-count/file-size/storage limits; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
+| Native iOS beta | Implemented, distribution signing pending | 30 unit and 8 UI tests pass, including maximum Dynamic Type, debounced draft autosave/background flush, bounded Undo/Redo, enforced import limits, and project-owned cancellable exports; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
 | TestFlight distribution | Blocked by account configuration | The Mac has a valid Apple Distribution certificate but no AyahClip provisioning profiles or registered iPhone; a signed archive and App Store Connect record for `app.ayahclip.mobile` are still required |
 | Public production readiness | Not complete | Remaining gates below |
 | Security/backend baseline | Implemented, distributed WAF pending | Zero production dependency advisories; no tracked secrets; headers, local-filesystem isolation, request limits and API boundary tests documented in `docs/2026-07-18-security-backend-audit.md` |

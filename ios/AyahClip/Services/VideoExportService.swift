@@ -33,7 +33,9 @@ enum VideoExportService {
     }
 
     static func render(sourceURLs: [URL], project: ClipProject) async throws -> URL {
+        try Task.checkCancellation()
         let asset = try await makeTimelineAsset(sourceURLs: sourceURLs, project: project)
+        try Task.checkCancellation()
         guard try await asset.loadTracks(withMediaType: .video).first != nil else {
             throw ExportError.noVideoTrack
         }
@@ -97,15 +99,26 @@ enum VideoExportService {
         exportSession.outputFileType = .mp4
         exportSession.shouldOptimizeForNetworkUse = true
         exportSession.videoComposition = videoComposition
+        let cancellation = ExportSessionCancellation(exportSession)
 
-        await exportSession.export()
-        guard exportSession.status == .completed else {
-            throw ExportError.exportFailed(
-                exportSession.error?.localizedDescription
-                    ?? "The video renderer stopped before completion."
-            )
+        do {
+            await withTaskCancellationHandler {
+                await exportSession.export()
+            } onCancel: {
+                cancellation.cancel()
+            }
+            try Task.checkCancellation()
+            guard exportSession.status == .completed else {
+                throw ExportError.exportFailed(
+                    exportSession.error?.localizedDescription
+                        ?? "The video renderer stopped before completion."
+                )
+            }
+            return destination
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
         }
-        return destination
     }
 
     static func makeTimelineAsset(sourceURLs: [URL], project: ClipProject) async throws -> AVAsset {
@@ -307,6 +320,20 @@ enum VideoExportService {
         } else {
             context.setFillColor(UIColor.black.withAlphaComponent(project.overlayOpacity).cgColor)
             context.fill(CGRect(origin: .zero, size: renderSize))
+        }
+    }
+}
+
+private final class ExportSessionCancellation: @unchecked Sendable {
+    private let session: AVAssetExportSession
+
+    init(_ session: AVAssetExportSession) {
+        self.session = session
+    }
+
+    func cancel() {
+        Task { @MainActor [self] in
+            session.cancelExport()
         }
     }
 }

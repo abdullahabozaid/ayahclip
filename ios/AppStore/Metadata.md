@@ -51,8 +51,9 @@ This is the first native iPhone beta. Please test:
 6. Undo and redo caption, timing, style, layout, reorder, and media-removal edits.
 7. Open the full-screen preview and verify the 9:16 canvas and captions.
 8. Export the MP4, save it to Photos, and open the saved video from the camera roll.
-9. Send an original movie or post link to AyahClip from the iOS Share Sheet.
-10. Duplicate and delete a project from the Projects screen.
+9. Cancel a render in progress and confirm it does not appear in another project.
+10. Send an original movie or post link to AyahClip from the iOS Share Sheet.
+11. Duplicate and delete a project from the Projects screen.
 
 Please report any mismatch between the editor preview and the exported MP4, clipped text, mistimed ayat, failed imports, or failed exports.
 
