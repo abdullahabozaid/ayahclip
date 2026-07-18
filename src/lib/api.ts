@@ -3,7 +3,6 @@ import { Surah, Verse, QcfWord } from "@/types";
 const QURAN_API = "https://api.quran.com/api/v4";
 const QURAN_CDN_API = "https://api.qurancdn.com/api/qdc";
 const ALQURAN_CLOUD = "https://api.alquran.cloud/v1";
-const EVERYAYAH_BASE = "https://everyayah.com/data";
 
 /** fetch + JSON with a status check, so an API outage fails with a clear error
  *  instead of "Unexpected token <" from parsing an HTML error page. */
@@ -138,12 +137,6 @@ function verifyAgainstSecondSource(surahId: number, verses: Verse[]): void {
     .catch(() => {
       /* second source unavailable — non-blocking */
     });
-}
-
-export function getAudioUrl(reciterFolder: string, surahNumber: number, ayahNumber: number): string {
-  const surah = String(surahNumber).padStart(3, "0");
-  const ayah = String(ayahNumber).padStart(3, "0");
-  return `${EVERYAYAH_BASE}/${reciterFolder}/${surah}${ayah}.mp3`;
 }
 
 export interface WordTiming {

@@ -3,7 +3,7 @@
 // to the OS (share sheet on touch, download elsewhere). Used by both the
 // Export button and the studio's "see the final MP4" preview.
 import { useAppStore } from "./store";
-import { reciters } from "./reciters";
+import { getReciter, getReciterOrDefault } from "./reciters";
 import { exportVideoWithInfo } from "./export";
 import { buildClipRows } from "./clip-rows";
 import { getTranslationLanguage } from "./translations";
@@ -95,12 +95,12 @@ export async function renderClipFile(
     s.audioSource.mode === "imported" ? s.audioSource.timings : undefined
   );
   if (rows.length === 0 || !s.surah) return null;
-  const reciter = reciters.find((r) => r.id === s.reciterId);
+  const reciter = getReciterOrDefault(s.reciterId);
 
   const exportOptions = {
     verses: selectedVerses,
     rows,
-    reciterFolder: reciter?.folder ?? "Alafasy_128kbps",
+    reciter,
     surahNumber: s.surah.id,
     videoFormat: s.videoFormat,
     arabicFontSize: s.arabicFontSize,
@@ -141,7 +141,7 @@ export async function renderClipFile(
         ? { url: s.audioSource.url, timings: s.audioSource.timings }
         : undefined,
     verseParts: s.audioSource.mode === "reciter" ? s.verseParts : undefined,
-    recitationId: reciter?.quranComRecitationId,
+    recitationId: reciter.quranComRecitationId,
     translationResourceId: getTranslationLanguage(s.translationLanguage).resourceId,
     background: s.background,
     backgroundFit: s.backgroundFit,
@@ -192,7 +192,7 @@ export async function saveRenderedToLibrary(file: File): Promise<boolean> {
   const s = useAppStore.getState();
   if (!s.surah) return false;
   try {
-    const reciter = reciters.find((r) => r.id === s.reciterId);
+    const reciter = getReciter(s.reciterId);
     const nums = s.selectedVerseNumbers;
     const range = nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : `${nums[0]}`;
     const meta: LibraryClip = {

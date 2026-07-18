@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useAppStore } from "@/lib/store";
-import { reciters } from "@/lib/reciters";
+import { getReciterOrDefault } from "@/lib/reciters";
 import { preloadVerseAudios } from "@/lib/audio";
 import { getTranslationLanguage } from "@/lib/translations";
 import {
@@ -148,7 +148,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     verseShownAtRef.current = performance.now();
   }, [store.currentVerseIndex, store.activePartIndex, store.playbackSegmentArabic, store.verseIntro, store.verseIntroMs]);
 
-  const reciterFolder = reciters.find((r) => r.id === store.reciterId)?.folder ?? "Alafasy_128kbps";
+  const reciter = getReciterOrDefault(store.reciterId);
 
   useEffect(() => {
     setAudioMap(new Map());
@@ -257,18 +257,12 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     if (map.size === 0) {
       setAudioLoading(true);
       map = await preloadVerseAudios(
-        reciterFolder,
+        reciter,
         store.surah!.id,
         store.selectedVerseNumbers
       );
       setAudioMap(map);
       setAudioLoading(false);
-    }
-
-    const reciter = reciters.find((r) => r.id === store.reciterId);
-    if (!reciter) {
-      setIsPlaying(false);
-      return;
     }
 
     const lang = getTranslationLanguage(useAppStore.getState().translationLanguage);

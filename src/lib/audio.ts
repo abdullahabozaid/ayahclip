@@ -1,4 +1,5 @@
-import { getAudioUrl } from "./api";
+import type { Reciter } from "@/types";
+import { resolveReciterVerseAudio } from "./reciter-audio";
 
 export async function loadAudio(url: string): Promise<HTMLAudioElement> {
   return new Promise((resolve, reject) => {
@@ -12,14 +13,14 @@ export async function loadAudio(url: string): Promise<HTMLAudioElement> {
 }
 
 export async function preloadVerseAudios(
-  reciterFolder: string,
+  reciter: Reciter,
   surahNumber: number,
   verseNumbers: number[]
 ): Promise<Map<number, HTMLAudioElement>> {
   const audioMap = new Map<number, HTMLAudioElement>();
   const results = await Promise.allSettled(
     verseNumbers.map(async (vn) => {
-      const url = getAudioUrl(reciterFolder, surahNumber, vn);
+      const { url } = resolveReciterVerseAudio(reciter, surahNumber, vn);
       const audio = await loadAudio(url);
       return { verseNumber: vn, audio };
     })

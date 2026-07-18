@@ -1,4 +1,19 @@
-import { Reciter } from "@/types";
+import { Reciter, type ReciterAudioSource } from "@/types";
+
+const EVERYAYAH_ATTRIBUTION = {
+  label: "EveryAyah.com",
+  url: "https://everyayah.com",
+  usageNote: "Audio remains hosted by its upstream source and is subject to the upstream recording terms.",
+  removalContact: "https://everyayah.com",
+} as const;
+
+function everyAyah(folder: string): ReciterAudioSource {
+  return {
+    kind: "everyayah",
+    folder,
+    attribution: EVERYAYAH_ATTRIBUTION,
+  };
+}
 
 export const RECITER_REGIONS: ReadonlyArray<{
   id: Reciter["region"];
@@ -19,60 +34,64 @@ export const RECITER_REGIONS: ReadonlyArray<{
  * playback, preview and export.
  */
 export const reciters: Reciter[] = [
-  { id: "juhany", name: "Abdullah Awad Al-Juhany", arabicName: "عبد الله عواد الجهني", folder: "Abdullaah_3awwaad_Al-Juhaynee_128kbps", region: "haramain", style: "Murattal" },
-  { id: "sudais", name: "Abdul Rahman Al-Sudais", arabicName: "عبد الرحمن السديس", folder: "Abdurrahmaan_As-Sudais_192kbps", region: "haramain", style: "Murattal", quranComRecitationId: 3 },
-  { id: "ali-jaber", name: "Ali Jaber", arabicName: "علي جابر", folder: "Ali_Jaber_64kbps", region: "haramain", style: "Murattal" },
-  { id: "hudhaify", name: "Ali Al-Hudhaify", arabicName: "علي الحذيفي", folder: "Hudhaify_128kbps", region: "haramain", style: "Murattal" },
-  { id: "ibrahim-akhdar", name: "Ibrahim Al-Akhdar", arabicName: "إبراهيم الأخضر", folder: "Ibrahim_Akhdar_32kbps", region: "haramain", style: "Murattal" },
-  { id: "maher-muaiqly", name: "Maher Al-Muaiqly", arabicName: "ماهر المعيقلي", folder: "MaherAlMuaiqly128kbps", region: "haramain", style: "Murattal" },
-  { id: "muhammad-ayyub", name: "Muhammad Ayyub", arabicName: "محمد أيوب", folder: "Muhammad_Ayyoub_128kbps", region: "haramain", style: "Murattal" },
-  { id: "muhsin-qasim", name: "Muhsin Al-Qasim", arabicName: "محسن القاسم", folder: "Muhsin_Al_Qasim_192kbps", region: "haramain", style: "Murattal" },
-  { id: "salah-budair", name: "Salah Al-Budair", arabicName: "صلاح البدير", folder: "Salah_Al_Budair_128kbps", region: "haramain", style: "Murattal" },
-  { id: "shuraym", name: "Saud Ash-Shuraym", arabicName: "سعود الشريم", folder: "Saood_ash-Shuraym_128kbps", region: "haramain", style: "Murattal", quranComRecitationId: 10 },
+  { id: "juhany", name: "Abdullah Awad Al-Juhany", arabicName: "عبد الله عواد الجهني", audioSource: everyAyah("Abdullaah_3awwaad_Al-Juhaynee_128kbps"), region: "haramain", style: "Murattal" },
+  { id: "sudais", name: "Abdul Rahman Al-Sudais", arabicName: "عبد الرحمن السديس", audioSource: everyAyah("Abdurrahmaan_As-Sudais_192kbps"), region: "haramain", style: "Murattal", quranComRecitationId: 3 },
+  { id: "ali-jaber", name: "Ali Jaber", arabicName: "علي جابر", audioSource: everyAyah("Ali_Jaber_64kbps"), region: "haramain", style: "Murattal" },
+  { id: "hudhaify", name: "Ali Al-Hudhaify", arabicName: "علي الحذيفي", audioSource: everyAyah("Hudhaify_128kbps"), region: "haramain", style: "Murattal" },
+  { id: "ibrahim-akhdar", name: "Ibrahim Al-Akhdar", arabicName: "إبراهيم الأخضر", audioSource: everyAyah("Ibrahim_Akhdar_32kbps"), region: "haramain", style: "Murattal" },
+  { id: "maher-muaiqly", name: "Maher Al-Muaiqly", arabicName: "ماهر المعيقلي", audioSource: everyAyah("MaherAlMuaiqly128kbps"), region: "haramain", style: "Murattal" },
+  { id: "muhammad-ayyub", name: "Muhammad Ayyub", arabicName: "محمد أيوب", audioSource: everyAyah("Muhammad_Ayyoub_128kbps"), region: "haramain", style: "Murattal" },
+  { id: "muhsin-qasim", name: "Muhsin Al-Qasim", arabicName: "محسن القاسم", audioSource: everyAyah("Muhsin_Al_Qasim_192kbps"), region: "haramain", style: "Murattal" },
+  { id: "salah-budair", name: "Salah Al-Budair", arabicName: "صلاح البدير", audioSource: everyAyah("Salah_Al_Budair_128kbps"), region: "haramain", style: "Murattal" },
+  { id: "shuraym", name: "Saud Ash-Shuraym", arabicName: "سعود الشريم", audioSource: everyAyah("Saood_ash-Shuraym_128kbps"), region: "haramain", style: "Murattal", quranComRecitationId: 10 },
 
-  { id: "basit-murattal", name: "Abdul Basit (Murattal)", arabicName: "عبد الباسط عبد الصمد", folder: "Abdul_Basit_Murattal_192kbps", region: "egypt", style: "Murattal", quranComRecitationId: 2 },
-  { id: "basit-mujawwad", name: "Abdul Basit (Mujawwad)", arabicName: "عبد الباسط عبد الصمد", folder: "Abdul_Basit_Mujawwad_128kbps", region: "egypt", style: "Mujawwad", quranComRecitationId: 1 },
-  { id: "ahmed-neana", name: "Ahmed Neana", arabicName: "أحمد نعينع", folder: "Ahmed_Neana_128kbps", region: "egypt", style: "Mujawwad" },
-  { id: "ali-suwaisi", name: "Ali Hajjaj Al-Suwaisi", arabicName: "علي حجاج السويسي", folder: "Ali_Hajjaj_AlSuesy_128kbps", region: "egypt", style: "Mujawwad" },
-  { id: "husary", name: "Mahmoud Khalil Al-Husary", arabicName: "محمود خليل الحصري", folder: "Husary_128kbps", region: "egypt", style: "Murattal", quranComRecitationId: 6 },
-  { id: "husary-mujawwad", name: "Mahmoud Khalil Al-Husary (Mujawwad)", arabicName: "محمود خليل الحصري", folder: "Husary_128kbps_Mujawwad", region: "egypt", style: "Mujawwad" },
-  { id: "husary-muallim", name: "Mahmoud Khalil Al-Husary (Muallim)", arabicName: "محمود خليل الحصري", folder: "Husary_Muallim_128kbps", region: "egypt", style: "Muallim", quranComRecitationId: 12 },
-  { id: "minshawi-murattal", name: "Muhammad Al-Minshawi (Murattal)", arabicName: "محمد صديق المنشاوي", folder: "Minshawy_Murattal_128kbps", region: "egypt", style: "Murattal", quranComRecitationId: 9 },
-  { id: "minshawi-mujawwad", name: "Muhammad Al-Minshawi (Mujawwad)", arabicName: "محمد صديق المنشاوي", folder: "Minshawy_Mujawwad_192kbps", region: "egypt", style: "Mujawwad", quranComRecitationId: 8 },
-  { id: "minshawi-muallim", name: "Muhammad Al-Minshawi (Muallim)", arabicName: "محمد صديق المنشاوي", folder: "Minshawy_Teacher_128kbps", region: "egypt", style: "Muallim" },
-  { id: "tablawy", name: "Muhammad Al-Tablawi", arabicName: "محمد محمود الطبلاوي", folder: "Mohammad_al_Tablaway_128kbps", region: "egypt", style: "Mujawwad", quranComRecitationId: 11 },
-  { id: "muhammad-jibreel", name: "Muhammad Jibreel", arabicName: "محمد جبريل", folder: "Muhammad_Jibreel_128kbps", region: "egypt", style: "Murattal" },
-  { id: "mustafa-ismail", name: "Mustafa Ismail", arabicName: "مصطفى إسماعيل", folder: "Mustafa_Ismail_48kbps", region: "egypt", style: "Mujawwad" },
-  { id: "mahmoud-banna", name: "Mahmoud Ali Al-Banna", arabicName: "محمود علي البنا", folder: "mahmoud_ali_al_banna_32kbps", region: "egypt", style: "Mujawwad" },
+  { id: "basit-murattal", name: "Abdul Basit (Murattal)", arabicName: "عبد الباسط عبد الصمد", audioSource: everyAyah("Abdul_Basit_Murattal_192kbps"), region: "egypt", style: "Murattal", quranComRecitationId: 2 },
+  { id: "basit-mujawwad", name: "Abdul Basit (Mujawwad)", arabicName: "عبد الباسط عبد الصمد", audioSource: everyAyah("Abdul_Basit_Mujawwad_128kbps"), region: "egypt", style: "Mujawwad", quranComRecitationId: 1 },
+  { id: "ahmed-neana", name: "Ahmed Neana", arabicName: "أحمد نعينع", audioSource: everyAyah("Ahmed_Neana_128kbps"), region: "egypt", style: "Mujawwad" },
+  { id: "ali-suwaisi", name: "Ali Hajjaj Al-Suwaisi", arabicName: "علي حجاج السويسي", audioSource: everyAyah("Ali_Hajjaj_AlSuesy_128kbps"), region: "egypt", style: "Mujawwad" },
+  { id: "husary", name: "Mahmoud Khalil Al-Husary", arabicName: "محمود خليل الحصري", audioSource: everyAyah("Husary_128kbps"), region: "egypt", style: "Murattal", quranComRecitationId: 6 },
+  { id: "husary-mujawwad", name: "Mahmoud Khalil Al-Husary (Mujawwad)", arabicName: "محمود خليل الحصري", audioSource: everyAyah("Husary_128kbps_Mujawwad"), region: "egypt", style: "Mujawwad" },
+  { id: "husary-muallim", name: "Mahmoud Khalil Al-Husary (Muallim)", arabicName: "محمود خليل الحصري", audioSource: everyAyah("Husary_Muallim_128kbps"), region: "egypt", style: "Muallim", quranComRecitationId: 12 },
+  { id: "minshawi-murattal", name: "Muhammad Al-Minshawi (Murattal)", arabicName: "محمد صديق المنشاوي", audioSource: everyAyah("Minshawy_Murattal_128kbps"), region: "egypt", style: "Murattal", quranComRecitationId: 9 },
+  { id: "minshawi-mujawwad", name: "Muhammad Al-Minshawi (Mujawwad)", arabicName: "محمد صديق المنشاوي", audioSource: everyAyah("Minshawy_Mujawwad_192kbps"), region: "egypt", style: "Mujawwad", quranComRecitationId: 8 },
+  { id: "minshawi-muallim", name: "Muhammad Al-Minshawi (Muallim)", arabicName: "محمد صديق المنشاوي", audioSource: everyAyah("Minshawy_Teacher_128kbps"), region: "egypt", style: "Muallim" },
+  { id: "tablawy", name: "Muhammad Al-Tablawi", arabicName: "محمد محمود الطبلاوي", audioSource: everyAyah("Mohammad_al_Tablaway_128kbps"), region: "egypt", style: "Mujawwad", quranComRecitationId: 11 },
+  { id: "muhammad-jibreel", name: "Muhammad Jibreel", arabicName: "محمد جبريل", audioSource: everyAyah("Muhammad_Jibreel_128kbps"), region: "egypt", style: "Murattal" },
+  { id: "mustafa-ismail", name: "Mustafa Ismail", arabicName: "مصطفى إسماعيل", audioSource: everyAyah("Mustafa_Ismail_48kbps"), region: "egypt", style: "Mujawwad" },
+  { id: "mahmoud-banna", name: "Mahmoud Ali Al-Banna", arabicName: "محمود علي البنا", audioSource: everyAyah("mahmoud_ali_al_banna_32kbps"), region: "egypt", style: "Mujawwad" },
 
-  { id: "alafasy", name: "Mishary Rashid Alafasy", arabicName: "مشاري راشد العفاسي", folder: "Alafasy_128kbps", region: "gulf", style: "Murattal", quranComRecitationId: 7 },
-  { id: "abdullah-basfar", name: "Abdullah Basfar", arabicName: "عبد الله بصفر", folder: "Abdullah_Basfar_192kbps", region: "gulf", style: "Murattal" },
-  { id: "abdullah-matroud", name: "Abdullah Matroud", arabicName: "عبد الله مطرود", folder: "Abdullah_Matroud_128kbps", region: "gulf", style: "Murattal" },
-  { id: "shaatree", name: "Abu Bakr Ash-Shaatree", arabicName: "أبو بكر الشاطري", folder: "Abu_Bakr_Ash-Shaatree_128kbps", region: "gulf", style: "Murattal", quranComRecitationId: 4 },
-  { id: "ajmy", name: "Ahmed Al-Ajmi", arabicName: "أحمد العجمي", folder: "ahmed_ibn_ali_al_ajamy_128kbps", region: "gulf", style: "Murattal" },
-  { id: "akram-alaqmi", name: "Akram Al-Alaqmi", arabicName: "أكرم العلاقمي", folder: "Akram_AlAlaqimy_128kbps", region: "gulf", style: "Murattal" },
-  { id: "fares-abbad", name: "Fares Abbad", arabicName: "فارس عباد", folder: "Fares_Abbad_64kbps", region: "gulf", style: "Murattal" },
-  { id: "saad-ghamdi", name: "Saad Al-Ghamdi", arabicName: "سعد الغامدي", folder: "Ghamadi_40kbps", region: "gulf", style: "Murattal" },
-  { id: "rifai", name: "Hani Ar-Rifai", arabicName: "هاني الرفاعي", folder: "Hani_Rifai_192kbps", region: "gulf", style: "Murattal", quranComRecitationId: 5 },
-  { id: "khalid-qahtani", name: "Khalid Al-Qahtani", arabicName: "خالد القحطاني", folder: "Khaalid_Abdullaah_al-Qahtaanee_192kbps", region: "gulf", style: "Murattal" },
-  { id: "muhammad-abdulkarim", name: "Muhammad Abdul Karim", arabicName: "محمد عبد الكريم", folder: "Muhammad_AbdulKareem_128kbps", region: "gulf", style: "Murattal" },
-  { id: "nabil-rifai", name: "Nabil Ar-Rifai", arabicName: "نبيل الرفاعي", folder: "Nabil_Rifa3i_48kbps", region: "gulf", style: "Murattal" },
-  { id: "nasser-qatami", name: "Nasser Al-Qatami", arabicName: "ناصر القطامي", folder: "Nasser_Alqatami_128kbps", region: "gulf", style: "Murattal" },
-  { id: "sahl-yassin", name: "Sahl Yassin", arabicName: "سهل ياسين", folder: "Sahl_Yassin_128kbps", region: "gulf", style: "Murattal" },
-  { id: "salah-bukhatir", name: "Salah Bukhatir", arabicName: "صلاح بو خاطر", folder: "Salaah_AbdulRahman_Bukhatir_128kbps", region: "gulf", style: "Murattal" },
-  { id: "yasser-dossary", name: "Yasser Al-Dosari", arabicName: "ياسر الدوسري", folder: "Yasser_Ad-Dussary_128kbps", region: "gulf", style: "Murattal" },
-  { id: "khalifa-tunaiji", name: "Khalifa Al-Tunaiji", arabicName: "خليفة الطنيجي", folder: "khalefa_al_tunaiji_64kbps", region: "gulf", style: "Murattal" },
+  { id: "alafasy", name: "Mishary Rashid Alafasy", arabicName: "مشاري راشد العفاسي", audioSource: everyAyah("Alafasy_128kbps"), region: "gulf", style: "Murattal", quranComRecitationId: 7 },
+  { id: "abdullah-basfar", name: "Abdullah Basfar", arabicName: "عبد الله بصفر", audioSource: everyAyah("Abdullah_Basfar_192kbps"), region: "gulf", style: "Murattal" },
+  { id: "abdullah-matroud", name: "Abdullah Matroud", arabicName: "عبد الله مطرود", audioSource: everyAyah("Abdullah_Matroud_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "shaatree", name: "Abu Bakr Ash-Shaatree", arabicName: "أبو بكر الشاطري", audioSource: everyAyah("Abu_Bakr_Ash-Shaatree_128kbps"), region: "gulf", style: "Murattal", quranComRecitationId: 4 },
+  { id: "ajmy", name: "Ahmed Al-Ajmi", arabicName: "أحمد العجمي", audioSource: everyAyah("ahmed_ibn_ali_al_ajamy_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "akram-alaqmi", name: "Akram Al-Alaqmi", arabicName: "أكرم العلاقمي", audioSource: everyAyah("Akram_AlAlaqimy_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "fares-abbad", name: "Fares Abbad", arabicName: "فارس عباد", audioSource: everyAyah("Fares_Abbad_64kbps"), region: "gulf", style: "Murattal" },
+  { id: "saad-ghamdi", name: "Saad Al-Ghamdi", arabicName: "سعد الغامدي", audioSource: everyAyah("Ghamadi_40kbps"), region: "gulf", style: "Murattal" },
+  { id: "rifai", name: "Hani Ar-Rifai", arabicName: "هاني الرفاعي", audioSource: everyAyah("Hani_Rifai_192kbps"), region: "gulf", style: "Murattal", quranComRecitationId: 5 },
+  { id: "khalid-qahtani", name: "Khalid Al-Qahtani", arabicName: "خالد القحطاني", audioSource: everyAyah("Khaalid_Abdullaah_al-Qahtaanee_192kbps"), region: "gulf", style: "Murattal" },
+  { id: "muhammad-abdulkarim", name: "Muhammad Abdul Karim", arabicName: "محمد عبد الكريم", audioSource: everyAyah("Muhammad_AbdulKareem_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "nabil-rifai", name: "Nabil Ar-Rifai", arabicName: "نبيل الرفاعي", audioSource: everyAyah("Nabil_Rifa3i_48kbps"), region: "gulf", style: "Murattal" },
+  { id: "nasser-qatami", name: "Nasser Al-Qatami", arabicName: "ناصر القطامي", audioSource: everyAyah("Nasser_Alqatami_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "sahl-yassin", name: "Sahl Yassin", arabicName: "سهل ياسين", audioSource: everyAyah("Sahl_Yassin_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "salah-bukhatir", name: "Salah Bukhatir", arabicName: "صلاح بو خاطر", audioSource: everyAyah("Salaah_AbdulRahman_Bukhatir_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "yasser-dossary", name: "Yasser Al-Dosari", arabicName: "ياسر الدوسري", audioSource: everyAyah("Yasser_Ad-Dussary_128kbps"), region: "gulf", style: "Murattal" },
+  { id: "khalifa-tunaiji", name: "Khalifa Al-Tunaiji", arabicName: "خليفة الطنيجي", audioSource: everyAyah("khalefa_al_tunaiji_64kbps"), region: "gulf", style: "Murattal" },
 
-  { id: "ayman-suwayd", name: "Ayman Suwayd", arabicName: "أيمن سويد", folder: "Ayman_Sowaid_64kbps", region: "levant", style: "Muallim" },
-  { id: "yaser-salamah", name: "Yaser Salamah", arabicName: "ياسر سلامة", folder: "Yaser_Salamah_128kbps", region: "levant", style: "Murattal" },
+  { id: "ayman-suwayd", name: "Ayman Suwayd", arabicName: "أيمن سويد", audioSource: everyAyah("Ayman_Sowaid_64kbps"), region: "levant", style: "Muallim" },
+  { id: "yaser-salamah", name: "Yaser Salamah", arabicName: "ياسر سلامة", audioSource: everyAyah("Yaser_Salamah_128kbps"), region: "levant", style: "Murattal" },
 
-  { id: "karim-mansouri", name: "Karim Mansouri", arabicName: "كريم منصوري", folder: "Karim_Mansoori_40kbps", region: "international", style: "Mujawwad" },
-  { id: "parhizgar", name: "Shahriar Parhizgar", arabicName: "شهريار پرهيزكار", folder: "Parhizgar_48kbps", region: "international", style: "Murattal" },
-  { id: "aziz-alili", name: "Aziz Alili", arabicName: "عزيز عليلي", folder: "aziz_alili_128kbps", region: "international", style: "Murattal" },
+  { id: "karim-mansouri", name: "Karim Mansouri", arabicName: "كريم منصوري", audioSource: everyAyah("Karim_Mansoori_40kbps"), region: "international", style: "Mujawwad" },
+  { id: "parhizgar", name: "Shahriar Parhizgar", arabicName: "شهريار پرهيزكار", audioSource: everyAyah("Parhizgar_48kbps"), region: "international", style: "Murattal" },
+  { id: "aziz-alili", name: "Aziz Alili", arabicName: "عزيز عليلي", audioSource: everyAyah("aziz_alili_128kbps"), region: "international", style: "Murattal" },
 ];
 
 export function getReciter(id: string): Reciter | undefined {
   return reciters.find((reciter) => reciter.id === id);
+}
+
+export function getReciterOrDefault(id: string): Reciter {
+  return getReciter(id) ?? reciters.find((reciter) => reciter.id === "alafasy")!;
 }
 
 export function supportsWordTimings(reciter: Reciter | undefined): boolean {

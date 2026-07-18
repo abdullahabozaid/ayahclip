@@ -78,8 +78,12 @@ The shared resolver should return the audio URL, source attribution, timing capa
 
 ## Next implementation checkpoint
 
-1. Introduce the source descriptor and resolver without changing current playback.
-2. Add unit tests proving URL, attribution, and timing capability resolution for every current entry.
-3. Add a source-health script that probes representative ayahs and emits a machine-readable report.
+1. **Completed:** introduce the source descriptor and resolver without changing current playback.
+2. **Completed:** add unit tests proving URL, attribution, and timing capability resolution for every current entry.
+3. **Completed:** add a source-health script that probes representative ayahs and emits a machine-readable report.
 4. Evaluate one additional, permission-compatible source against the production admission gate.
 5. Only then add modern reciters and ship the searchable catalog UI.
+
+### Verification checkpoint
+
+On 2026-07-18, `npm run check:reciter-sources -- --output <report.json>` tested four references for every catalog entry: 1:1, 2:255, 55:13, and 114:6. All 184 requests returned audio with browser-compatible CORS. The resolver is also exercised by a real browser journey that previews the upstream recitation and renders a final MP4.

@@ -1,6 +1,6 @@
-import { Verse, VideoFormat, Background, TextShadow, TextOutline, LetterboxConfig, SplitMaskConfig } from "@/types";
+import { Verse, VideoFormat, Background, TextShadow, TextOutline, LetterboxConfig, SplitMaskConfig, type Reciter } from "@/types";
 import type { VerseEmphasis } from "./store";
-import { getAudioUrl } from "./api";
+import { resolveReciterVerseAudio } from "./reciter-audio";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { ensureFontsReady, SafeAreaTarget } from "./canvas-utils";
 import {
@@ -30,7 +30,7 @@ interface ExportOptions {
    * `verses` is retained for the reciter audio path and styling lookups.
    */
   rows: ClipRow[];
-  reciterFolder: string;
+  reciter: Reciter;
   surahNumber: number;
   videoFormat: VideoFormat;
   arabicFontSize: number;
@@ -526,7 +526,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
         }
         renderWhilePlaying = true;
       } else {
-        const audioUrl = getAudioUrl(options.reciterFolder, options.surahNumber, verse.verse_number);
+        const audioUrl = resolveReciterVerseAudio(options.reciter, options.surahNumber, verse.verse_number).url;
         const response = await fetch(audioUrl);
         const audioBuffer = await audioCtx.decodeAudioData(await response.arrayBuffer());
         source.buffer = audioBuffer;
@@ -623,7 +623,8 @@ async function assembleAudio(
       }
     } else {
       for (const { verse } of options.rows) {
-        const r = await fetch(getAudioUrl(options.reciterFolder, options.surahNumber, verse.verse_number));
+        const audioUrl = resolveReciterVerseAudio(options.reciter, options.surahNumber, verse.verse_number).url;
+        const r = await fetch(audioUrl);
         const b = await ac.decodeAudioData(await r.arrayBuffer());
         slices.push({ buf: b, offset: 0, dur: b.duration });
       }

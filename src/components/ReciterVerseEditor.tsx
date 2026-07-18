@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { reciters, supportsWordTimings } from "@/lib/reciters";
-import { getAudioUrl } from "@/lib/api";
+import { getReciterOrDefault, supportsWordTimings } from "@/lib/reciters";
+import { resolveReciterVerseAudio } from "@/lib/reciter-audio";
 import { getTranslationLanguage } from "@/lib/translations";
 import {
   loadVerseWords,
@@ -32,9 +32,8 @@ export function ReciterVerseEditor() {
   const activePartIndex = useAppStore((s) => s.activePartIndex);
   const setActivePartIndex = useAppStore((s) => s.setActivePartIndex);
 
-  const reciter = reciters.find((r) => r.id === reciterId);
+  const reciter = getReciterOrDefault(reciterId);
   const recitationId = reciter?.quranComRecitationId;
-  const folder = reciter?.folder ?? "Alafasy_128kbps";
   const surahNumber = surah?.id;
   const resourceId = getTranslationLanguage(translationLanguage).resourceId;
 
@@ -94,7 +93,7 @@ export function ReciterVerseEditor() {
   const playPart = (verseNumber: number, startMs: number, endMs: number, key: string) => {
     if (surahNumber == null) return;
     let audio = audioRef.current;
-    const src = getAudioUrl(folder, surahNumber, verseNumber);
+    const src = resolveReciterVerseAudio(reciter, surahNumber, verseNumber).url;
     if (!audio) {
       audio = new Audio();
       audioRef.current = audio;

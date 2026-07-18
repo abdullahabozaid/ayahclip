@@ -32,11 +32,24 @@ export interface Verse {
   qcfWords?: QcfWord[];
 }
 
+export interface ReciterSourceAttribution {
+  label: string;
+  url: string;
+  usageNote: string;
+  removalContact: string;
+}
+
+export type ReciterAudioSource = {
+  kind: "everyayah";
+  folder: string;
+  attribution: ReciterSourceAttribution;
+};
+
 export interface Reciter {
   id: string;
   name: string;
   arabicName: string;
-  folder: string;
+  audioSource: ReciterAudioSource;
   region: "haramain" | "egypt" | "gulf" | "levant" | "international";
   style: "Murattal" | "Mujawwad" | "Muallim";
   /** Present only when Quran.com publishes verified per-word timings. */
