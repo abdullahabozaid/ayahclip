@@ -33,7 +33,8 @@ The test is deliberately skipped unless both `PERFORMANCE_BUDGET=1` and `PLAYWRI
 - Results depend on network location, CDN state, browser and hardware. The budgets are release regressions, not a universal latency promise to every user.
 - Recognition-model download and ASR execution have separate size, route and corpus gates because including the 131 MB model in an ordinary editor interaction budget would mix two different workflows.
 - Mobile-native rendering uses AVFoundation and remains covered by the iOS export unit/UI suites rather than this browser measurement.
+- `e2e/offline-export-readiness.spec.ts` separately proves that once local media and Studio are loaded, an exact MP4 can still be produced after the browser is forced offline. This does not claim that first-load navigation, remote reciter audio, stock discovery, recognition-model download, or AI captions work without a network.
 
 ## Release decision
 
-The short deployed creator journey is within budget and the constrained-memory three-minute browser export is stable. Poor-network behavior and real-device thermal/memory testing remain separate launch gates and must not be inferred from these results.
+The short deployed creator journey is within budget, the constrained-memory three-minute browser export is stable, and an already-open local-media Studio exports while offline. Throttled-network behavior and real-device thermal/memory testing remain separate launch gates and must not be inferred from these results.

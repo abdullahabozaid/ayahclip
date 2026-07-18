@@ -32,6 +32,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Operator analytics | Implemented for account-free beta | Authenticated local report aggregates production Runtime Logs into activation, successful exports, return-visit proxy, funnel, assistance, device/browser/source, and fixed failure metrics without publishing journey IDs or adding a public admin surface; true account retention remains intentionally unavailable without accounts |
 | Account-free browser isolation | Implemented | Three simultaneous production browser contexts retain distinct personal B-roll shelves; the test explicitly does not claim future authenticated tenant isolation |
 | Web performance and sustained export | Implemented, real-device gate pending | Three deployed Chrome journeys pass import, ingestion, Studio transition, playback, timeline-seek and exact-MP4 budgets; a 512 MB-heap Chrome fixture exports a verified 181-second MP4 |
+| Offline local-media export | Implemented | After Studio is loaded, forced network loss does not prevent an imported local WAV from rendering to a verified MP4; network-backed sources remain explicitly out of scope |
 
 ## Delivery sequence
 
