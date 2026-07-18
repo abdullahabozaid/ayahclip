@@ -80,6 +80,8 @@ final class ShareViewController: UIViewController {
     }
 
     private func storeFile(_ source: URL) throws {
+        let didAccess = source.startAccessingSecurityScopedResource()
+        defer { if didAccess { source.stopAccessingSecurityScopedResource() } }
         guard let group = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: suiteName
         ) else { throw CocoaError(.fileNoSuchFile) }
@@ -88,7 +90,18 @@ final class ShareViewController: UIViewController {
         let ext = source.pathExtension.isEmpty ? "mov" : source.pathExtension
         let destination = inbox.appendingPathComponent("\(UUID().uuidString).\(ext)")
         try FileManager.default.copyItem(at: source, to: destination)
-        UserDefaults(suiteName: suiteName)?.set(destination.lastPathComponent, forKey: "pendingSharedFile")
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            try? FileManager.default.removeItem(at: destination)
+            throw CocoaError(.fileWriteUnknown)
+        }
+        var queuedFiles = defaults.stringArray(forKey: "pendingSharedFiles") ?? []
+        if let legacyFile = defaults.string(forKey: "pendingSharedFile"),
+           !queuedFiles.contains(legacyFile) {
+            queuedFiles.insert(legacyFile, at: 0)
+        }
+        queuedFiles.append(destination.lastPathComponent)
+        defaults.set(queuedFiles, forKey: "pendingSharedFiles")
+        defaults.removeObject(forKey: "pendingSharedFile")
     }
 
     private func storeLink(_ value: String) {

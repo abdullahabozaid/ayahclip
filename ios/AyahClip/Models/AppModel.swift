@@ -222,17 +222,32 @@ final class AppModel {
 
     func consumeSharedInbox() async {
         guard let defaults = UserDefaults(suiteName: appGroup) else { return }
-        if let filename = defaults.string(forKey: "pendingSharedFile"),
+        var queuedFiles = defaults.stringArray(forKey: "pendingSharedFiles") ?? []
+        if let legacyFile = defaults.string(forKey: "pendingSharedFile"),
+           !queuedFiles.contains(legacyFile) {
+            queuedFiles.insert(legacyFile, at: 0)
+        }
+        if !queuedFiles.isEmpty,
            let group = FileManager.default.containerURL(
-               forSecurityApplicationGroupIdentifier: appGroup
+            forSecurityApplicationGroupIdentifier: appGroup
            ) {
-            let source = group
-                .appendingPathComponent("Incoming", isDirectory: true)
-                .appendingPathComponent(filename)
             selectedTab = .import
-            if await importMedia(from: source) {
-                defaults.removeObject(forKey: "pendingSharedFile")
-                try? FileManager.default.removeItem(at: source)
+            var remainingFiles: [String] = []
+            for filename in queuedFiles {
+                let source = group
+                    .appendingPathComponent("Incoming", isDirectory: true)
+                    .appendingPathComponent(filename)
+                if await importMedia(from: source) {
+                    try? FileManager.default.removeItem(at: source)
+                } else {
+                    remainingFiles.append(filename)
+                }
+            }
+            defaults.removeObject(forKey: "pendingSharedFile")
+            if remainingFiles.isEmpty {
+                defaults.removeObject(forKey: "pendingSharedFiles")
+            } else {
+                defaults.set(remainingFiles, forKey: "pendingSharedFiles")
             }
         }
 

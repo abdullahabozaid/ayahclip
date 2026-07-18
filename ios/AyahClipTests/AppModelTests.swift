@@ -304,13 +304,49 @@ final class AppModelTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "group.app.ayahclip.mobile"))
         let filename = "missing-\(UUID().uuidString).mov"
         defaults.set(filename, forKey: "pendingSharedFile")
-        defer { defaults.removeObject(forKey: "pendingSharedFile") }
+        defer {
+            defaults.removeObject(forKey: "pendingSharedFile")
+            defaults.removeObject(forKey: "pendingSharedFiles")
+        }
 
         let model = AppModel()
         await model.consumeSharedInbox()
 
-        XCTAssertEqual(defaults.string(forKey: "pendingSharedFile"), filename)
+        XCTAssertNil(defaults.string(forKey: "pendingSharedFile"))
+        XCTAssertEqual(defaults.stringArray(forKey: "pendingSharedFiles"), [filename])
         XCTAssertNotNil(model.notice)
+    }
+
+    func testMultipleSharedFilesImportInDeliveryOrder() async throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "group.app.ayahclip.mobile"))
+        let group = try XCTUnwrap(FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "group.app.ayahclip.mobile"
+        ))
+        let inbox = group.appendingPathComponent("Incoming", isDirectory: true)
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let firstSource = try await makeTestVideo()
+        let secondSource = try await makeTestVideo()
+        let filenames = ["first-\(UUID().uuidString).mov", "second-\(UUID().uuidString).mov"]
+        for (source, filename) in zip([firstSource, secondSource], filenames) {
+            try FileManager.default.copyItem(at: source, to: inbox.appendingPathComponent(filename))
+        }
+        defaults.set(filenames, forKey: "pendingSharedFiles")
+        defer {
+            defaults.removeObject(forKey: "pendingSharedFiles")
+            for filename in filenames {
+                try? FileManager.default.removeItem(at: inbox.appendingPathComponent(filename))
+            }
+        }
+
+        let model = AppModel()
+        model.activeProject = nil
+        await model.consumeSharedInbox()
+
+        XCTAssertEqual(model.activeProject?.allMediaFilenames.count, 2)
+        XCTAssertNil(defaults.stringArray(forKey: "pendingSharedFiles"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: inbox.appendingPathComponent(filenames[0]).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: inbox.appendingPathComponent(filenames[1]).path))
+        for url in model.importedMediaURLs { try? FileManager.default.removeItem(at: url) }
     }
 
     func testInvalidSharedTextIsDeliveredOnceForCorrection() async throws {
