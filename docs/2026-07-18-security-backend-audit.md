@@ -12,6 +12,7 @@ Date: 2026-07-18
 - Telemetry accepts only event-specific fields from the versioned schema in `src/lib/telemetry-schema.ts`, caps payloads at 2 KB, rejects cross-site browser requests, and does not log source media, file names, Quran text, transcripts, URLs, raw errors, user agents, referrers, or client IP addresses. Route tests prove deterministic 120-accepted/1-throttled behavior under a 121-request same-client burst.
 - Caption requests cap bodies at 12 KB, reject cross-site browser requests, use structured output, set `store: false`, and fall back to reviewed local editorial copy if OpenAI is absent or unavailable.
 - Pexels search, caption generation, telemetry and Stripe checkout now share bounded warm-instance throttling. Cross-site browser requests cannot spend Pexels or caption quota.
+- The account-free release keeps projects and uploaded media in browser-owned IndexedDB. `e2e/account-free-concurrency.spec.ts` opens three independent creator contexts against production simultaneously, uploads a different personal B-roll asset in each, and proves that no context can enumerate either of the other two assets. This is evidence for the current local-only architecture, not tenant-isolation evidence for a future account backend.
 - Checkout validates the exact same origin, normalizes the donation amount, constructs return URLs from the deployment origin, keeps the Stripe key server-only, and never returns payment-provider errors or request identifiers to the public client.
 - Production recognition resolves the reviewed 131,652,337-byte model through a same-origin route. The route rejects upstream size drift, redacts upstream failures, marks the response immutable for browser/CDN caching, and adds `nosniff`; move the asset to CORS-enabled object storage before broad traffic to control bandwidth cost.
 - `e2e/security-boundaries.spec.ts` verifies cross-site Pexels/checkout rejection, oversized telemetry rejection, public filesystem isolation, and public save-to-disk denial. Production smoke tests verify security headers and a real MP4 render in installed Google Chrome.
@@ -34,5 +35,6 @@ npm test
 npm run build
 npx playwright test e2e/security-boundaries.spec.ts e2e/social-caption.spec.ts
 PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 \
-  npx playwright test e2e/security-boundaries.spec.ts e2e/production-smoke.spec.ts --project=google-chrome
+  npx playwright test e2e/security-boundaries.spec.ts e2e/production-smoke.spec.ts \
+  e2e/account-free-concurrency.spec.ts --project=google-chrome
 ```
