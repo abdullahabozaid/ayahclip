@@ -5,7 +5,7 @@ test("the direct Surah workflow exposes the broad reciter catalog and preserves 
   await expect(page.getByRole("heading", { level: 1, name: "Al-Fatihah" })).toBeVisible();
 
   const recitation = page.getByLabel("Recitation");
-  await expect(recitation.locator("option")).toHaveCount(47);
+  await expect(recitation.locator("option")).toHaveCount(56);
   await recitation.selectOption("yasser-dossary");
   await expect(page.getByText("Whole-verse captions")).toBeVisible();
 

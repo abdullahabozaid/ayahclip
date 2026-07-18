@@ -187,9 +187,9 @@ async function main(): Promise<void> {
       browserPreviewAndExport: false,
     },
     admission: {
-      status: "candidate",
+      status: "provider-gates-passed",
       blockingReason:
-        "Implement and verify chapter-cue playback plus byte-range export before enabling this source in production.",
+        "This provider audit does not run a browser. Production admission additionally requires the exact-duration preview/export matrix.",
     },
   };
   const json = `${JSON.stringify(report, null, 2)}\n`;

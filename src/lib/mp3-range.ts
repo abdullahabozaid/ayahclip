@@ -166,6 +166,12 @@ export async function fetchMp3Clip(input: {
   const bytes = await clipResponse.arrayBuffer();
   const clipFirstFrame = findMp3Frame(new Uint8Array(bytes));
   if (!clipFirstFrame) throw new Error("The selected MP3 byte range contains no audio frames");
+  if (
+    clipFirstFrame.bitrate !== firstFrame.bitrate ||
+    clipFirstFrame.sampleRate !== firstFrame.sampleRate
+  ) {
+    throw new Error("Variable-rate MP3 chapters are not safe for cue-based byte seeking");
+  }
   const mediaStartSeconds = Math.max(
     0,
     (plan.byteStart + clipFirstFrame.offset - plan.audioStartByte) / plan.bytesPerSecond

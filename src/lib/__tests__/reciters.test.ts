@@ -72,20 +72,36 @@ describe("reciter audio sources", () => {
     }
   });
 
-  it("admits Mansour Al-Salimi through the verified MP3Quran timed read", () => {
-    const reciter = reciters.find((item) => item.id === "mansour-salimi");
+  it("admits only audited complete MP3Quran timed reads", () => {
+    const expected = [
+      ["abdullah-buaijan", 58, "https://server8.mp3quran.net/buajan/"],
+      ["idrees-abkr", 12, "https://server6.mp3quran.net/abkr/"],
+      ["khalid-jileel", 20, "https://server10.mp3quran.net/jleel/"],
+      ["bandar-balilah", 217, "https://server6.mp3quran.net/balilah/"],
+      ["raad-kurdi", 221, "https://server6.mp3quran.net/kurdi/"],
+      ["mansour-salimi", 245, "https://server14.mp3quran.net/mansor/"],
+      ["ahmad-nufais", 259, "https://server16.mp3quran.net/nufais/Rewayat-Hafs-A-n-Assem/"],
+      ["peshawa-qadr-kurdi", 268, "https://server16.mp3quran.net/peshawa/Rewayat-Hafs-A-n-Assem/"],
+      ["abdulaziz-turki", 282, "https://server16.mp3quran.net/a_turki/Rewayat-Hafs-A-n-Assem/"],
+      ["anas-emadi", 314, "https://server16.mp3quran.net/a_alemadi/Rewayat-Hafs-A-n-Assem/"],
+    ] as const;
 
-    expect(reciter?.audioSource).toMatchObject({
-      kind: "chapter-cues",
-      provider: "mp3quran",
-      readId: 245,
-      server: "https://server14.mp3quran.net/mansor/",
-    });
-    expect(resolveReciterVerseAudio(reciter!, 2, 255)).toMatchObject({
-      url: "https://server14.mp3quran.net/mansor/002.mp3",
-      sourceKind: "chapter-cues",
-      timingCapability: "whole-ayah",
-    });
+    const chapterReciters = reciters.filter((item) => item.audioSource.kind === "chapter-cues");
+    expect(chapterReciters).toHaveLength(expected.length);
+    for (const [id, readId, server] of expected) {
+      const reciter = reciters.find((item) => item.id === id);
+      expect(reciter?.audioSource).toMatchObject({
+        kind: "chapter-cues",
+        provider: "mp3quran",
+        readId,
+        server,
+      });
+      expect(resolveReciterVerseAudio(reciter!, 2, 255)).toMatchObject({
+        url: `${server}002.mp3`,
+        sourceKind: "chapter-cues",
+        timingCapability: "whole-ayah",
+      });
+    }
   });
 
   it("returns a recoverable result for an invalid Quran reference", () => {

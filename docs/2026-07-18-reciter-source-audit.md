@@ -4,7 +4,7 @@ Date: 2026-07-18
 
 ## Decision
 
-AyahClip currently exposes 46 verified recitation recordings from EveryAyah. This is effectively the complete set of distinct Hafs reciters and recording styles in EveryAyah's live public directory; the remaining folders are lower-bitrate duplicates, translations, Warsh recordings, support files, or alternate folder spellings.
+AyahClip now exposes 56 verified recitation recordings: 46 distinct Hafs voices/styles from EveryAyah and 10 complete timed Hafs recordings from MP3Quran. The remaining EveryAyah folders are lower-bitrate duplicates, translations, Warsh recordings, support files, or alternate folder spellings.
 
 The catalog should not be made to look larger by adding duplicate bitrates or by pointing at recordings whose reuse terms, completeness, CORS behaviour, or ayah boundaries have not been verified. More names without a dependable export path would make the product less trustworthy.
 
@@ -37,7 +37,7 @@ QuranLab can help validate names, riwayah, completeness, and source provenance. 
 
 ### MP3Quran
 
-MP3Quran is the first additional provider to pass the legal-discovery and catalog-coverage parts of the admission gate, but it is not enabled yet.
+MP3Quran is the first additional provider to pass the complete production admission gate and is enabled through AyahClip's shared `chapter-cues` engine.
 
 - The official [MP3Quran developer API](https://www.mp3quran.net/ar/api) publishes reciter, riwayah, complete-Surah, ayah-timing, and timed-read endpoints. It explicitly documents chapter audio servers and per-ayah start/end times.
 - The official [MP3Quran usage policy](https://www.mp3quran.net/privacy-en.html) says that visitors and developers may copy site material or use site links. AyahClip must still attribute MP3Quran and preserve the recorded reciter identity and removal contact.
@@ -47,11 +47,15 @@ MP3Quran is the first additional provider to pass the legal-discovery and catalo
 
 The audio servers support HTTPS, browser CORS, byte ranges, and stable three-digit chapter URLs. The timing endpoint returned complete cue counts for 1:1, 2:255, 55:13, and 114:6 for read 245 (Mansour Al-Salimi), including all 286 Al-Baqarah ayahs.
 
-The remaining blocker is export architecture. MP3Quran recordings are chapter files, not one file per ayah. Mansour Al-Salimi's Al-Baqarah file is roughly 268 MB; downloading and decoding the whole chapter to export one selected ayah would not be production-safe. A range prototype downloaded and decoded only the cue neighbourhood successfully, but the browser preview/export path must implement and verify the same chapter-cue range strategy before the voice is admitted.
+MP3Quran recordings are chapter files, not one file per ayah. Mansour Al-Salimi's Al-Baqarah file is roughly 268 MB, so AyahClip never downloads a whole chapter to export one selected ayah. The production engine resolves the official ayah cue, reads the MP3 stream header, requests only a padded byte range, rejects variable-rate ranges that would make byte seeking unsafe, and passes the same decoded window to both preview and export.
+
+The admitted MP3Quran reads are Mansour Al-Salimi (245), Abdullah Al-Buaijan (58), Idrees Abkr (12), Khalid Al-Jileel (20), Bandar Balilah (217), Raad Al-Kurdi (221), Ahmad Al-Nufais (259), Peshawa Qadr Al-Kurdi (268), Abdulaziz Al-Turki (282), and Anas Al-Emadi (314). Each has 114 advertised Surahs, 114 official timing files, complete representative cue coverage, CORS, byte ranges, attribution, and a real browser MP4 fixture.
+
+`e2e/mp3quran-reciter-matrix.spec.ts` previews and exports 114:6 for every newly admitted read and compares the MP4 duration with that read's official cue. Mansour Al-Salimi additionally passes selection, save, dashboard reopen, preview, and exact-duration export in `e2e/reciter-export.spec.ts`.
 
 Run `npm run audit:mp3quran-provider -- --output /tmp/mp3quran-audit.json` to reproduce the catalog join, 114-Surah timing check, representative cue checks, CORS checks, and byte-range checks. Use `--read <id>` to evaluate another complete timed Hafs recording.
 
-Decision: **provider candidate, not yet production-admitted**. The next source implementation is a reusable `chapter-cues` engine, followed by real preview and MP4 export tests. Do not add MP3Quran names to the selector before those tests pass.
+Decision: **production-admitted for the 10 audited reads above**. Other MP3Quran reads remain candidates until they independently pass the same catalog, cue, CORS, range, browser-preview, and MP4-duration gates.
 
 ### AQQD
 
@@ -106,9 +110,9 @@ The shared resolver should return the audio URL, source attribution, timing capa
 2. **Completed:** add unit tests proving URL, attribution, and timing capability resolution for every current entry.
 3. **Completed:** add a source-health script that probes representative ayahs and emits a machine-readable report.
 4. **Completed:** evaluate MP3Quran and AQQD against the production admission gate.
-5. Implement MP3Quran chapter-cue playback and byte-range export, then admit only the recordings that pass the complete browser test.
-6. Add the admitted modern reciters and ship the searchable catalog UI.
+5. **Completed:** implement MP3Quran chapter-cue playback and byte-range export, then admit only recordings that pass the complete browser test.
+6. **Partially completed:** add the first 10 admitted modern reciters. The searchable, keyboard-complete catalog UI remains the next catalog checkpoint.
 
 ### Verification checkpoint
 
-On 2026-07-18, `npm run check:reciter-sources -- --output <report.json>` tested four references for every catalog entry: 1:1, 2:255, 55:13, and 114:6. All 184 requests returned audio with browser-compatible CORS. The resolver is also exercised by a real browser journey that previews the upstream recitation and renders a final MP4.
+On 2026-07-18, `npm run check:reciter-sources -- --output <report.json>` tested four references for every catalog entry: 1:1, 2:255, 55:13, and 114:6. Before this nine-read expansion, all 188 requests passed. The expanded catalog is required to pass 224/224 live source probes plus the 10-read browser MP4 matrix before publication.
