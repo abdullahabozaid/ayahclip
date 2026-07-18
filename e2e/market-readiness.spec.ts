@@ -162,7 +162,9 @@ test("a real local audio file survives import, template choice, save, and reopen
 
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 2, name: "Your clips" })).toBeVisible();
-  await page.getByRole("heading", { level: 3, name: "Adh-Dhariyat 1-2" }).click();
+  const openSavedClip = page.getByRole("button", { name: "Open Adh-Dhariyat 1-2" });
+  await openSavedClip.focus();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/studio/);
   await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
 
@@ -259,6 +261,7 @@ test("a failed first save stays a draft and explains how to recover", async ({ p
 });
 
 test("a saved imported clip with missing audio never reopens as a reciter clip", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
@@ -284,7 +287,8 @@ test("a saved imported clip with missing audio never reopens as a reciter clip",
   });
   await page.reload();
 
-  await page.getByRole("heading", { level: 3, name: "Adh-Dhariyat 1-2" }).click();
+  await expect(page.getByRole("button", { name: "Delete project" })).toBeVisible();
+  await page.getByRole("button", { name: "Open Adh-Dhariyat 1-2" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(
     page.locator('[role="alert"]').filter({ hasText: "Clip could not open." }),
@@ -324,7 +328,7 @@ test("saved clip deletion stays in context and can be cancelled safely", async (
 
   const clip = page.getByRole("heading", { level: 3, name: "Delete Safeguard" });
   await expect(clip).toBeVisible();
-  await clip.locator("xpath=ancestor::div[contains(@class, 'group')]").hover();
+  await clip.locator("xpath=ancestor::article").hover();
   await page.getByRole("button", { name: "Delete project" }).click();
   const safeguard = page.locator('[role="alert"]').filter({ hasText: "Delete “Delete Safeguard”?" });
   await expect(safeguard).toContainText("permanently removed");
