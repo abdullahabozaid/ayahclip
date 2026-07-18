@@ -26,7 +26,7 @@ export default function PrivacyPage() {
           <p className="mt-5 max-w-[65ch] text-base leading-7 text-[var(--muted)]">
             AyahClip is built around local processing. Imported audio, video, recognition output and editable projects remain in your browser unless you deliberately share or download them.
           </p>
-          <p className="mt-3 text-xs text-[var(--muted-deep)]">Last updated 17 July 2026</p>
+          <p className="mt-3 text-xs text-[var(--muted-deep)]">Last updated 18 July 2026</p>
         </header>
 
         <div className="mt-12 grid gap-10 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-16">
@@ -53,13 +53,14 @@ export default function PrivacyPage() {
             <section id="diagnostics" className="scroll-mt-28">
               <h2 className="font-display text-2xl text-parchment">Anonymous diagnostics</h2>
               <p className="mt-4">To understand whether creators reach a successful export, AyahClip can record a small set of milestones such as source loaded, Quran range confirmed, template chosen, Studio opened and export succeeded or failed.</p>
-              <p className="mt-3">Each browser session receives a random temporary journey identifier. Reports include only a coarse device class, browser family, duration band and fixed error category. They do not contain account identifiers, advertising identifiers, precise device details or free-form error messages. AyahClip honours the browser Do Not Track setting.</p>
+              <p className="mt-3">Each browser session receives a random temporary journey identifier. Reports include only a coarse device class, browser family, duration band and fixed error category. They do not contain account identifiers, advertising identifiers, precise device details or free-form error messages. Request addresses may be held briefly in memory to limit abusive request bursts, but AyahClip does not add them to product-event records. AyahClip honours the browser Do Not Track setting.</p>
               <div className="mt-6"><TelemetryPreference /></div>
             </section>
 
             <section id="services" className="scroll-mt-28">
               <h2 className="font-display text-2xl text-parchment">Services AyahClip contacts</h2>
-              <p className="mt-4">The app may request Quran text and translation data from Quran.com, reciter audio from EveryAyah, optional stock media from Pexels, and application assets or recognition-model files from AyahClip hosting. Those providers receive ordinary network information such as an IP address when your browser contacts them.</p>
+              <p className="mt-4">The app may request Quran text and translation data from Quran.com, reciter audio and timing data from EveryAyah or MP3Quran, optional stock media from Pexels, and application assets or recognition-model files from AyahClip hosting. Those providers receive ordinary network information such as an IP address when your browser contacts them.</p>
+              <p className="mt-3">If server-assisted caption writing is configured, AyahClip sends the platform, tone, Surah name, verse reference, exact translation excerpt and selected reciter name to OpenAI. It does not send imported media, files or detected transcripts. Starting a donation sends the chosen amount and frequency to Stripe so Stripe can host the checkout.</p>
               <p className="mt-3">AyahClip is hosted on Vercel. Like most hosting providers, Vercel may process request metadata needed to deliver and protect the service. AyahClip does not add request IP addresses, raw user-agent strings or referrers to its product-event records.</p>
             </section>
 

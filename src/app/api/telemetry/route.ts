@@ -1,4 +1,5 @@
 import { parseProductEvent } from "@/lib/telemetry-schema";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/server-rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -6,6 +7,17 @@ export async function POST(request: Request): Promise<Response> {
   const fetchSite = request.headers.get("sec-fetch-site");
   if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const rateLimit = checkRateLimit(request, {
+    namespace: "telemetry",
+    limit: 120,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: "Too many events" },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
   }
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > 2_048) {

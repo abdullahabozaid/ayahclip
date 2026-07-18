@@ -80,6 +80,15 @@ After the production deployment is ready, verify the deployed routes, security h
 npm run test:production-google
 ```
 
+Also run the public API and local-filesystem isolation checks:
+
+```bash
+PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 \
+  npx playwright test e2e/security-boundaries.spec.ts --project=google-chrome
+```
+
+Application throttles protect a warm function instance. Before spending against paid APIs at broad-launch scale, publish the separately priced Vercel WAF fixed-window rule described in `docs/2026-07-18-security-backend-audit.md`; do not treat the in-process map as a distributed quota.
+
 `/robots.txt` advertises `/sitemap.xml`; the sitemap contains only public, indexable product pages. Browser-local libraries, editing surfaces, diagnostics and thank-you routes publish `noindex`. To connect Google Search Console, set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` to the verification token supplied by Google, redeploy, confirm the verification meta tag, and submit `https://ayahclip.vercel.app/sitemap.xml`. Indexing itself remains Google's decision and can take time.
 
 Browser profiles are not physical phones. Before announcing broad availability, repeat a short import, final-preview, Save Video and camera-roll playback check on current iPhone Safari and Android Chrome hardware. Record the operating-system version, browser version, source format, clip duration, output type and result. Do not call the physical-device gate complete from emulation alone.

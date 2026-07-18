@@ -7,15 +7,14 @@ import {
   type CaptionFrame,
   type SocialCaptionRequest,
 } from "@/lib/social-caption";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/server-rate-limit";
 
 export const dynamic = "force-dynamic";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_CAPTION_MODEL = process.env.OPENAI_CAPTION_MODEL ?? "gpt-5.6-luna";
 const MAX_BODY_BYTES = 12_288;
-const WINDOW_MS = 60_000;
-const MAX_REQUESTS_PER_WINDOW = 8;
-const attempts = new Map<string, { count: number; resetAt: number }>();
+const CAPTION_RATE_LIMIT = { namespace: "social-caption", limit: 8, windowMs: 60_000 } as const;
 
 const OUTPUT_SCHEMA = {
   type: "object",
@@ -44,22 +43,6 @@ const OUTPUT_SCHEMA = {
   },
   required: ["frames"],
 } as const;
-
-function requestKey(request: Request): string {
-  return (request.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim().slice(0, 80);
-}
-
-function isRateLimited(request: Request): boolean {
-  const now = Date.now();
-  const key = requestKey(request);
-  const existing = attempts.get(key);
-  if (!existing || existing.resetAt <= now) {
-    attempts.set(key, { count: 1, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  existing.count += 1;
-  return existing.count > MAX_REQUESTS_PER_WINDOW;
-}
 
 function outputText(response: unknown): string | null {
   if (!response || typeof response !== "object") return null;
@@ -137,10 +120,11 @@ export async function POST(request: Request): Promise<Response> {
   if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (isRateLimited(request)) {
+  const rateLimit = checkRateLimit(request, CAPTION_RATE_LIMIT);
+  if (!rateLimit.allowed) {
     return Response.json(
       { error: "Please wait a moment before creating more captions." },
-      { status: 429, headers: { "retry-after": "60", "cache-control": "no-store" } },
+      { status: 429, headers: rateLimitHeaders(rateLimit) },
     );
   }
   const contentLength = Number(request.headers.get("content-length") ?? 0);

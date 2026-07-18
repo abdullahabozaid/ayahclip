@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildCheckoutParams, normalizeAmount, type Frequency } from "@/lib/support";
 import { createCheckoutSession, isStripeConfigured } from "@/lib/stripe";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/server-rate-limit";
 
 export const runtime = "nodejs";
+const MAX_BODY_BYTES = 2_048;
 
 // POST /api/support/checkout → create a Stripe Checkout Session for a one-time
 // or monthly donation and return its hosted URL. The client redirects to it.
@@ -11,17 +13,40 @@ export async function POST(req: NextRequest) {
   if (!origin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  let siteOrigin: string;
   try {
-    if (new URL(origin).host !== req.nextUrl.host) {
+    const parsedOrigin = new URL(origin);
+    const requestHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+    if (!requestHost || parsedOrigin.host !== requestHost) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    siteOrigin = parsedOrigin.origin;
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const rateLimit = checkRateLimit(req, {
+    namespace: "support-checkout",
+    limit: 10,
+    windowMs: 10 * 60_000,
+  });
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Please wait before starting another checkout." },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+  const contentLength = Number(req.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
   }
 
   let body: { amount?: unknown; frequency?: unknown };
   try {
-    body = await req.json();
+    const text = await req.text();
+    if (text.length > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    }
+    body = JSON.parse(text) as { amount?: unknown; frequency?: unknown };
   } catch {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
@@ -47,7 +72,6 @@ export async function POST(req: NextRequest) {
 
   // Build absolute return URLs from the request origin so this works on any
   // deployment without a hardcoded base URL.
-  const siteOrigin = req.nextUrl.origin;
   const params = buildCheckoutParams({
     pence: amount.pence,
     frequency,

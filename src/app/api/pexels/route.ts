@@ -1,8 +1,24 @@
 import { NextRequest } from "next/server";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/server-rate-limit";
 
 const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
 export async function GET(request: NextRequest) {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const rateLimit = checkRateLimit(request, {
+    namespace: "pexels-search",
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rateLimit.allowed) {
+    return Response.json(
+      { error: "Too many searches" },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
   if (!PEXELS_API_KEY || PEXELS_API_KEY === "your_pexels_api_key_here") {
     return Response.json(
       { error: "Pexels API key not configured. Add PEXELS_API_KEY to .env.local" },

@@ -46,6 +46,9 @@ test("deployed AyahClip completes a real MP4 journey in Google Chrome", async ({
   expect(homepage.headers()["x-content-type-options"]).toBe("nosniff");
   expect(homepage.headers()["x-frame-options"]).toBe("DENY");
   expect(homepage.headers()["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(homepage.headers()["strict-transport-security"]).toContain("max-age=63072000");
+  expect(homepage.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
+  expect(homepage.headers()["permissions-policy"]).toContain("browsing-topics=()");
 
   await page.goto("/import");
   await page.locator('input[type="file"]').setInputFiles({

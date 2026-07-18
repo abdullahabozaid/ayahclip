@@ -19,7 +19,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | --- | --- | --- |
 | Desktop editor shell | Implemented, continuing polish | Compact preview/inspector/timeline architecture and browser QA |
 | Quran navigation | Implemented, polished | Long Surahs use passage-first selection; individual ayahs stay bounded; mobile preview precedes the grid |
-| Reciter breadth | Implemented for current audio architecture | 46 verified EveryAyah verse-level recordings; source expansion contract documented in `docs/2026-07-18-reciter-source-audit.md` |
+| Reciter breadth | Implemented, search UX pending | 56 verified recordings: 46 EveryAyah verse files plus 10 complete MP3Quran timed reads; 224/224 source probes and exact-duration browser export matrix |
 | Word-level timing | Implemented for supported subset | 12 Quran.com timing-capable recitations, labelled honestly |
 | Whole-verse captions | Implemented | Unsupported word-timing voices no longer inherit another reciter's timings |
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
@@ -28,6 +28,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Native iOS beta | Implemented | Signed IPA and passing unit/UI tests |
 | TestFlight distribution | Blocked by account configuration | App Store Connect app record for `app.ayahclip.mobile` still required |
 | Public production readiness | Not complete | Remaining gates below |
+| Security/backend baseline | Implemented, distributed WAF pending | Zero production dependency advisories; no tracked secrets; headers, local-filesystem isolation, request limits and API boundary tests documented in `docs/2026-07-18-security-backend-audit.md` |
 
 ## Delivery sequence
 
