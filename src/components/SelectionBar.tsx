@@ -16,16 +16,16 @@ export function SelectionBar({ count }: SelectionBarProps) {
       : `~${Math.floor(estSeconds / 60)}m ${estSeconds % 60}s`;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-6">
-      <div className="rise flex items-center gap-5 rounded-full border border-[var(--hairline)] bg-[var(--surface)]/95 py-2.5 pl-6 pr-2.5 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.9)] backdrop-blur-xl">
-        <span className="text-sm text-parchment">
-          <span className="font-display text-gold-soft">{count}</span> verse
-          {count !== 1 ? "s" : ""}
-          <span className="ml-2 text-[var(--muted)]">{duration}</span>
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--hairline)] bg-[var(--surface)] px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+        <span className="min-w-0 text-sm text-parchment">
+          <span className="font-medium tabular-nums text-gold-soft">{count}</span> ayah
+          {count !== 1 ? "s" : ""} selected
+          <span className="ml-2 hidden text-[var(--muted)] sm:inline">Estimated {duration}</span>
         </span>
         <Link
           href="/studio"
-          className="btn-gold flex items-center gap-2 rounded-full px-5 py-2.5 text-sm"
+          className="btn-gold flex min-h-11 shrink-0 items-center gap-2 rounded-full px-5 text-sm"
         >
           Open studio
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">

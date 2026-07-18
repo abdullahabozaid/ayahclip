@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Verse } from "@/types";
 
 interface VersePickerProps {
@@ -10,6 +10,57 @@ interface VersePickerProps {
   onSelectRange: (from: number, to: number) => void;
   onSelectAll: () => void;
   onClear: () => void;
+}
+
+interface VersePreviewProps {
+  verse: Verse | undefined;
+  verseNumber: number;
+  selected: boolean;
+  onToggle: () => void;
+}
+
+function VersePreview({ verse, verseNumber, selected, onToggle }: VersePreviewProps) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[var(--hairline-soft)] bg-[var(--surface)]">
+      <div className="flex min-h-12 items-center justify-between border-b border-[var(--hairline-soft)] px-4 py-2.5 sm:px-5">
+        <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-gold-soft/75">
+          Ayah {verseNumber}
+        </span>
+        {verse && (
+          <button
+            onClick={onToggle}
+            aria-pressed={selected}
+            className={`min-h-10 rounded-full px-3 text-xs transition-colors sm:min-h-8 ${
+              selected
+                ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                : "btn-ghost"
+            }`}
+          >
+            {selected ? "Selected" : "Add ayah"}
+          </button>
+        )}
+      </div>
+      <div className="max-h-[360px] overflow-y-auto px-4 py-5 sm:px-5">
+        {verse ? (
+          <>
+            <p
+              className="font-arabic text-right text-2xl leading-[2.15] text-parchment"
+              dir="rtl"
+            >
+              {verse.text_uthmani}
+            </p>
+            {verse.translation && (
+              <p className="mt-4 text-sm leading-relaxed text-[var(--muted)]">
+                {verse.translation}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">Choose an ayah to preview its text.</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function VersePicker({
@@ -24,14 +75,20 @@ export function VersePicker({
   const [preview, setPreview] = useState<number>(verses[0]?.verse_number ?? 1);
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
+  const [individualOpen, setIndividualOpen] = useState(() => verses.length <= 40);
+
+  useEffect(() => {
+    setPreview(verses[0]?.verse_number ?? 1);
+    setIndividualOpen(verses.length <= 40);
+  }, [verses]);
 
   const total = verses.length;
   const clamp = (n: number) => Math.max(1, Math.min(total, n));
 
   const applyRange = () => {
     if (!rangeFrom && !rangeTo) return;
-    const f = clamp(parseInt(rangeFrom) || 1);
-    const t = clamp(parseInt(rangeTo) || total);
+    const f = clamp(parseInt(rangeFrom || rangeTo) || 1);
+    const t = clamp(parseInt(rangeTo || rangeFrom) || f);
     onSelectRange(f, t);
     setRangeFrom("");
     setRangeTo("");
@@ -52,130 +109,144 @@ export function VersePicker({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_minmax(280px,360px)]">
-      {/* Number pad */}
-      <div>
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <button
-            onClick={allSelected ? onClear : onSelectAll}
-            className="btn-ghost rounded-full px-4 py-2 text-sm"
-          >
-            {allSelected ? "Deselect all" : "Select all"}
-          </button>
-          {selectedNumbers.length > 0 && (
-            <button
-              onClick={onClear}
-              className="rounded-full px-4 py-2 text-sm text-[var(--muted)] transition-colors hover:text-parchment"
-            >
-              Clear
-            </button>
-          )}
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+      <div className="min-w-0 space-y-5">
+        <section aria-labelledby="ayah-range-heading" className="border-y border-[var(--hairline-soft)] py-4">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h2 id="ayah-range-heading" className="text-sm font-medium text-parchment">
+                Choose a continuous passage
+              </h2>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">
+                Most clips use neighbouring ayahs. Enter the first and last ayah in the passage.
+              </p>
+            </div>
+            {selectedNumbers.length > 0 && (
+              <button
+                onClick={onClear}
+                className="min-h-10 rounded-full px-3 text-xs text-[var(--muted)] transition-colors hover:text-parchment"
+              >
+                Clear {selectedNumbers.length} selected
+              </button>
+            )}
+          </div>
 
-          {/* Explicit range — works on touch and desktop */}
-          <div className="ml-auto flex items-center gap-1.5 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] py-1 pl-3 pr-1">
-            <span className="text-xs text-[var(--muted)]">Range</span>
-            <input
-              type="number"
-              min={1}
-              max={total}
-              value={rangeFrom}
-              onChange={(e) => setRangeFrom(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyRange()}
-              placeholder="1"
-              className="field w-12 px-1 py-1 text-center text-sm placeholder-[var(--muted-deep)]"
-            />
-            <span className="text-[var(--muted-deep)]">–</span>
-            <input
-              type="number"
-              min={1}
-              max={total}
-              value={rangeTo}
-              onChange={(e) => setRangeTo(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyRange()}
-              placeholder={String(total)}
-              className="field w-12 px-1 py-1 text-center text-sm placeholder-[var(--muted-deep)]"
-            />
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(110px,150px)_minmax(110px,150px)_auto] sm:items-end">
+            <label className="grid gap-1.5 text-xs text-[var(--muted)]">
+              First ayah
+              <input
+                type="number"
+                min={1}
+                max={total}
+                value={rangeFrom}
+                onChange={(event) => setRangeFrom(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && applyRange()}
+                placeholder="1"
+                className="field min-h-11 w-full px-3 text-sm tabular-nums"
+              />
+            </label>
+            <label className="grid gap-1.5 text-xs text-[var(--muted)]">
+              Last ayah
+              <input
+                type="number"
+                min={1}
+                max={total}
+                value={rangeTo}
+                onChange={(event) => setRangeTo(event.target.value)}
+                onKeyDown={(event) => event.key === "Enter" && applyRange()}
+                placeholder={String(total)}
+                className="field min-h-11 w-full px-3 text-sm tabular-nums"
+              />
+            </label>
             <button
               onClick={applyRange}
-              className="btn-gold rounded-full px-3 py-1 text-xs"
+              disabled={!rangeFrom && !rangeTo}
+              className="btn-gold col-span-2 min-h-11 rounded-full px-5 text-sm disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-1"
             >
-              Add
+              Add passage
             </button>
           </div>
+        </section>
+
+        <div className="lg:hidden">
+          <VersePreview
+            verse={previewVerse}
+            verseNumber={preview}
+            selected={selectedSet.has(preview)}
+            onToggle={() => handleChip(preview, false)}
+          />
         </div>
 
-        <p className="mb-3 text-xs text-[var(--muted-deep)]">
-          Tap a number to add it · <span className="text-gold-soft/70">shift-click</span> a second to fill the gap
-        </p>
+        <details
+          className="group"
+          open={individualOpen}
+          onToggle={(event) => setIndividualOpen(event.currentTarget.open)}
+        >
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-1 text-sm text-parchment outline-none focus-visible:ring-2 focus-visible:ring-gold/60 [&::-webkit-details-marker]:hidden">
+            <span>
+              Pick individual ayahs
+              <span className="ml-2 text-xs text-[var(--muted-deep)]">{total} available</span>
+            </span>
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-[var(--muted)] transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+            </svg>
+          </summary>
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5">
-          {verses.map((v) => {
-            const n = v.verse_number;
-            const sel = selectedSet.has(n);
-            const isPreview = preview === n;
-            return (
+          <div className="mt-2 border-t border-[var(--hairline-soft)] pt-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-[var(--muted-deep)]">
+                Tap to select. On desktop, shift-click a second ayah to fill the gap.
+              </p>
               <button
-                key={v.id}
-                onMouseEnter={() => setPreview(n)}
-                onClick={(e) => handleChip(n, e.shiftKey)}
-                aria-pressed={sel}
-                className={`relative flex h-11 items-center justify-center rounded-lg border text-sm tabular-nums transition-all ${
-                  sel
-                    ? "border-[var(--gold)] bg-[var(--gold)] font-medium text-[var(--ink-deep)]"
-                    : isPreview
-                      ? "border-[var(--gold)]/50 bg-[var(--gold)]/[0.08] text-parchment"
-                      : "border-[var(--hairline-soft)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment"
-                }`}
+                onClick={allSelected ? onClear : onSelectAll}
+                className="btn-ghost min-h-10 rounded-full px-3 text-xs sm:min-h-8"
               >
-                {n}
+                {allSelected ? "Deselect all" : "Select all"}
               </button>
-            );
-          })}
-        </div>
+            </div>
+
+            <div
+              role="region"
+              className="max-h-[min(52dvh,540px)] overflow-y-auto overscroll-contain pr-1"
+              aria-label="Individual ayahs"
+            >
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(44px,1fr))] gap-1.5">
+                {verses.map((verse) => {
+                  const number = verse.verse_number;
+                  const selected = selectedSet.has(number);
+                  const isPreview = preview === number;
+                  return (
+                    <button
+                      key={verse.id}
+                      onMouseEnter={() => setPreview(number)}
+                      onFocus={() => setPreview(number)}
+                      onClick={(event) => handleChip(number, event.shiftKey)}
+                      aria-pressed={selected}
+                      className={`relative flex h-11 items-center justify-center rounded-lg border text-sm tabular-nums transition-colors ${
+                        selected
+                          ? "border-[var(--gold)] bg-[var(--gold)] font-medium text-[var(--ink-deep)]"
+                          : isPreview
+                            ? "border-[var(--gold)]/50 bg-[var(--gold)]/[0.08] text-parchment"
+                            : "border-[var(--hairline-soft)] bg-[var(--surface)] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment"
+                      }`}
+                    >
+                      {number}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
 
-      {/* Preview pane */}
-      <div className="lg:sticky lg:top-[88px] lg:self-start">
-        <div className="panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[var(--hairline-soft)] px-5 py-3">
-            <span className="text-xs uppercase tracking-[0.2em] text-gold-soft/70">
-              Verse {preview}
-            </span>
-            {previewVerse && (
-              <button
-                onClick={() => handleChip(preview, false)}
-                className={`rounded-full px-3 py-1 text-xs transition-colors ${
-                  selectedSet.has(preview)
-                    ? "bg-[var(--gold)] text-[var(--ink-deep)]"
-                    : "btn-ghost"
-                }`}
-              >
-                {selectedSet.has(preview) ? "Selected ✓" : "Add"}
-              </button>
-            )}
-          </div>
-          <div className="max-h-[420px] overflow-y-auto px-5 py-5">
-            {previewVerse ? (
-              <>
-                <p
-                  className="font-arabic text-right text-2xl leading-[2.2] text-parchment"
-                  dir="rtl"
-                >
-                  {previewVerse.text_uthmani}
-                </p>
-                {previewVerse.translation && (
-                  <p className="mt-4 text-sm leading-relaxed text-[var(--muted)]">
-                    {previewVerse.translation}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-[var(--muted)]">
-                Hover a number to preview the verse.
-              </p>
-            )}
-          </div>
-        </div>
+      <div className="hidden lg:sticky lg:top-[88px] lg:block lg:self-start">
+        <VersePreview
+          verse={previewVerse}
+          verseNumber={preview}
+          selected={selectedSet.has(preview)}
+          onToggle={() => handleChip(preview, false)}
+        />
       </div>
     </div>
   );
