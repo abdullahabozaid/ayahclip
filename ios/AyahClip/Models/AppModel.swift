@@ -6,6 +6,11 @@ import Photos
 @MainActor
 @Observable
 final class AppModel {
+    typealias ExportRenderer = @MainActor ([URL], ClipProject) async throws -> URL
+    typealias AvailableCapacityProvider = @MainActor (URL) throws -> Int64?
+    typealias PhotoAuthorizationRequester = @MainActor () async -> PHAuthorizationStatus
+    typealias PhotoSaver = @MainActor (URL) async throws -> Void
+
     private let appGroup = "group.app.ayahclip.mobile"
     enum AppTab: Hashable {
         case projects
@@ -34,9 +39,34 @@ final class AppModel {
     private var redoStack: [ClipProject] = []
     @ObservationIgnored private var autosaveTask: Task<Void, Never>?
     @ObservationIgnored private var exportTask: Task<Void, Never>?
+    @ObservationIgnored private let exportRenderer: ExportRenderer
+    @ObservationIgnored private let availableCapacityProvider: AvailableCapacityProvider
+    @ObservationIgnored private let photoAuthorizationRequester: PhotoAuthorizationRequester
+    @ObservationIgnored private let photoSaver: PhotoSaver
     private var exportRequestID: UUID?
 
-    init() {
+    init(
+        exportRenderer: @escaping ExportRenderer = { sourceURLs, project in
+            try await VideoExportService.render(sourceURLs: sourceURLs, project: project)
+        },
+        availableCapacityProvider: @escaping AvailableCapacityProvider = { directory in
+            try directory.resourceValues(
+                forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+            ).volumeAvailableCapacityForImportantUsage
+        },
+        photoAuthorizationRequester: @escaping PhotoAuthorizationRequester = {
+            await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        },
+        photoSaver: @escaping PhotoSaver = { exportURL in
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: exportURL)
+            }
+        }
+    ) {
+        self.exportRenderer = exportRenderer
+        self.availableCapacityProvider = availableCapacityProvider
+        self.photoAuthorizationRequester = photoAuthorizationRequester
+        self.photoSaver = photoSaver
         loadProjects()
         pendingLink = UserDefaults.standard.string(forKey: referenceKey) ?? ""
     }
@@ -187,9 +217,7 @@ final class AppModel {
                 let sourceBytes = Int64(
                     try sourceURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
                 )
-                let availableBytes = try directory.resourceValues(
-                    forKeys: [.volumeAvailableCapacityForImportantUsageKey]
-                ).volumeAvailableCapacityForImportantUsage
+                let availableBytes = try availableCapacityProvider(directory)
                 try MediaImportPolicy.validateFile(
                     fileBytes: sourceBytes,
                     availableBytes: availableBytes
@@ -320,19 +348,21 @@ final class AppModel {
             notice = "Import a video before exporting."
             return
         }
+        guard importedMediaURLs.allSatisfy(\.isFileURL) else {
+            notice = "Export uses media stored on this iPhone. Re-import any remote media before exporting."
+            return
+        }
         guard exportTask == nil else { return }
         let sourceURLs = importedMediaURLs
         let projectID = project.id
+        let renderer = exportRenderer
         let requestID = UUID()
         exportRequestID = requestID
         exportURL = nil
         isExporting = true
         exportTask = Task { [weak self] in
             do {
-                let output = try await VideoExportService.render(
-                    sourceURLs: sourceURLs,
-                    project: project
-                )
+                let output = try await renderer(sourceURLs, project)
                 try Task.checkCancellation()
                 guard let self,
                       self.exportRequestID == requestID,
@@ -370,16 +400,14 @@ final class AppModel {
 
         isSavingToPhotos = true
         defer { isSavingToPhotos = false }
-        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        let status = await photoAuthorizationRequester()
         guard status == .authorized || status == .limited else {
             notice = "Photos access is off. Allow AyahClip to add photos in Settings, then try again."
             return
         }
 
         do {
-            try await PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: exportURL)
-            }
+            try await photoSaver(exportURL)
             notice = "Video saved to Photos."
         } catch {
             notice = "Could not save the video to Photos: \(error.localizedDescription)"

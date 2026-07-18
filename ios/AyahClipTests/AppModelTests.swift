@@ -195,6 +195,23 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.importedMediaURLs.isEmpty)
     }
 
+    func testImportRejectsBeforeCopyWhenStorageReserveWouldBeConsumed() async throws {
+        let source = try await makeTestVideo(frameCount: 12)
+        let model = AppModel(availableCapacityProvider: { _ in
+            MediaImportPolicy.storageReserveBytes
+        })
+        model.createProject()
+
+        let imported = await model.importMedia(from: source)
+
+        XCTAssertFalse(imported)
+        XCTAssertEqual(
+            model.notice,
+            "Could not import that file: This iPhone does not have enough free space to copy that source safely. Free some storage, then try again."
+        )
+        XCTAssertTrue(model.importedMediaURLs.isEmpty)
+    }
+
     func testNewClipDeepLinkOpensEditor() throws {
         let model = AppModel()
         XCTAssertNil(model.activeProject)
@@ -280,6 +297,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.activeProject?.id, replacementProjectID)
         XCTAssertFalse(model.isExporting)
         XCTAssertNil(model.exportURL)
+    }
+
+    func testInterruptedExportSurfacesRecoveryWithoutPublishingPartialOutput() async throws {
+        struct InterruptedExport: LocalizedError {
+            var errorDescription: String? { "Rendering stopped because storage became unavailable." }
+        }
+        let model = AppModel(exportRenderer: { _, _ in throw InterruptedExport() })
+        model.createProject()
+        model.importedMediaURLs = [FileManager.default.temporaryDirectory.appendingPathComponent("local-source.mov")]
+
+        model.startExport()
+        for _ in 0..<20 {
+            guard model.isExporting else { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+
+        XCTAssertFalse(model.isExporting)
+        XCTAssertNil(model.exportURL)
+        XCTAssertEqual(model.notice, "Export failed: Rendering stopped because storage became unavailable.")
+    }
+
+    func testExportRejectsRemoteMediaSoFinishedProjectsRemainOfflineCapable() throws {
+        var rendererInvoked = false
+        let model = AppModel(exportRenderer: { _, _ in
+            rendererInvoked = true
+            return FileManager.default.temporaryDirectory.appendingPathComponent("should-not-render.mp4")
+        })
+        model.createProject()
+        model.importedMediaURLs = [try XCTUnwrap(URL(string: "https://example.com/remote.mov"))]
+
+        model.startExport()
+
+        XCTAssertFalse(rendererInvoked)
+        XCTAssertFalse(model.isExporting)
+        XCTAssertNil(model.exportURL)
+        XCTAssertEqual(
+            model.notice,
+            "Export uses media stored on this iPhone. Re-import any remote media before exporting."
+        )
     }
 
     func testBrollSequenceRotatesVisualsAtVerseBoundary() async throws {
@@ -516,6 +572,45 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.notice, "Render the video before saving it to Photos.")
         XCTAssertFalse(model.isSavingToPhotos)
+    }
+
+    func testDeniedPhotosPermissionExplainsHowToRecoverWithoutAttemptingSave() async {
+        var saveAttempted = false
+        let model = AppModel(
+            photoAuthorizationRequester: { .denied },
+            photoSaver: { _ in saveAttempted = true }
+        )
+        model.exportURL = FileManager.default.temporaryDirectory.appendingPathComponent("finished.mp4")
+
+        await model.saveExportToPhotos()
+
+        XCTAssertFalse(saveAttempted)
+        XCTAssertFalse(model.isSavingToPhotos)
+        XCTAssertEqual(
+            model.notice,
+            "Photos access is off. Allow AyahClip to add photos in Settings, then try again."
+        )
+    }
+
+    func testPhotosSaveFailureKeepsRenderedExportAvailableForRetry() async {
+        struct SaveFailure: LocalizedError {
+            var errorDescription: String? { "The device has no space for another video." }
+        }
+        let rendered = FileManager.default.temporaryDirectory.appendingPathComponent("finished.mp4")
+        let model = AppModel(
+            photoAuthorizationRequester: { .authorized },
+            photoSaver: { _ in throw SaveFailure() }
+        )
+        model.exportURL = rendered
+
+        await model.saveExportToPhotos()
+
+        XCTAssertFalse(model.isSavingToPhotos)
+        XCTAssertEqual(model.exportURL, rendered)
+        XCTAssertEqual(
+            model.notice,
+            "Could not save the video to Photos: The device has no space for another video."
+        )
     }
 
     func testImportedMediaRetainsSavedSocialReference() async throws {
