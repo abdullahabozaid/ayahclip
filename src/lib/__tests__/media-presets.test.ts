@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { artisticBackgroundPresets } from "@/lib/backgrounds";
 import { STOCK_IMAGES } from "@/lib/stock-library";
 import { VIDEO_PRESETS } from "@/lib/video-presets";
 
@@ -40,5 +41,28 @@ describe("curated media presets", () => {
     expect(pickerSource).toContain("<StockLibrary");
     expect(pickerSource).not.toContain("PexelsSearch");
     expect(existsSync(resolve(process.cwd(), "src/app/api/pexels/route.ts"))).toBe(false);
+  });
+
+  it("ships optimized local artwork in a separately labelled illustration collection", () => {
+    expect(artisticBackgroundPresets).toHaveLength(3);
+    expect(artisticBackgroundPresets.every((item) =>
+      item.type === "image" &&
+      item.collection === "artistic" &&
+      item.value.startsWith("/backgrounds/artistic-") &&
+      item.value.endsWith(".webp")
+    )).toBe(true);
+
+    for (const item of artisticBackgroundPresets) {
+      const assetPath = resolve(process.cwd(), "public", item.value.slice(1));
+      expect(existsSync(assetPath), item.label).toBe(true);
+      expect(statSync(assetPath).size, item.label).toBeLessThan(350 * 1024);
+    }
+
+    const pickerSource = readFileSync(
+      resolve(process.cwd(), "src/components/BackgroundPicker.tsx"),
+      "utf8",
+    );
+    expect(pickerSource).toContain("Artistic illustrations");
+    expect(pickerSource).toContain("Original vertical compositions with room for captions.");
   });
 });

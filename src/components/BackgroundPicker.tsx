@@ -136,7 +136,12 @@ function PresetsGrid({
 }) {
   const solids = backgroundPresets.filter((b) => b.type === "solid");
   const gradients = backgroundPresets.filter((b) => b.type === "gradient");
-  const images = backgroundPresets.filter((b) => b.type === "image");
+  const graphicImages = backgroundPresets.filter(
+    (background) => background.type === "image" && background.collection !== "artistic",
+  );
+  const artisticImages = backgroundPresets.filter(
+    (background) => background.type === "image" && background.collection === "artistic",
+  );
 
   return (
     <div className="space-y-3">
@@ -180,9 +185,9 @@ function PresetsGrid({
       </div>
       <BackgroundEditor value={value} onChange={onEditCurrent} />
       <div>
-        <p className="mb-2 text-xs text-[var(--muted)]">Images</p>
+        <p className="mb-2 text-xs text-[var(--muted)]">Graphic backgrounds</p>
         <div className="flex flex-wrap gap-2">
-          {images.map((bg) => (
+          {graphicImages.map((bg) => (
             <button
               key={bg.value}
               onClick={() => onChange(bg)}
@@ -192,6 +197,7 @@ function PresetsGrid({
                   : "border-transparent hover:border-[var(--hairline)]"
               }`}
               aria-label={bg.label}
+              aria-pressed={value.value === bg.value}
               title={bg.label}
             >
               {/* Direct media preview: sources may be blob URLs or user-selected remote files. */}
@@ -203,6 +209,57 @@ function PresetsGrid({
               />
             </button>
           ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-[var(--muted)]">Artistic illustrations</p>
+            <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--muted-deep)]">
+              Original vertical compositions with room for captions.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full border border-[var(--hairline-soft)] px-2 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
+            Original
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {artisticImages.map((background) => {
+            const selected = value.value === background.value;
+
+            return (
+              <button
+                key={background.value}
+                type="button"
+                onClick={() => onChange(background)}
+                aria-label={`Use ${background.label}`}
+                aria-pressed={selected}
+                className={`group min-w-0 overflow-hidden rounded-lg border text-left transition-colors ${
+                  selected
+                    ? "border-[var(--gold)] bg-[var(--gold)]/5"
+                    : "border-[var(--hairline-soft)] bg-white/[0.025] hover:border-[var(--hairline)]"
+                }`}
+              >
+                <span className="relative block aspect-[9/16] overflow-hidden bg-[var(--ink-deep)]">
+                  {/* Built-in artwork is served from the local public directory. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={background.value}
+                    alt=""
+                    className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+                  />
+                  {selected && (
+                    <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-[var(--gold)] text-[10px] font-bold text-[var(--ink-deep)] shadow-sm">
+                      ✓
+                    </span>
+                  )}
+                </span>
+                <span className="block truncate px-2 py-1.5 text-[10px] text-[var(--muted)]">
+                  {background.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

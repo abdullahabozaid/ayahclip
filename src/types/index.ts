@@ -80,6 +80,8 @@ export interface Background {
   type: BackgroundType;
   value: string;
   label: string;
+  /** Presentation grouping for built-in image presets. */
+  collection?: "graphic" | "artistic";
   /** Last creator-authored canvas treatments, retained while comparing modes. */
   canvasAlternates?: {
     solid?: string;

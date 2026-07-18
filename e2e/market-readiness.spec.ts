@@ -110,6 +110,19 @@ test("a real local audio file survives import, template choice, save, and reopen
   if ((await inspectorToggle.getAttribute("aria-expanded")) === "false") await inspectorToggle.click();
   await page.getByRole("button", { name: "Text", exact: true }).click();
   await expect(page.getByRole("button", { name: "Compare all five on this ayah" })).toBeVisible();
+  await page.getByRole("button", { name: "Media", exact: true }).click();
+  const studioBackground = page.getByRole("button", { name: "Background", exact: true });
+  if ((await studioBackground.getAttribute("aria-expanded")) === "false") {
+    await studioBackground.click();
+  }
+  await expect(page.getByText("Artistic illustrations", { exact: true })).toBeVisible();
+  const artisticPreset = page.getByRole("button", { name: "Use Reciter side fade" });
+  await expect(artisticPreset).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use Quiet courtyard" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use Prayer rows" })).toBeVisible();
+  await artisticPreset.click();
+  await expect(artisticPreset).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Text", exact: true }).click();
   await expect.poll(() => productEvents.map((event) => event.event)).toEqual(
     expect.arrayContaining([
       "journey_started",
