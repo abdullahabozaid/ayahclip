@@ -22,6 +22,17 @@ Each event carries one random browser-session journey ID and `schemaVersion: 1`.
 
 Keep preview and download outcomes separate with `exportAction`. A preview proves successful rendering. A download proves the creator asked AyahClip to deliver the rendered file.
 
+Generate the aggregate operator report directly from authenticated production Runtime Logs:
+
+```bash
+npm run analytics:report
+npm run analytics:report -- --since 30d --format json --output /tmp/ayahclip-analytics.json
+```
+
+The command uses the signed-in Vercel CLI, defaults to the last seven days, and does not create a public admin route. It reports distinct-journey funnel conversion, activation, successful-export journeys, first and returning visits, export attempts/successes/failures, preview versus download outcomes, time to first successful export, assistance feedback, coarse device/browser/source mix, and fixed failure categories. Journey IDs are used only in memory and are never written to the aggregate output. Use `--input <vercel-jsonl-file>` to reproduce a report from an archived log export without network access.
+
+“Returning visit” is intentionally a coarse browser-local proxy derived from `firstVisit: false`; it is not account-level retention. The account-free beta has no persistent user identifier, so week-over-week user cohorts cannot be calculated honestly. Add authenticated, consented account analytics and a retention/deletion policy together if true retention becomes a launch requirement.
+
 ## Privacy boundary
 
 The telemetry route accepts only the fields defined in `src/lib/telemetry-schema.ts`. Unknown keys are discarded. Never add any of the following:

@@ -21,7 +21,8 @@
     "benchmark:prepare-quranlab": "tsx scripts/prepare-quranlab-benchmark.ts",
     "benchmark:fixtures": "node scripts/fetch-alignment-fixtures.mjs",
     "check:reciter-sources": "tsx scripts/check-reciter-sources.ts",
-    "audit:mp3quran-provider": "tsx scripts/audit-mp3quran-provider.ts"
+    "audit:mp3quran-provider": "tsx scripts/audit-mp3quran-provider.ts",
+    "analytics:report": "tsx scripts/product-analytics-report.ts"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
