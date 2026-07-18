@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { reciters } from "@/lib/reciters";
+import { reciters, supportsWordTimings } from "@/lib/reciters";
 import { getAudioUrl } from "@/lib/api";
 import { getTranslationLanguage } from "@/lib/translations";
 import {
@@ -33,8 +33,9 @@ export function ReciterVerseEditor() {
   const setActivePartIndex = useAppStore((s) => s.setActivePartIndex);
 
   const reciter = reciters.find((r) => r.id === reciterId);
-  const recitationId = reciter?.quranComRecitationId ?? 7;
+  const recitationId = reciter?.quranComRecitationId;
   const folder = reciter?.folder ?? "Alafasy_128kbps";
+  const surahNumber = surah?.id;
   const resourceId = getTranslationLanguage(translationLanguage).resourceId;
 
   const selectedVerses = verses.filter((v) => selected.includes(v.verse_number));
@@ -45,6 +46,11 @@ export function ReciterVerseEditor() {
 
   useEffect(() => {
     if (!surah || selectedVerses.length === 0) return;
+    if (recitationId == null) {
+      setWordsByVerse({});
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setWordsByVerse({});
@@ -85,32 +91,30 @@ export function ReciterVerseEditor() {
     setPlayingKey(null);
   }, []);
 
-  const playPart = useCallback(
-    (verseNumber: number, startMs: number, endMs: number, key: string) => {
-      let audio = audioRef.current;
-      const src = getAudioUrl(folder, surah!.id, verseNumber);
-      if (!audio) {
-        audio = new Audio();
-        audioRef.current = audio;
-        audio.addEventListener("timeupdate", () => {
-          if (stopAtRef.current != null && audio!.currentTime * 1000 >= stopAtRef.current) {
-            audio!.pause();
-            stopAtRef.current = null;
-            setPlayingKey(null);
-          }
-        });
-        audio.addEventListener("ended", () => setPlayingKey(null));
-      }
-      if (audio.src !== src) audio.src = src;
-      stopAtRef.current = endMs > startMs ? endMs : null;
-      audio.currentTime = startMs / 1000;
-      audio.play().then(
-        () => setPlayingKey(key),
-        () => setPlayingKey(null)
-      );
-    },
-    [folder, surah]
-  );
+  const playPart = (verseNumber: number, startMs: number, endMs: number, key: string) => {
+    if (surahNumber == null) return;
+    let audio = audioRef.current;
+    const src = getAudioUrl(folder, surahNumber, verseNumber);
+    if (!audio) {
+      audio = new Audio();
+      audioRef.current = audio;
+      audio.addEventListener("timeupdate", () => {
+        if (stopAtRef.current != null && audio!.currentTime * 1000 >= stopAtRef.current) {
+          audio!.pause();
+          stopAtRef.current = null;
+          setPlayingKey(null);
+        }
+      });
+      audio.addEventListener("ended", () => setPlayingKey(null));
+    }
+    if (audio.src !== src) audio.src = src;
+    stopAtRef.current = endMs > startMs ? endMs : null;
+    audio.currentTime = startMs / 1000;
+    audio.play().then(
+      () => setPlayingKey(key),
+      () => setPlayingKey(null)
+    );
+  };
 
   useEffect(() => () => stop(), [stop]);
 
@@ -139,6 +143,11 @@ export function ReciterVerseEditor() {
 
   return (
     <div className="flex flex-col gap-3">
+      {!supportsWordTimings(reciter) && (
+        <div className="border-y border-[var(--hairline-soft)] px-1 py-3 text-[12px] leading-relaxed text-[var(--muted)]">
+          {reciter?.name ?? "This reciter"} supports complete verse playback and export. Choose a word-synced voice to split captions inside an ayah.
+        </div>
+      )}
       {loading && (
         <p className="px-1 text-[12px] text-[var(--muted-deep)]">
           Loading word timings from Quran.com…
@@ -180,7 +189,7 @@ export function ReciterVerseEditor() {
               )}
               {total === 0 && !loading && (
                 <span className="text-[11px] text-amber-300/80">
-                  No word timings for this reciter — splitting unavailable.
+                  Whole-verse captions for this voice.
                 </span>
               )}
             </div>
@@ -228,7 +237,7 @@ export function ReciterVerseEditor() {
       })}
 
       <p className="px-1 text-[11px] leading-relaxed text-[var(--muted-deep)]">
-        Splitting keeps every word — it shows the verse in parts (part 1, part 2…)
+        Splitting keeps every word. It shows the verse in parts (part 1, part 2…)
         timed to the reciter&apos;s words. Parts appear as the recitation reaches them.
       </p>
     </div>

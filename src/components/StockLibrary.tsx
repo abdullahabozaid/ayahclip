@@ -18,6 +18,9 @@ export function StockLibrary({ onSelect }: StockLibraryProps) {
 
   return (
     <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+        People-free picks, reviewed for quiet Quran B-roll.
+      </p>
       {STOCK_CATEGORIES.map((category) => {
         const images = STOCK_IMAGES.filter((img) => img.category === category);
         if (images.length === 0) return null;
@@ -49,7 +52,7 @@ export function StockLibrary({ onSelect }: StockLibraryProps) {
         );
       })}
       <p className="text-center text-[10px] text-gray-600">
-        Photos by Pexels
+        Curated photos from Pexels
       </p>
     </div>
   );

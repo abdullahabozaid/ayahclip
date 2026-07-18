@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { reciters } from "@/lib/reciters";
+import { ReciterSelect } from "@/components/ReciterSelect";
 import { FormatSelector } from "./FormatSelector";
 import { BackgroundPicker } from "./BackgroundPicker";
 import { ExportButton } from "./ExportButton";
@@ -414,11 +414,10 @@ export function StudioSettings() {
               </button>
             </div>
           ) : (
-            <Field
-              label="Reciter"
+            <ReciterSelect
               value={store.reciterId}
               onChange={store.setReciterId}
-              options={reciters.map((r) => ({ value: r.id, label: r.name }))}
+              showCatalogCount
             />
           )}
         </Section>

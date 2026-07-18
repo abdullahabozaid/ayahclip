@@ -7,6 +7,7 @@ import { VIDEO_PRESETS, VIDEO_CATEGORIES } from "@/lib/video-presets";
 import { AESTHETIC_VIDEOS } from "@/lib/aesthetic-videos";
 import { StockLibrary } from "./StockLibrary";
 import { BackgroundEditor } from "./BackgroundEditor";
+import { BrollLibrary } from "./BrollLibrary";
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -80,7 +81,7 @@ interface BackgroundPickerProps {
   revokePrevious?: boolean;
 }
 
-type Tab = "presets" | "pexels" | "video" | "upload";
+type Tab = "presets" | "pexels" | "video" | "library";
 
 export function BackgroundPicker({
   value,
@@ -94,7 +95,7 @@ export function BackgroundPicker({
     { id: "presets", label: "Presets" },
     { id: "pexels", label: "Stock Photos" },
     { id: "video", label: "Video" },
-    { id: "upload", label: "Upload" },
+    { id: "library", label: "My media" },
   ];
 
   return (
@@ -120,7 +121,7 @@ export function BackgroundPicker({
       )}
       {tab === "pexels" && <StockLibrary onSelect={onChange} />}
       {tab === "video" && <VideoSection value={value} onChange={onChange} revokePrevious={revokePrevious} />}
-      {tab === "upload" && <UploadSection value={value} onChange={onChange} revokePrevious={revokePrevious} />}
+      {tab === "library" && <BrollLibrary value={value} onSelect={onChange} />}
     </div>
   );
 }
@@ -242,6 +243,14 @@ function VideoSection({
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+          People-free motion backgrounds, reviewed by AyahClip.
+        </p>
+        <span className="shrink-0 rounded-full border border-[var(--hairline-soft)] px-2 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-[var(--muted)]">
+          Curated
+        </span>
+      </div>
       {/* Your videos (local, synced from the aesthetic folder) */}
       {AESTHETIC_VIDEOS.length > 0 && (
         <div>
@@ -304,67 +313,5 @@ function VideoSection({
       </button>
       {uploadError && <p className="text-xs text-red-400" role="alert">{uploadError}</p>}
     </div>
-  );
-}
-
-function UploadSection({
-  value,
-  onChange,
-  revokePrevious,
-}: {
-  value: Background;
-  onChange: (bg: Background) => void;
-  revokePrevious: boolean;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const isVideo = file.type.startsWith("video/");
-    const maxBytes = (isVideo ? 50 : 20) * 1024 * 1024;
-    if (file.size > maxBytes) {
-      setUploadError(`Choose ${isVideo ? "a video under 50 MB" : "an image under 20 MB"}.`);
-      e.target.value = "";
-      return;
-    }
-    setUploadError(null);
-    if (revokePrevious) revokeIfBlob(value.value);
-    const url = URL.createObjectURL(file);
-    onChange({
-      type: isVideo ? "video" : "image",
-      value: url,
-      label: file.name,
-    });
-  };
-  const openPicker = () => {
-    const el = inputRef.current;
-    if (!el) return;
-    el.value = "";
-    el.click();
-  };
-
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*,video/mp4,video/webm"
-        onChange={handleFile}
-        className="sr-only"
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-      <button
-        type="button"
-        onClick={openPicker}
-        className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-6 transition-colors hover:border-white/20 focus-visible:border-gold"
-      >
-        <span className="text-2xl text-[var(--muted-deep)]">+</span>
-        <span className="text-xs text-[var(--muted)]">Upload image or video</span>
-        <span className="text-[10px] text-[var(--muted-deep)]">Images up to 20 MB · videos up to 50 MB</span>
-      </button>
-      {uploadError && <p className="mt-2 text-xs text-red-400" role="alert">{uploadError}</p>}
-    </>
   );
 }

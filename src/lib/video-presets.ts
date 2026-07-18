@@ -4,6 +4,8 @@ export interface VideoPreset {
   category: "nature" | "islamic" | "abstract" | "night";
   videoUrl: string;
   thumbnailUrl: string | null;
+  /** Manually reviewed to contain no visible people. */
+  peopleFree: true;
 }
 
 export const VIDEO_PRESETS: VideoPreset[] = [
@@ -13,6 +15,7 @@ export const VIDEO_PRESETS: VideoPreset[] = [
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/5197762/5197762-uhd_2560_1440_25fps.mp4",
     thumbnailUrl: null,
+    peopleFree: true,
   },
   {
     id: "ocean",
@@ -20,6 +23,7 @@ export const VIDEO_PRESETS: VideoPreset[] = [
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/1093652/1093652-uhd_2560_1440_30fps.mp4",
     thumbnailUrl: "https://images.pexels.com/videos/1093652/free-video-1093652.jpg?auto=compress&cs=tinysrgb&w=280",
+    peopleFree: true,
   },
   {
     id: "clouds",
@@ -27,6 +31,7 @@ export const VIDEO_PRESETS: VideoPreset[] = [
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/856171/856171-hd_1920_1080_30fps.mp4",
     thumbnailUrl: "https://images.pexels.com/videos/856171/free-video-856171.jpg?auto=compress&cs=tinysrgb&w=280",
+    peopleFree: true,
   },
   {
     id: "forest-1",
@@ -34,6 +39,7 @@ export const VIDEO_PRESETS: VideoPreset[] = [
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/852335/852335-hd_1920_1080_24fps.mp4",
     thumbnailUrl: "https://images.pexels.com/videos/852335/free-video-852335.jpg?auto=compress&cs=tinysrgb&w=280",
+    peopleFree: true,
   },
   {
     id: "forest-2",
@@ -41,13 +47,7 @@ export const VIDEO_PRESETS: VideoPreset[] = [
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/1448735/1448735-uhd_2732_1440_24fps.mp4",
     thumbnailUrl: "https://images.pexels.com/videos/1448735/free-video-1448735.jpg?auto=compress&cs=tinysrgb&w=280",
-  },
-  {
-    id: "mosque",
-    name: "Prophet's Mosque",
-    category: "islamic",
-    videoUrl: "https://videos.pexels.com/video-files/3687764/3687764-hd_1920_1080_30fps.mp4",
-    thumbnailUrl: "https://images.pexels.com/videos/3687764/pexels-photo-3687764.jpeg?auto=compress&cs=tinysrgb&w=280",
+    peopleFree: true,
   },
   {
     id: "islamic-bg",
@@ -55,6 +55,7 @@ export const VIDEO_PRESETS: VideoPreset[] = [
     category: "islamic",
     videoUrl: "https://videos.pexels.com/video-files/15399236/15399236-uhd_1440_2160_30fps.mp4",
     thumbnailUrl: null,
+    peopleFree: true,
   },
   {
     id: "bokeh",
@@ -62,41 +63,39 @@ export const VIDEO_PRESETS: VideoPreset[] = [
     category: "abstract",
     videoUrl: "https://videos.pexels.com/video-files/5926164/5926164-hd_1920_1080_30fps.mp4",
     thumbnailUrl: null,
+    peopleFree: true,
   },
   {
     id: "misty-mountains",
-    name: "Misty Mountains",
+    name: "Tropical Coast",
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/2169880/2169880-uhd_2560_1440_30fps.mp4",
     thumbnailUrl: null,
+    peopleFree: true,
   },
   {
     id: "sunset-sky",
-    name: "Sunset Sky",
+    name: "Alpine Valley",
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/3214448/3214448-uhd_2560_1440_25fps.mp4",
     thumbnailUrl: null,
+    peopleFree: true,
   },
   {
     id: "calm-lake",
-    name: "Calm Lake",
+    name: "Misty Ridge",
     category: "nature",
     videoUrl: "https://videos.pexels.com/video-files/4763824/4763824-uhd_2560_1440_24fps.mp4",
     thumbnailUrl: null,
-  },
-  {
-    id: "desert-dunes",
-    name: "Desert Dunes",
-    category: "nature",
-    videoUrl: "https://videos.pexels.com/video-files/5752729/5752729-hd_1920_1080_30fps.mp4",
-    thumbnailUrl: null,
+    peopleFree: true,
   },
   {
     id: "starry-night",
-    name: "Starry Night",
-    category: "night",
+    name: "Floating Moss",
+    category: "abstract",
     videoUrl: "https://videos.pexels.com/video-files/7710243/7710243-uhd_2560_1440_30fps.mp4",
     thumbnailUrl: null,
+    peopleFree: true,
   },
 ];
 

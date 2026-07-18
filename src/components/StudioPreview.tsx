@@ -281,7 +281,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
       const newMap = new Map<number, TextSegment[]>();
       for (const verse of selectedVerses) {
         const boundaries = partsState[verse.verse_number];
-        if (boundaries && boundaries.length > 0) {
+        if (boundaries && boundaries.length > 0 && reciter.quranComRecitationId != null) {
           try {
             const words = await loadVerseWords(
               reciter.quranComRecitationId,

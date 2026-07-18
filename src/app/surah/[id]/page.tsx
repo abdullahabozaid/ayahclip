@@ -8,6 +8,7 @@ import { getTranslationLanguage } from "@/lib/translations";
 import { Surah, Verse } from "@/types";
 import { VersePicker } from "@/components/VersePicker";
 import { SelectionBar } from "@/components/SelectionBar";
+import { ReciterSelect } from "@/components/ReciterSelect";
 
 export default function SurahPage() {
   const params = useParams();
@@ -25,6 +26,8 @@ export default function SurahPage() {
   const clearSelection = useAppStore((s) => s.clearSelection);
   const setSurahStore = useAppStore((s) => s.setSurah);
   const setVersesStore = useAppStore((s) => s.setVerses);
+  const reciterId = useAppStore((s) => s.reciterId);
+  const setReciterId = useAppStore((s) => s.setReciterId);
   const translationLanguage = useAppStore((s) => s.translationLanguage);
 
   useEffect(() => {
@@ -85,6 +88,21 @@ export default function SurahPage() {
                 <div className="gold-rule" />
               </div>
             </header>
+
+            <section className="mb-7 grid gap-4 border-y border-[var(--hairline-soft)] py-4 sm:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] sm:items-center">
+              <div>
+                <h2 className="text-sm font-medium text-parchment">Choose the voice before editing</h2>
+                <p className="mt-1 max-w-lg text-sm leading-relaxed text-[var(--muted)]">
+                  Every voice supports verse playback and export. The synced collection also unlocks precise word-part captions.
+                </p>
+              </div>
+              <ReciterSelect
+                value={reciterId}
+                onChange={setReciterId}
+                label="Recitation"
+                showCatalogCount
+              />
+            </section>
 
             <VersePicker
               verses={verses}

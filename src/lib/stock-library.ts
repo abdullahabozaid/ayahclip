@@ -4,6 +4,8 @@ export interface StockImage {
   category: "nature" | "islamic" | "night" | "abstract";
   url: string;
   thumbUrl: string;
+  /** Manually reviewed to contain no visible people. */
+  peopleFree: true;
 }
 
 const pexelsImg = (id: number) =>
@@ -11,7 +13,7 @@ const pexelsImg = (id: number) =>
 
 const img = (id: number, w = 1080) => `${pexelsImg(id)}?auto=compress&cs=tinysrgb&w=${w}`;
 
-export const STOCK_IMAGES: StockImage[] = [
+const REVIEWED_STOCK_IMAGES: Omit<StockImage, "peopleFree">[] = [
   { id: "forest-1", name: "Forest", category: "nature", url: img(1459534), thumbUrl: img(1459534, 280) },
   { id: "forest-2", name: "Dark Forest", category: "nature", url: img(1671325), thumbUrl: img(1671325, 280) },
   { id: "ocean-1", name: "Ocean Waves", category: "nature", url: img(1646311), thumbUrl: img(1646311, 280) },
@@ -24,7 +26,6 @@ export const STOCK_IMAGES: StockImage[] = [
   { id: "mosque-2", name: "Golden Interior", category: "islamic", url: img(13234206), thumbUrl: img(13234206, 280) },
   { id: "mosque-3", name: "Calligraphy", category: "islamic", url: img(8385228), thumbUrl: img(8385228, 280) },
   { id: "lanterns-1", name: "Festive Glow", category: "islamic", url: img(1038180), thumbUrl: img(1038180, 280) },
-  { id: "lanterns-2", name: "Turkish Lanterns", category: "islamic", url: img(13820620), thumbUrl: img(13820620, 280) },
   { id: "geometric", name: "Geometric Pattern", category: "islamic", url: img(14137368), thumbUrl: img(14137368, 280) },
   { id: "stars-1", name: "Milky Way", category: "night", url: img(1205301), thumbUrl: img(1205301, 280) },
   { id: "stars-2", name: "Starry Desert", category: "night", url: img(998641), thumbUrl: img(998641, 280) },
@@ -34,5 +35,11 @@ export const STOCK_IMAGES: StockImage[] = [
   { id: "bokeh", name: "Bokeh Lights", category: "abstract", url: img(342411), thumbUrl: img(342411, 280) },
   { id: "sunset", name: "Sunset", category: "abstract", url: img(1765708), thumbUrl: img(1765708, 280) },
 ];
+
+// New entries must pass the same visual review before moving into this list.
+export const STOCK_IMAGES: StockImage[] = REVIEWED_STOCK_IMAGES.map((image) => ({
+  ...image,
+  peopleFree: true,
+}));
 
 export const STOCK_CATEGORIES = ["nature", "islamic", "night", "abstract"] as const;

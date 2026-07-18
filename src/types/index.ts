@@ -35,8 +35,12 @@ export interface Verse {
 export interface Reciter {
   id: string;
   name: string;
+  arabicName: string;
   folder: string;
-  quranComRecitationId: number;
+  region: "haramain" | "egypt" | "gulf" | "levant" | "international";
+  style: "Murattal" | "Mujawwad" | "Muallim";
+  /** Present only when Quran.com publishes verified per-word timings. */
+  quranComRecitationId?: number;
 }
 
 export interface TranslationLanguage {
