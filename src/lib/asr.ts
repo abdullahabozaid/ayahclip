@@ -11,13 +11,11 @@ import {
 } from "@huggingface/transformers";
 
 const ORT_VERSION = "1.26.0";
-// The ~131 MB model. By default it's served same-origin from public/asr/, but
-// that file is gitignored and too large for some static hosts (e.g. Vercel's
-// per-file limit), so production can point at CORS-enabled external storage
-// (S3/R2/CDN) via NEXT_PUBLIC_ASR_MODEL_URL. Either way it's cached in IndexedDB
-// after first load, so it's fetched once per browser.
+// The ~131 MB model is served through the reviewed same-origin Route Handler,
+// which owns upstream allow-listing, range requests, and cache headers. A
+// self-hosted operator may override it with a reviewed CORS-enabled URL.
 const MODEL_URL =
-  process.env.NEXT_PUBLIC_ASR_MODEL_URL || "/asr/fastconformer_ar_ctc_q8.onnx";
+  process.env.NEXT_PUBLIC_ASR_MODEL_URL || "/api/asr-model";
 const VOCAB_URL = "/asr-vocab.json";
 
 // ---- mel feature params (must match the model's NeMo recipe exactly) ----
