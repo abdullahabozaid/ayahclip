@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test:google-chrome": "GOOGLE_CHROME=1 playwright test",
     "test:production-google": "PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 playwright test e2e/google-readiness.spec.ts e2e/production-smoke.spec.ts",
+    "test:production-performance": "PERFORMANCE_BUDGET=1 PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 playwright test e2e/performance-budget.spec.ts --project=google-chrome --workers=1 --repeat-each=3",
     "test:export-matrix": "EXPORT_STRESS=1 playwright test e2e/device-export-readiness.spec.ts e2e/long-export-readiness.spec.ts",
     "test:detection": "tsx scripts/test-detection.ts",
     "test:alignment": "node scripts/test-alignment-matrix.mjs",
