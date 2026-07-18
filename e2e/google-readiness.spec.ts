@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-const productionOrigin = "https://ayahclip.vercel.app";
+const productionOrigin = (
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.PLAYWRIGHT_BASE_URL ??
+  "https://ayahclip.com"
+).replace(/\/$/, "");
 
 function pngDimensions(bytes: Buffer): { width: number; height: number } {
   expect(bytes.subarray(1, 4).toString("ascii")).toBe("PNG");

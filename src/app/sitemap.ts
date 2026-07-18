@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ayahclip.vercel.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ayahclip.com";
 
 const pages = [
   { path: "", changeFrequency: "weekly", priority: 1 },

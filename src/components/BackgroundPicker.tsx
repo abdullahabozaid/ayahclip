@@ -8,6 +8,10 @@ import { StockLibrary } from "./StockLibrary";
 import { BackgroundEditor } from "./BackgroundEditor";
 import { BrollLibrary } from "./BrollLibrary";
 import { isSupportedVideoFile, VIDEO_FILE_ACCEPT } from "@/lib/media-file";
+import {
+  nativeMobileBridgeAvailable,
+  requestNativeMediaImport,
+} from "@/lib/mobile-bridge";
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -296,7 +300,26 @@ function VideoSection({
     const url = URL.createObjectURL(file);
     onChange({ type: "video", value: url, label: file.name });
   };
-  const openVideoPicker = () => {
+  const openVideoPicker = async () => {
+    if (nativeMobileBridgeAvailable()) {
+      setUploadError(null);
+      try {
+        const result = await requestNativeMediaImport({
+          kinds: ["video"],
+          maxCount: 1,
+          purpose: revokePrevious ? "replacement" : "broll",
+        });
+        const media = result?.media[0];
+        if (!media || !media.contentType.startsWith("video/")) {
+          throw new Error("No video was selected.");
+        }
+        if (revokePrevious) revokeIfBlob(value.value);
+        onChange({ type: "video", value: media.url, label: "iPhone video" });
+      } catch (error) {
+        setUploadError(error instanceof Error ? error.message : "That video could not be imported.");
+      }
+      return;
+    }
     const el = videoInputRef.current;
     if (!el) return;
     el.value = "";
@@ -357,7 +380,7 @@ function VideoSection({
       />
       <button
         type="button"
-        onClick={openVideoPicker}
+        onClick={() => void openVideoPicker()}
         className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-4 transition-colors hover:border-white/20 focus-visible:border-gold"
       >
         <span className="text-lg text-[var(--muted-deep)]">+</span>

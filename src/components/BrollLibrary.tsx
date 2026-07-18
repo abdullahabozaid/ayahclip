@@ -10,6 +10,10 @@ import {
 } from "@/lib/broll-library";
 import { isImageFile, isSupportedVideoFile, VIDEO_FILE_ACCEPT } from "@/lib/media-file";
 import type { Background } from "@/types";
+import {
+  nativeMobileBridgeAvailable,
+  requestNativeMediaImport,
+} from "@/lib/mobile-bridge";
 
 interface BrollLibraryProps {
   value: Background;
@@ -97,6 +101,35 @@ export function BrollLibrary({ value, onSelect }: BrollLibraryProps) {
     if (inputRef.current) inputRef.current.value = "";
   };
 
+  const openMediaPicker = async () => {
+    if (!nativeMobileBridgeAvailable()) {
+      if (inputRef.current) {
+        inputRef.current.value = "";
+        inputRef.current.click();
+      }
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await requestNativeMediaImport({
+        kinds: ["image", "video"],
+        maxCount: 1,
+        purpose: "broll",
+      });
+      const media = result?.media[0];
+      if (!media) throw new Error("No photo or video was selected.");
+      const type = media.contentType.startsWith("image/") ? "image"
+        : media.contentType.startsWith("video/") ? "video" : null;
+      if (!type) throw new Error("That media type is not supported as B-roll.");
+      onSelect({ type, value: media.url, label: "iPhone media" });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "That media could not be imported.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const remove = async (id: string) => {
     const removed = await deleteBrollAsset(id);
     if (!removed) {
@@ -133,7 +166,7 @@ export function BrollLibrary({ value, onSelect }: BrollLibraryProps) {
         />
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => void openMediaPicker()}
           disabled={saving}
           className="btn-ghost min-h-10 rounded-full px-3 text-xs disabled:opacity-50"
         >
@@ -151,7 +184,7 @@ export function BrollLibrary({ value, onSelect }: BrollLibraryProps) {
       ) : assets.length === 0 ? (
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => void openMediaPicker()}
           className="min-h-24 w-full rounded-xl border border-dashed border-[var(--hairline)] px-5 text-left hover:border-gold"
         >
           <span className="block text-sm text-parchment">Build your B-roll shelf</span>

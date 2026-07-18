@@ -10,7 +10,7 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Video</string>
+			<string>Media</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>
@@ -20,6 +20,7 @@
 				<string>public.movie</string>
 				<string>public.video</string>
 				<string>public.audio</string>
+				<string>public.image</string>
 			</array>
 		</dict>
 	</array>
@@ -48,12 +49,14 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>AyahClip saves finished clips to your photo library only when you ask.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>AyahClip lets you select videos and audio you own to create Quran clips.</string>
+	<string>AyahClip lets you select photos, videos, and audio you own to create Quran clips.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>UthmanicHafs1Ver18.ttf</string>

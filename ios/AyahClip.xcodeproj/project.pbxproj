@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0317BE5043B5E83C050BF0F2 /* MobileEditorBridgeContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDF94661E02AC32183328773 /* MobileEditorBridgeContract.swift */; };
+		0B5C19CF473B890420D8C4A5 /* MobileEditorMessageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FCC75384D0808C65132D525 /* MobileEditorMessageHandler.swift */; };
 		11AEF5791BFEFF520B58A781 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 561F2B99968082698392C47B /* ProjectsView.swift */; };
 		123D1C4D68F856337C982E74 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4327B53EAD20575F8F2644FC /* Assets.xcassets */; };
 		20D7827FA6971421100DE8D6 /* AyahTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61922DB54168A48678B7457D /* AyahTheme.swift */; };
@@ -17,16 +19,28 @@
 		45EF8D8B7CB403748466D75C /* VideoExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25E9C1DCA52A394EAE426B3 /* VideoExportService.swift */; };
 		500A15ABB69E5717DB669D36 /* ImportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212E1AC15620BA68063B7061 /* ImportPolicy.swift */; };
 		562DD0475C936BE6D2D2D283 /* ClipProject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A134191131CC037D7EDFEAE /* ClipProject.swift */; };
+		573EB2DA4FA310F63D208551 /* MobileEditorHostSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F69AE894309AB6269B190E /* MobileEditorHostSession.swift */; };
 		6645FDD5C187D1206F8FD116 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E3A9EA9F165064212185BB49 /* PrivacyInfo.xcprivacy */; };
+		6759EFB3BFB4235EFB3DB4F1 /* MobileEditorHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C34BA38C5AD4CB919511450 /* MobileEditorHostView.swift */; };
+		6BB020F4710946676FE39F1E /* NativeMediaBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EA2ED6501D6F3C370216A22 /* NativeMediaBridge.swift */; };
+		6C569BFA6735C5E9045987B6 /* MobileEditorEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF107906981F2E537EE402E3 /* MobileEditorEnvironment.swift */; };
 		711E63BF9C20C293057B8DEF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3E09647E3D3A59A2BDAACF /* AppModel.swift */; };
 		732D609D99E4E124943CF035 /* ImportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212E1AC15620BA68063B7061 /* ImportPolicy.swift */; };
 		7D87D1AC05DC9D287C35BE97 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C4A362C08918BA7A1DACC7 /* AppModelTests.swift */; };
+		7F0B9A74ED8C765C2A2E4BCA /* MobileEditorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB393D90931D1EFC122B38C4 /* MobileEditorSession.swift */; };
 		821B06CAA6697FB287E28D27 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622BA8E6624825D55A04DAB8 /* SettingsView.swift */; };
+		8377704C37D6002D254EEE26 /* QuranCatalogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66364EEE37DF9BD48B8153 /* QuranCatalogService.swift */; };
+		85A02D442DF42BCA04D3BBBA /* NativeMediaSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBB578CD38BEC62C2A826A3F /* NativeMediaSchemeHandler.swift */; };
 		8FCC71577BE126BA19A4B65D /* AyahClipUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB8C45FE09072DE78783BF8 /* AyahClipUITests.swift */; };
+		93A8D1D17B773A11DB28A5E6 /* MobileExportTransferSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E671C4AA343D536043E334F /* MobileExportTransferSession.swift */; };
+		ADD5151E32CF7E1143B5931B /* NativeMediaImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11371C01E9BD50D1543D4D3E /* NativeMediaImportCoordinator.swift */; };
+		AEDF0E92BCAAF7644C64B748 /* WatermarkCleanupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98FE99DECB6E3575408BBF97 /* WatermarkCleanupService.swift */; };
 		B64DB59B23B39B1E52AD64F6 /* UthmanicHafs1Ver18.ttf in Resources */ = {isa = PBXBuildFile; fileRef = EC350CC9CE5E681E281B8F03 /* UthmanicHafs1Ver18.ttf */; };
 		C7C6AA357409BFDF41322897 /* ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88E650A7A336F5BEB953F372 /* ImportView.swift */; };
+		D49CC4F71A7A9DF7150D6500 /* SharedMediaProviderLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA61EF99F945FC79CA8B1BA /* SharedMediaProviderLoader.swift */; };
 		DD629E491AD677B7EBF3C198 /* AyahClipShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 77C869BB69E26926D78613AF /* AyahClipShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E2C65AE6EC062E1E94369C14 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96AA9820895C2AEEA0D288A /* ShareViewController.swift */; };
+		F9BC0235D058389D6FA313CE /* SharedMediaProviderLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DA61EF99F945FC79CA8B1BA /* SharedMediaProviderLoader.swift */; };
 		FFBEEC8C28897B0B0D85E442 /* AyahClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E89336E43AA96C601DD95A8 /* AyahClipApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -70,18 +84,27 @@
 
 /* Begin PBXFileReference section */
 		0E89336E43AA96C601DD95A8 /* AyahClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahClipApp.swift; sourceTree = "<group>"; };
+		0EA2ED6501D6F3C370216A22 /* NativeMediaBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMediaBridge.swift; sourceTree = "<group>"; };
+		11371C01E9BD50D1543D4D3E /* NativeMediaImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMediaImportCoordinator.swift; sourceTree = "<group>"; };
+		1C34BA38C5AD4CB919511450 /* MobileEditorHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorHostView.swift; sourceTree = "<group>"; };
+		1E671C4AA343D536043E334F /* MobileExportTransferSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileExportTransferSession.swift; sourceTree = "<group>"; };
 		212E1AC15620BA68063B7061 /* ImportPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPolicy.swift; sourceTree = "<group>"; };
+		3DA61EF99F945FC79CA8B1BA /* SharedMediaProviderLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedMediaProviderLoader.swift; sourceTree = "<group>"; };
 		4327B53EAD20575F8F2644FC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		447AB318F1DC4DE2CBF5B82D /* AyahClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AyahClip.entitlements; sourceTree = "<group>"; };
 		45C4A362C08918BA7A1DACC7 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		4FCC75384D0808C65132D525 /* MobileEditorMessageHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorMessageHandler.swift; sourceTree = "<group>"; };
 		522173E4C0D4B3C5F37609BC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		561F2B99968082698392C47B /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
 		61922DB54168A48678B7457D /* AyahTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahTheme.swift; sourceTree = "<group>"; };
 		622BA8E6624825D55A04DAB8 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		77C869BB69E26926D78613AF /* AyahClipShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = AyahClipShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7EAF34BB4FE6B64FF5A06E6B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		81F69AE894309AB6269B190E /* MobileEditorHostSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorHostSession.swift; sourceTree = "<group>"; };
 		88E650A7A336F5BEB953F372 /* ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportView.swift; sourceTree = "<group>"; };
+		8E66364EEE37DF9BD48B8153 /* QuranCatalogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuranCatalogService.swift; sourceTree = "<group>"; };
 		975F2415C9ED5D5D1146481A /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		98FE99DECB6E3575408BBF97 /* WatermarkCleanupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCleanupService.swift; sourceTree = "<group>"; };
 		9964BB5AF61634A90C7EBE5A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9A134191131CC037D7EDFEAE /* ClipProject.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipProject.swift; sourceTree = "<group>"; };
 		9B3E09647E3D3A59A2BDAACF /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -91,8 +114,12 @@
 		BF0451B62C22FD0B3E33DF68 /* AyahClipUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AyahClipUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C35B4C9C6E64263F5DE64A79 /* AyahClip.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = AyahClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CEB8C45FE09072DE78783BF8 /* AyahClipUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahClipUITests.swift; sourceTree = "<group>"; };
+		CF107906981F2E537EE402E3 /* MobileEditorEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorEnvironment.swift; sourceTree = "<group>"; };
 		E3A9EA9F165064212185BB49 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		EB393D90931D1EFC122B38C4 /* MobileEditorSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorSession.swift; sourceTree = "<group>"; };
+		EBB578CD38BEC62C2A826A3F /* NativeMediaSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMediaSchemeHandler.swift; sourceTree = "<group>"; };
 		EC350CC9CE5E681E281B8F03 /* UthmanicHafs1Ver18.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = UthmanicHafs1Ver18.ttf; sourceTree = "<group>"; };
+		EDF94661E02AC32183328773 /* MobileEditorBridgeContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorBridgeContract.swift; sourceTree = "<group>"; };
 		F046E5E8ECDA6F8A946998FF /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F5A43E7B39917DA60AE46A85 /* EditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorView.swift; sourceTree = "<group>"; };
 		F87C3568383F351B021F3B8F /* AyahClipShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AyahClipShare.entitlements; sourceTree = "<group>"; };
@@ -119,7 +146,18 @@
 		28363A9017022B5E8AFDE050 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				EDF94661E02AC32183328773 /* MobileEditorBridgeContract.swift */,
+				CF107906981F2E537EE402E3 /* MobileEditorEnvironment.swift */,
+				81F69AE894309AB6269B190E /* MobileEditorHostSession.swift */,
+				4FCC75384D0808C65132D525 /* MobileEditorMessageHandler.swift */,
+				EB393D90931D1EFC122B38C4 /* MobileEditorSession.swift */,
+				1E671C4AA343D536043E334F /* MobileExportTransferSession.swift */,
+				0EA2ED6501D6F3C370216A22 /* NativeMediaBridge.swift */,
+				11371C01E9BD50D1543D4D3E /* NativeMediaImportCoordinator.swift */,
+				EBB578CD38BEC62C2A826A3F /* NativeMediaSchemeHandler.swift */,
+				8E66364EEE37DF9BD48B8153 /* QuranCatalogService.swift */,
 				A25E9C1DCA52A394EAE426B3 /* VideoExportService.swift */,
+				98FE99DECB6E3575408BBF97 /* WatermarkCleanupService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -149,6 +187,7 @@
 			isa = PBXGroup;
 			children = (
 				212E1AC15620BA68063B7061 /* ImportPolicy.swift */,
+				3DA61EF99F945FC79CA8B1BA /* SharedMediaProviderLoader.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -158,6 +197,7 @@
 			children = (
 				F5A43E7B39917DA60AE46A85 /* EditorView.swift */,
 				88E650A7A336F5BEB953F372 /* ImportView.swift */,
+				1C34BA38C5AD4CB919511450 /* MobileEditorHostView.swift */,
 				975F2415C9ED5D5D1146481A /* OnboardingView.swift */,
 				561F2B99968082698392C47B /* ProjectsView.swift */,
 				7EAF34BB4FE6B64FF5A06E6B /* RootView.swift */,
@@ -329,11 +369,9 @@
 					};
 					82E24E80AFC968881C2CBC0E = {
 						DevelopmentTeam = PUV357QJL4;
-						ProvisioningStyle = Automatic;
 					};
 					C5221EF52C7D90D5C41B9563 = {
 						DevelopmentTeam = PUV357QJL4;
-						ProvisioningStyle = Automatic;
 					};
 					E64D2C07ABAD03313DE33C19 = {
 						DevelopmentTeam = PUV357QJL4;
@@ -405,11 +443,24 @@
 				408D85AA7F430D4BB736E920 /* EditorView.swift in Sources */,
 				500A15ABB69E5717DB669D36 /* ImportPolicy.swift in Sources */,
 				C7C6AA357409BFDF41322897 /* ImportView.swift in Sources */,
+				0317BE5043B5E83C050BF0F2 /* MobileEditorBridgeContract.swift in Sources */,
+				6C569BFA6735C5E9045987B6 /* MobileEditorEnvironment.swift in Sources */,
+				573EB2DA4FA310F63D208551 /* MobileEditorHostSession.swift in Sources */,
+				6759EFB3BFB4235EFB3DB4F1 /* MobileEditorHostView.swift in Sources */,
+				0B5C19CF473B890420D8C4A5 /* MobileEditorMessageHandler.swift in Sources */,
+				7F0B9A74ED8C765C2A2E4BCA /* MobileEditorSession.swift in Sources */,
+				93A8D1D17B773A11DB28A5E6 /* MobileExportTransferSession.swift in Sources */,
+				6BB020F4710946676FE39F1E /* NativeMediaBridge.swift in Sources */,
+				ADD5151E32CF7E1143B5931B /* NativeMediaImportCoordinator.swift in Sources */,
+				85A02D442DF42BCA04D3BBBA /* NativeMediaSchemeHandler.swift in Sources */,
 				26F6DA2716F7244A0AE98AB2 /* OnboardingView.swift in Sources */,
 				11AEF5791BFEFF520B58A781 /* ProjectsView.swift in Sources */,
+				8377704C37D6002D254EEE26 /* QuranCatalogService.swift in Sources */,
 				2D59A3F74A57116315B160A7 /* RootView.swift in Sources */,
 				821B06CAA6697FB287E28D27 /* SettingsView.swift in Sources */,
+				D49CC4F71A7A9DF7150D6500 /* SharedMediaProviderLoader.swift in Sources */,
 				45EF8D8B7CB403748466D75C /* VideoExportService.swift in Sources */,
+				AEDF0E92BCAAF7644C64B748 /* WatermarkCleanupService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -419,6 +470,7 @@
 			files = (
 				732D609D99E4E124943CF035 /* ImportPolicy.swift in Sources */,
 				E2C65AE6EC062E1E94369C14 /* ShareViewController.swift in Sources */,
+				F9BC0235D058389D6FA313CE /* SharedMediaProviderLoader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -455,6 +507,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AyahClipShare/AyahClipShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				INFOPLIST_FILE = AyahClipShare/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -463,6 +517,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile.share;
 				PRODUCT_NAME = AyahClipShare;
+				PROVISIONING_PROFILE_SPECIFIER = "AyahClip Share App Store";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -493,7 +548,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = AyahClip/Resources/AyahClip.entitlements;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
 				INFOPLIST_FILE = AyahClip/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -501,6 +557,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = app.ayahclip.mobile;
 				PRODUCT_NAME = AyahClip;
+				PROVISIONING_PROFILE_SPECIFIER = "AyahClip App Store";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -541,7 +598,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = PUV357QJL4;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -638,7 +695,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = PUV357QJL4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

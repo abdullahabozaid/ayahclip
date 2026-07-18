@@ -45,7 +45,7 @@ const notoNaskh = Noto_Naskh_Arabic({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ayahclip.vercel.app"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ayahclip.com"),
   applicationName: "AyahClip",
   title: {
     default: "AyahClip — Luminous Quran recitation clips",

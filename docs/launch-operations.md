@@ -18,7 +18,7 @@ The measurable path is:
 6. `export_succeeded`, after the exact MP4 or fallback WebM is rendered.
 7. `journey_feedback`, when a first-export creator answers whether they reached the final preview without help.
 
-Each event carries one random browser-session journey ID and `schemaVersion: 1`. To calculate the first-run funnel, filter Vercel Runtime Logs for `ayahclip_product_event`, restrict analysis to one schema version, group by `journeyId`, and count distinct journeys reaching each ordered milestone. The unassisted completion measure is:
+Each event carries one random browser-session journey ID and `schemaVersion: 1`. To calculate the first-run funnel, filter the `ayahclip-frontend` container logs for `ayahclip_product_event`, restrict analysis to one schema version, group by `journeyId`, and count distinct journeys reaching each ordered milestone. The unassisted completion measure is:
 
 `without_help feedback / all journey_feedback responses`
 
@@ -31,7 +31,7 @@ npm run analytics:report
 npm run analytics:report -- --since 30d --format json --output /tmp/ayahclip-analytics.json
 ```
 
-The command uses the signed-in Vercel CLI, defaults to the last seven days, and does not create a public admin route. It reports distinct-journey funnel conversion, activation, successful-export journeys, first and returning visits, export attempts/successes/failures, preview versus download outcomes, time to first successful export, assistance feedback, coarse device/browser/source mix, and fixed failure categories. Journey IDs are used only in memory and are never written to the aggregate output. Use `--input <vercel-jsonl-file>` to reproduce a report from an archived log export without network access.
+Run the command on the VPS (or against an archived input file). It reads the `ayahclip-frontend` Docker logs, defaults to the last seven days, and does not create a public admin route. Set `AYAHCLIP_CONTAINER` if the container name differs. It reports distinct-journey funnel conversion, activation, successful-export journeys, first and returning visits, export attempts/successes/failures, preview versus download outcomes, time to first successful export, assistance feedback, coarse device/browser/source mix, and fixed failure categories. Journey IDs are used only in memory and are never written to the aggregate output. Use `--input <jsonl-file>` to reproduce a report from an archived log export without runtime access.
 
 “Returning visit” is intentionally a coarse browser-local proxy derived from `firstVisit: false`; it is not account-level retention. The account-free beta has no persistent user identifier, so week-over-week user cohorts cannot be calculated honestly. Add authenticated, consented account analytics and a retention/deletion policy together if true retention becomes a launch requirement.
 
@@ -103,15 +103,15 @@ npm run test:production-google
 Also run the public API and local-filesystem isolation checks:
 
 ```bash
-PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 \
+PLAYWRIGHT_BASE_URL=https://ayahclip.com GOOGLE_CHROME=1 \
   npx playwright test e2e/security-boundaries.spec.ts --project=google-chrome
 ```
 
-Application throttles protect a warm function instance. Before spending against paid APIs at broad-launch scale, publish the separately priced Vercel WAF fixed-window rule described in `docs/2026-07-18-security-backend-audit.md`; do not treat the in-process map as a distributed quota.
+Application throttles protect the running application instance. Before spending against paid APIs at broad-launch scale, add fixed-window limits at the trusted reverse-proxy or upstream firewall layer as described in `docs/2026-07-18-security-backend-audit.md`; do not treat the in-process map as a distributed quota.
 
-`/robots.txt` advertises `/sitemap.xml`; the sitemap contains only public, indexable product pages. Browser-local libraries, editing surfaces, diagnostics and thank-you routes publish `noindex`. To connect Google Search Console, set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` to the verification token supplied by Google, redeploy, confirm the verification meta tag, and submit `https://ayahclip.vercel.app/sitemap.xml`. Indexing itself remains Google's decision and can take time.
+`/robots.txt` advertises `/sitemap.xml`; the sitemap contains only public, indexable product pages. Browser-local libraries, editing surfaces, diagnostics and thank-you routes publish `noindex`. To connect Google Search Console, set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` to the verification token supplied by Google, redeploy, confirm the verification meta tag, and submit `https://ayahclip.com/sitemap.xml`. Indexing itself remains Google's decision and can take time.
 
-As of 2026-07-18, the production Vercel project does not contain `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`. The deployed Google readiness suite proves crawl/index metadata, but Search Console ownership and sitemap submission remain an owner action until Google supplies that token.
+As of 2026-07-18, production does not contain `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`. The deployed Google readiness suite proves crawl/index metadata, but Search Console ownership and sitemap submission remain an owner action until Google supplies that token.
 
 Browser profiles are not physical phones. Before announcing broad availability, repeat a short import, final-preview, Save Video and camera-roll playback check on current iPhone Safari and Android Chrome hardware. Record the operating-system version, browser version, source format, clip duration, output type and result. Do not call the physical-device gate complete from emulation alone.
 

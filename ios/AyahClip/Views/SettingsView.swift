@@ -1,6 +1,14 @@
 import SwiftUI
 
 struct SettingsView: View {
+    private var buildLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "Unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+            ?? "Unknown"
+        return "AyahClip \(version) (\(build)) · TestFlight beta"
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -14,11 +22,11 @@ struct SettingsView: View {
                 }
 
                 VStack(spacing: 0) {
-                    SettingsLink(title: "Privacy policy", icon: "hand.raised", url: "https://ayahclip.vercel.app/privacy")
+                    SettingsLink(title: "Privacy policy", icon: "hand.raised", url: "https://ayahclip.com/privacy")
                     Divider().overlay(AyahTheme.hairline)
-                    SettingsLink(title: "Terms of use", icon: "doc.text", url: "https://ayahclip.vercel.app/terms")
+                    SettingsLink(title: "Terms of use", icon: "doc.text", url: "https://ayahclip.com/terms")
                     Divider().overlay(AyahTheme.hairline)
-                    SettingsLink(title: "Help and support", icon: "questionmark.circle", url: "https://ayahclip.vercel.app/support")
+                    SettingsLink(title: "Help and support", icon: "questionmark.circle", url: "https://ayahclip.com/support")
                 }
                 .ayahPanel()
 
@@ -26,7 +34,7 @@ struct SettingsView: View {
                     Label("Copyright-aware import", systemImage: "checkmark.shield")
                         .font(.headline)
                         .foregroundStyle(AyahTheme.parchment)
-                    Text("AyahClip does not download other creators’ posts or strip platform watermarks. Import the original video you own, or use a post link as a reference while locating your source file.")
+                    Text("AyahClip never downloads another creator’s post. Post links are references only. Clean a watermark works on device after you select a video you own or have permission to reuse.")
                         .font(.caption)
                         .lineSpacing(3)
                         .foregroundStyle(AyahTheme.muted)
@@ -34,7 +42,7 @@ struct SettingsView: View {
                 .padding(18)
                 .ayahPanel()
 
-                Text("AyahClip 0.1.0 (1) · TestFlight beta")
+                Text(buildLabel)
                     .font(.caption2.monospaced())
                     .foregroundStyle(AyahTheme.muted.opacity(0.72))
                     .frame(maxWidth: .infinity)

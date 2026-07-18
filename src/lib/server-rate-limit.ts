@@ -19,9 +19,9 @@ const MAX_BUCKETS = 10_000;
 const buckets = new Map<string, Bucket>();
 
 function clientAddress(request: Request): string {
-  // Vercel overwrites X-Forwarded-For with the public client IP, preventing a
-  // caller from choosing another bucket. Local development falls back to one
-  // shared bucket because there is no trusted proxy header.
+  // Production is reachable only through the trusted TLS reverse proxy, which
+  // overwrites X-Forwarded-For with the public client IP. Local development
+  // falls back to one shared bucket when there is no proxy header.
   return (request.headers.get("x-forwarded-for") ?? "local")
     .split(",")[0]
     .trim()
@@ -41,8 +41,8 @@ function prune(now: number): void {
 
 /**
  * Bounded warm-instance limiter. This prevents accidental loops and small
- * bursts from consuming paid APIs, while Vercel WAF remains the authoritative
- * distributed control for launch traffic.
+ * bursts from consuming paid APIs, while the VPS reverse-proxy/firewall layer
+ * remains the authoritative distributed control for launch traffic.
  */
 export function checkRateLimit(
   request: Request,

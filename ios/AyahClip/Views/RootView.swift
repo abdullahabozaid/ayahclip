@@ -6,7 +6,10 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var selections: [PhotosPickerItem] = []
+    @State private var watermarkSelections: [PhotosPickerItem] = []
     @State private var showFileImporter = false
+    @State private var showWatermarkDisclosure = false
+    @State private var showWatermarkPicker = false
     @AppStorage("ayahclip.onboarding.complete") private var onboardingComplete = false
 
     var body: some View {
@@ -20,7 +23,11 @@ struct RootView: View {
             .tabItem { Label("Projects", systemImage: "rectangle.stack") }
 
             NavigationStack {
-                ImportView(selections: $selections, showFileImporter: $showFileImporter)
+                ImportView(
+                    selections: $selections,
+                    showFileImporter: $showFileImporter,
+                    cleanWatermark: { showWatermarkDisclosure = true }
+                )
             }
             .tag(AppModel.AppTab.import)
             .tabItem { Label("Import", systemImage: "plus.circle") }
@@ -34,12 +41,12 @@ struct RootView: View {
         .tint(AyahTheme.gold)
         .background(AyahTheme.ink)
         .fullScreenCover(item: $model.activeProject) { _ in
-            EditorView()
+            MobileEditorHostView(model: model)
                 .environment(model)
         }
         .fileImporter(
             isPresented: $showFileImporter,
-            allowedContentTypes: [.movie, .video, .audio, .mpeg4Movie, .quickTimeMovie],
+            allowedContentTypes: [.movie, .video, .audio, .image, .mpeg4Movie, .quickTimeMovie],
             allowsMultipleSelection: true
         ) { result in
             if case let .success(urls) = result {
@@ -54,7 +61,7 @@ struct RootView: View {
                 do {
                     var urls: [URL] = []
                     for item in items {
-                        guard let imported = try await item.loadTransferable(type: ImportedMovie.self) else {
+                        guard let imported = try await item.loadTransferable(type: ImportedMedia.self) else {
                             throw CocoaError(.fileReadUnknown)
                         }
                         urls.append(imported.url)
@@ -62,9 +69,46 @@ struct RootView: View {
                     }
                     await model.importMedia(from: urls)
                 } catch {
-                    model.notice = "Could not load those videos: \(error.localizedDescription)"
+                    model.notice = "Could not load that media: \(error.localizedDescription)"
                 }
                 selections = []
+            }
+        }
+        .confirmationDialog(
+            "Clean a watermark",
+            isPresented: $showWatermarkDisclosure,
+            titleVisibility: .visible
+        ) {
+            Button("I own it or have permission") { showWatermarkPicker = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("AyahClip can blur the two common moving TikTok watermark zones on a video already in your library. Only edit media you own or are allowed to reuse.")
+        }
+        .photosPicker(
+            isPresented: $showWatermarkPicker,
+            selection: $watermarkSelections,
+            maxSelectionCount: 1,
+            matching: .videos
+        )
+        .onChange(of: watermarkSelections) { _, items in
+            guard let item = items.first else { return }
+            Task {
+                defer { watermarkSelections = [] }
+                do {
+                    guard let imported = try await item.loadTransferable(type: ImportedMedia.self) else {
+                        throw CocoaError(.fileReadUnknown)
+                    }
+                    defer { try? FileManager.default.removeItem(at: imported.url) }
+                    let cleaned = try await WatermarkCleanupService.cleanCommonTikTokZones(
+                        sourceURL: imported.url
+                    )
+                    defer { try? FileManager.default.removeItem(at: cleaned) }
+                    if await model.importMedia(from: cleaned) {
+                        model.notice = "Watermark zones cleaned on device. Review the result in Studio before exporting."
+                    }
+                } catch {
+                    model.notice = "Could not clean that video: \(error.localizedDescription)"
+                }
             }
         }
         .alert("AyahClip", isPresented: Binding(
@@ -94,7 +138,7 @@ struct RootView: View {
     }
 }
 
-private struct ImportedMovie: Transferable {
+private struct ImportedMedia: Transferable {
     let url: URL
 
     static var transferRepresentation: some TransferRepresentation {
@@ -103,6 +147,15 @@ private struct ImportedMovie: Transferable {
         } importing: { received in
             let destination = FileManager.default.temporaryDirectory
                 .appendingPathComponent("photos-\(UUID().uuidString).\(received.file.pathExtension)")
+            try FileManager.default.copyItem(at: received.file, to: destination)
+            return Self(url: destination)
+        }
+        FileRepresentation(contentType: .image) { image in
+            SentTransferredFile(image.url)
+        } importing: { received in
+            let fileExtension = received.file.pathExtension.isEmpty ? "jpg" : received.file.pathExtension
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("photos-\(UUID().uuidString).\(fileExtension)")
             try FileManager.default.copyItem(at: received.file, to: destination)
             return Self(url: destination)
         }

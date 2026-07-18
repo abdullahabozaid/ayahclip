@@ -9,7 +9,7 @@ Do not count the maintainer, a contributor, or anyone who has already seen the e
 
 ## Before each session
 
-- Open `https://ayahclip.vercel.app` in a private/incognito window so the first-run journey is clean.
+- Open `https://ayahclip.com` in a private/incognito window so the first-run journey is clean.
 - Use media the tester owns or has permission to use. Never use gated benchmark recordings.
 - Ask the tester to share their screen only. Do not ask them to share the source file.
 - Do not explain AyahClip's navigation, recognition, timeline, templates, or export controls.

@@ -9,11 +9,22 @@
 	<key>method</key>
 	<string>app-store-connect</string>
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>app.ayahclip.mobile</key>
+		<string>AyahClip App Store</string>
+		<key>app.ayahclip.mobile.share</key>
+		<string>AyahClip Share App Store</string>
+	</dict>
 	<key>stripSwiftSymbols</key>
 	<true/>
 	<key>teamID</key>
 	<string>PUV357QJL4</string>
+	<key>testFlightInternalTestingOnly</key>
+	<true/>
 	<key>uploadSymbols</key>
 	<true/>
 </dict>

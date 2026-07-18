@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
-const isHostedProduction = process.env.VERCEL_ENV === "production";
+const isHostedProduction =
+  process.env.VERCEL_ENV === "production" || process.env.DOCKER_BUILD === "1";
 
 const contentSecurityPolicy = [
   "base-uri 'self'",
@@ -11,6 +12,11 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Next.js' minimal production server is used by the VPS Docker image. Local
+  // builds keep the standard output so existing development workflows stay the
+  // same.
+  output: process.env.DOCKER_BUILD === "1" ? "standalone" : undefined,
+  deploymentId: process.env.DEPLOYMENT_VERSION,
   poweredByHeader: false,
   // Allow phones/other devices on the LAN to load the dev server's assets
   // (Next.js blocks cross-origin dev requests by default). Covers the current

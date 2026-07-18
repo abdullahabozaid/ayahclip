@@ -7,7 +7,7 @@ final class ShareViewController: UIViewController {
     private let suiteName = "group.app.ayahclip.mobile"
 
     private enum ReceivedItem {
-        case video
+        case media
         case reference
         case unsupported
     }
@@ -61,13 +61,13 @@ final class ShareViewController: UIViewController {
             return
         }
 
-        var videoCount = 0
+        var mediaCount = 0
         var referenceCount = 0
         var failureCount = 0
         for provider in providers {
             do {
                 switch try await receive(provider) {
-                case .video: videoCount += 1
+                case .media: mediaCount += 1
                 case .reference: referenceCount += 1
                 case .unsupported: failureCount += 1
                 }
@@ -76,26 +76,37 @@ final class ShareViewController: UIViewController {
             }
         }
 
-        if videoCount > 0 {
-            let noun = videoCount == 1 ? "video" : "videos"
+        if mediaCount > 0 {
+            let noun = mediaCount == 1 ? "media item" : "media items"
             let failedNoun = failureCount == 1 ? "item" : "items"
             let suffix = failureCount > 0
                 ? " \(failureCount) \(failedNoun) could not be copied."
                 : ""
-            showResult("\(videoCount) \(noun) saved privately. Open AyahClip to begin editing.\(suffix)")
+            showResult("\(mediaCount) \(noun) saved privately. Open AyahClip to begin editing.\(suffix)")
         } else if referenceCount > 0 {
             showResult("Post reference saved. Open AyahClip and attach the original file you own.")
         } else {
-            showResult("No supported video or TikTok, Instagram, or YouTube link was found.")
+            showResult("No supported photo, video, or TikTok, Instagram, or YouTube link was found.")
         }
     }
 
     private func receive(_ provider: NSItemProvider) async throws -> ReceivedItem {
         if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-            let item = try await provider.loadItem(forTypeIdentifier: UTType.movie.identifier)
-            guard let source = item as? URL else { throw CocoaError(.fileReadUnknown) }
+            let source = try await SharedMediaProviderLoader.loadFile(
+                from: provider,
+                type: .movie
+            )
+            defer { try? FileManager.default.removeItem(at: source) }
             try storeFile(source)
-            return .video
+            return .media
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            let source = try await SharedMediaProviderLoader.loadFile(
+                from: provider,
+                type: .image
+            )
+            defer { try? FileManager.default.removeItem(at: source) }
+            try storeFile(source)
+            return .media
         } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
             let item = try await provider.loadItem(forTypeIdentifier: UTType.url.identifier)
             guard let url = item as? URL else { throw CocoaError(.fileReadUnknown) }

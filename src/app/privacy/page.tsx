@@ -61,7 +61,7 @@ export default function PrivacyPage() {
               <h2 className="font-display text-2xl text-parchment">Services AyahClip contacts</h2>
               <p className="mt-4">The app may request Quran text and translation data from Quran.com, reciter audio and timing data from EveryAyah or MP3Quran, optional stock media from Pexels, and application assets or recognition-model files from AyahClip hosting. Those providers receive ordinary network information such as an IP address when your browser contacts them.</p>
               <p className="mt-3">If server-assisted caption writing is configured, AyahClip sends the platform, tone, Surah name, verse reference, exact translation excerpt and selected reciter name to OpenAI. It does not send imported media, files or detected transcripts. Starting a donation sends the chosen amount and frequency to Stripe so Stripe can host the checkout.</p>
-              <p className="mt-3">AyahClip is hosted on Vercel. Like most hosting providers, Vercel may process request metadata needed to deliver and protect the service. AyahClip does not add request IP addresses, raw user-agent strings or referrers to its product-event records.</p>
+              <p className="mt-3">AyahClip runs on privately managed hosting infrastructure. The hosting and network providers may process request metadata needed to deliver and protect the service. AyahClip does not add request IP addresses, raw user-agent strings or referrers to its product-event records.</p>
             </section>
 
             <section id="storage" className="scroll-mt-28">
