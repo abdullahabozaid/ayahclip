@@ -106,6 +106,14 @@ test("desktop Studio keeps platform frames visible and supports repeated caption
   await settings.click();
   await page.getByRole("button", { name: "Timeline", exact: true }).click();
   await expect(page.getByText("3 segments", { exact: true })).toBeVisible();
+  const timelineWaveform = page.getByRole("region", {
+    name: "Timeline waveform. Drag to scrub, pinch to zoom.",
+  });
+  await expect(timelineWaveform).toBeVisible();
+  const timelineBox = await timelineWaveform.boundingBox();
+  expect(timelineBox).not.toBeNull();
+  expect(timelineBox!.y + timelineBox!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await expect(page.getByRole("button", { name: /Ayah 1, part 1 of 3/ })).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("button", { name: "Saved", exact: true })).toBeVisible();
 

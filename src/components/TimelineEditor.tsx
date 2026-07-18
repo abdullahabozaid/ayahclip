@@ -1232,7 +1232,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const busy = redetecting || deepProgress != null;
 
   return (
-    <div className="space-y-3 pb-1">
+    <div className={`${fullscreen ? "space-y-3" : "space-y-2"} pb-1`}>
+      {fullscreen && (
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--hairline-soft)] pb-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/80">Timeline</p>
@@ -1249,9 +1250,10 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           </span>
         </div>
       </div>
+      )}
       {/* Primary transport — the controls used 80% of the time stay in front.
           Pause rebuild, recitation alignment, and trim live in a collapsible cluster. */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className={`flex flex-wrap items-center ${fullscreen ? "gap-3" : "gap-2"}`}>
         <button
           onClick={togglePlay}
           disabled={loading || duration === 0}
@@ -1316,9 +1318,15 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           </button>
         </div>
 
-        <span className="tabular-nums text-[13px] text-[var(--muted)]">
+        <span className="tabular-nums text-[12px] text-[var(--muted)]">
           {fmt(headTime)} <span className="text-[var(--muted-deep)]">/ {fmt(duration)}</span>
         </span>
+
+        {!fullscreen && (
+          <span className="hidden rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 text-[10px] tabular-nums text-[var(--muted-deep)] md:inline-flex">
+            {timings.length} ayah{timings.length === 1 ? "" : "s"} · {timings.reduce((count, timing) => count + (timing.splits?.length ?? 0), 0)} cuts
+          </span>
+        )}
 
         {/* Right cluster: Tools toggle + zoom */}
         <div className="ml-auto flex items-center gap-2.5 max-sm:ml-0 max-sm:w-full max-sm:justify-between">
@@ -1536,13 +1544,13 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
         const range = v.wordRange ?? { from: 0, to: Math.max(0, totalWords - 1) };
         const isTrimmed = !!v.wordRange;
         return (
-          <div className="relative flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-gold/20 bg-[var(--ink-deep)] px-3 py-2.5">
-            <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-deep)]">Selected</span>
+          <div className={`relative flex flex-wrap items-center gap-y-2 rounded-xl border border-gold/20 bg-[var(--ink-deep)] px-3 ${fullscreen ? "gap-x-4 py-2.5" : "gap-x-3 py-2"}`}>
+            {fullscreen && <span className="text-[9px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-deep)]">Selected</span>}
             <span
               className="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-md bg-[var(--gold)]/15 px-2 text-[12px] font-medium tabular-nums text-gold-soft ring-1 ring-inset ring-[var(--hairline)]"
-              title={`Verse ${v.verseNumber} of this clip`}
+              title={`Ayah ${v.verseNumber} of this clip`}
             >
-              {v.verseNumber}
+              {fullscreen ? v.verseNumber : `Ayah ${v.verseNumber}`}
             </span>
 
             <div className="flex items-center gap-2 text-[12px] tabular-nums">
@@ -1604,7 +1612,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
 
             <button
               onClick={() => duplicateVerse(activeIdx)}
-              className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] sm:min-h-7"
+              className={`btn-ghost min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] sm:min-h-7 ${fullscreen ? "flex" : "hidden md:flex"}`}
               title="Duplicate this verse so the same ayah appears twice on the timeline"
             >
               <TlIcon d={TL_ICON.copy} /> Duplicate
@@ -1613,7 +1621,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             <button
               onClick={() => deleteVerse(activeIdx)}
               disabled={timings.length <= 1}
-              className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] transition-colors hover:border-[var(--gold)] hover:text-gold-soft disabled:opacity-30 sm:min-h-7"
+              className={`btn-ghost min-h-11 items-center gap-1.5 rounded-full px-3 text-[11px] transition-colors hover:border-[var(--gold)] hover:text-gold-soft disabled:opacity-30 sm:min-h-7 ${fullscreen ? "flex" : "hidden md:flex"}`}
               title="Remove this verse from the clip"
             >
               <TlIcon d={TL_ICON.trash} /> Delete
@@ -1745,7 +1753,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               }
             }}
             className={`relative cursor-ew-resize touch-none overflow-hidden rounded-xl border border-[var(--hairline)] bg-[linear-gradient(180deg,rgba(201,162,75,0.025),rgba(5,5,7,0.96))] ${
-              fullscreen ? "h-[clamp(200px,40dvh,440px)]" : "h-28 sm:h-32"
+              fullscreen ? "h-[clamp(200px,40dvh,440px)]" : "h-24"
             }`}
           >
             <canvas
@@ -1837,6 +1845,16 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                     <div
                       onPointerDown={startDrag(seg.tIdx, "body")}
                       onPointerUp={onBodyPointerUp(seg.tIdx)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        store.setCurrentVerseIndex(seg.tIdx);
+                        seek(seg.s);
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Ayah ${seg.vn}${multiPart ? `, part ${seg.pIdx + 1} of ${seg.total}` : ""}, ${fmt(seg.s)} to ${fmt(seg.e)}`}
                       className={`h-full w-full ${
                         active
                           ? "cursor-cell active:cursor-grabbing"
@@ -1918,7 +1936,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               verse's on-screen text (broken into split-segments) is visible
               inline with its time range. No playback needed to confirm what
               will appear when. */}
-          <div className="relative mt-1.5 h-11 rounded-md bg-[var(--ink-deep)]/60 ring-1 ring-[var(--hairline-soft)]">
+          <div className={`relative mt-1.5 rounded-md bg-[var(--ink-deep)]/60 ring-1 ring-[var(--hairline-soft)] ${fullscreen ? "h-11" : "h-9"}`}>
             {timings.map((tg, i) => {
               const verse = store.verses.find((v) => v.verse_number === tg.verseNumber);
               if (!verse) return null;
@@ -1973,7 +1991,12 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
 
       {/* A compact legend makes the waveform states readable without opening
           help; keyboard detail stays progressive on the right. */}
-      <div className="relative flex flex-wrap items-center justify-between gap-2">
+      {!fullscreen && (
+        <div aria-label="Timeline legend" className="sr-only">
+          Selected ayah. Detected pause. Needs review.
+        </div>
+      )}
+      {fullscreen && <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div aria-label="Timeline legend" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--muted-deep)]">
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-gold" />Selected ayah</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-0.5 bg-gold/35" />Detected pause</span>
@@ -2032,7 +2055,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
