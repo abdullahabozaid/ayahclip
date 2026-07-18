@@ -52,6 +52,10 @@ final class AyahClipUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Text"].exists)
         XCTAssertTrue(app.buttons["Style"].exists)
         XCTAssertTrue(app.buttons["Media"].exists)
+        XCTAssertTrue(app.buttons["Undo"].exists)
+        XCTAssertTrue(app.buttons["Redo"].exists)
+        XCTAssertFalse(app.buttons["Undo"].isEnabled)
+        XCTAssertFalse(app.buttons["Redo"].isEnabled)
 
         let canvas = app.descendants(matching: .any)["editor-canvas"]
         XCTAssertTrue(canvas.exists)
@@ -124,6 +128,32 @@ final class AyahClipUITests: XCTestCase {
         attachment.name = "Focused style sheet"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor
+    func testStyleEditCanBeUndoneAndRedone() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ayahclip.onboarding.complete", "true"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["New Quran clip"].waitForExistence(timeout: 5))
+        app.buttons["New Quran clip"].tap()
+        let undo = app.buttons["Undo"]
+        let redo = app.buttons["Redo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 3))
+        XCTAssertFalse(undo.isEnabled)
+        XCTAssertFalse(redo.isEnabled)
+
+        app.buttons["Style"].tap()
+        XCTAssertTrue(app.buttons["Side fade"].waitForExistence(timeout: 3))
+        app.buttons["Side fade"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(undo.isEnabled)
+
+        undo.tap()
+        XCTAssertTrue(redo.isEnabled)
+        redo.tap()
+        XCTAssertTrue(undo.isEnabled)
     }
 
     @MainActor

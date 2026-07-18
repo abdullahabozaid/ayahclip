@@ -25,7 +25,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
 | Curated stock B-roll | Implemented, expansion pending | 20 photos and 11 videos visually reviewed as people-free |
 | Multi-clip B-roll timeline | Implemented | Audio-led sequence, split/reorder/trim workflow |
-| Native iOS beta | Implemented, distribution signing pending | 23 unit and 7 UI tests pass, including maximum Dynamic Type; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
+| Native iOS beta | Implemented, distribution signing pending | 25 unit and 8 UI tests pass, including maximum Dynamic Type and bounded Undo/Redo across project, timing, style, layout, and media edits; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
 | TestFlight distribution | Blocked by account configuration | The Mac has a valid Apple Distribution certificate but no AyahClip provisioning profiles or registered iPhone; a signed archive and App Store Connect record for `app.ayahclip.mobile` are still required |
 | Public production readiness | Not complete | Remaining gates below |
 | Security/backend baseline | Implemented, distributed WAF pending | Zero production dependency advisories; no tracked secrets; headers, local-filesystem isolation, request limits and API boundary tests documented in `docs/2026-07-18-security-backend-audit.md` |
@@ -45,7 +45,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 
 ### 2. Editor reliability
 
-- Exercise every toolbar, inspector, timeline, keyboard, undo/redo, upload, autosave, restore, and export path.
+- Exercise every toolbar, inspector, timeline, keyboard, upload, autosave, restore, and export path. Native Undo/Redo now has direct model and UI coverage; desktop history remains part of this gate.
 - Test long Surahs, long translations, right-to-left text, missing translations, network loss, storage quota, corrupt files, and unsupported codecs.
 - Verify preview/export parity at TikTok, Reels, Shorts, and landscape sizes.
 - Add performance budgets for initial load, timeline scrubbing, preview playback, and export.

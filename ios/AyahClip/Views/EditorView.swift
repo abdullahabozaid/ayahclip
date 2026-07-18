@@ -83,15 +83,22 @@ struct EditorView: View {
                     .lineLimit(1)
             }
             Spacer()
-            Button { } label: {
+            Button { model.undo() } label: {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 14, weight: .medium))
-                    .frame(width: 36, height: 44)
+                    .frame(width: 30, height: 44)
             }
-            .disabled(true)
+            .disabled(!model.canUndo)
             .accessibilityLabel("Undo")
+            Button { model.redo() } label: {
+                Image(systemName: "arrow.uturn.forward")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 30, height: 44)
+            }
+            .disabled(!model.canRedo)
+            .accessibilityLabel("Redo")
             Button("Export") {
-                model.updateActive { $0.selectedTool = .export }
+                model.updateActive(recordHistory: false) { $0.selectedTool = .export }
                 presentedTool = .export
             }
             .font(.caption.weight(.semibold))
@@ -216,7 +223,7 @@ struct EditorView: View {
         HStack {
             ForEach([EditorTool.edit, .captions, .style, .media]) { tool in
                 Button {
-                    model.updateActive { $0.selectedTool = tool }
+                    model.updateActive(recordHistory: false) { $0.selectedTool = tool }
                     presentedTool = tool
                 } label: {
                     VStack(spacing: 4) {

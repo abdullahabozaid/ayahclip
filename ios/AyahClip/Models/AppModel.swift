@@ -24,9 +24,14 @@ final class AppModel {
     var isExporting = false
     var isSavingToPhotos = false
     var exportURL: URL?
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
 
     private let projectsKey = "ayahclip.projects.v2"
     private let referenceKey = "ayahclip.lastReference.v1"
+    private let historyLimit = 100
+    private var undoStack: [ClipProject] = []
+    private var redoStack: [ClipProject] = []
 
     init() {
         loadProjects()
@@ -34,13 +39,17 @@ final class AppModel {
     }
 
     func createProject() {
+        resetHistory()
         activeProject = .freshStarter()
         importedMediaURLs = []
+        exportURL = nil
     }
 
     func open(_ project: ClipProject) {
+        resetHistory()
         activeProject = project
         importedMediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
+        exportURL = nil
     }
 
     func duplicate(_ project: ClipProject) {
@@ -79,54 +88,65 @@ final class AppModel {
     func closeEditor() {
         saveActiveProject()
         activeProject = nil
+        importedMediaURLs = []
         exportURL = nil
+        resetHistory()
+        cleanupUnreferencedMedia()
     }
 
-    func updateActive(_ update: (inout ClipProject) -> Void) {
-        guard var project = activeProject else { return }
+    func updateActive(recordHistory: Bool = true, _ update: (inout ClipProject) -> Void) {
+        guard let original = activeProject else { return }
+        var project = original
         update(&project)
+        guard project != original else { return }
         project.updatedAt = Date()
-        activeProject = project
+        replaceActiveProject(project, previous: original, recordHistory: recordHistory)
+    }
+
+    func undo() {
+        guard let current = activeProject, let previous = undoStack.popLast() else { return }
+        appendHistory(current, to: &redoStack)
+        restoreActiveProject(previous)
+    }
+
+    func redo() {
+        guard let current = activeProject, let next = redoStack.popLast() else { return }
+        appendHistory(current, to: &undoStack)
+        restoreActiveProject(next)
     }
 
     func moveMedia(from sourceIndex: Int, to destinationIndex: Int) async {
-        guard var project = activeProject else { return }
+        guard let original = activeProject else { return }
+        var project = original
         var filenames = project.allMediaFilenames
         guard filenames.indices.contains(sourceIndex), filenames.indices.contains(destinationIndex) else { return }
         let filename = filenames.remove(at: sourceIndex)
         filenames.insert(filename, at: destinationIndex)
         project.setMediaFilenames(filenames)
-        project.updatedAt = Date()
-        activeProject = project
-        importedMediaURLs = filenames.compactMap(mediaURL(for:))
-        exportURL = nil
-        if let primaryURL = importedMediaURLs.first,
+        let mediaURLs = filenames.compactMap(mediaURL(for:))
+        if let primaryURL = mediaURLs.first,
            let duration = try? await AVURLAsset(url: primaryURL).load(.duration).seconds {
-            updateActive { $0.fitSegments(to: duration) }
+            project.fitSegments(to: duration)
         }
+        project.updatedAt = Date()
+        replaceActiveProject(project, previous: original)
     }
 
     func removeMedia(at index: Int) async {
-        guard var project = activeProject else { return }
+        guard let original = activeProject else { return }
+        var project = original
         var filenames = project.allMediaFilenames
         guard filenames.indices.contains(index) else { return }
-        let removed = filenames.remove(at: index)
+        filenames.remove(at: index)
         project.setMediaFilenames(filenames)
-        project.updatedAt = Date()
-        activeProject = project
-        importedMediaURLs = filenames.compactMap(mediaURL(for:))
-        exportURL = nil
-
-        let referencedElsewhere = projects.contains {
-            $0.id != project.id && $0.allMediaFilenames.contains(removed)
-        }
-        if !referencedElsewhere, let url = mediaURL(for: removed) {
-            try? FileManager.default.removeItem(at: url)
-        }
-        if let primaryURL = importedMediaURLs.first,
+        let mediaURLs = filenames.compactMap(mediaURL(for:))
+        if let primaryURL = mediaURLs.first,
            let duration = try? await AVURLAsset(url: primaryURL).load(.duration).seconds {
-            updateActive { $0.fitSegments(to: duration) }
+            project.fitSegments(to: duration)
         }
+        project.updatedAt = Date()
+        // Keep detached media until the editor closes so Undo can restore it.
+        replaceActiveProject(project, previous: original)
     }
 
     @discardableResult
@@ -159,26 +179,31 @@ final class AppModel {
                 }
             }
 
-            if activeProject == nil { activeProject = .freshStarter() }
+            if activeProject == nil {
+                resetHistory()
+                activeProject = .freshStarter()
+            }
+            guard let original = activeProject else { return false }
+            var project = original
             let isAddingPrimary = activeProject?.mediaFilename == nil
             let sourceReference = normalizedReferenceURL(from: pendingLink)?.absoluteString
-            updateActive { project in
-                var filenames = destinations.map(\.lastPathComponent)
-                if project.mediaFilename == nil, let primary = filenames.first {
-                    project.mediaFilename = primary
-                    if let sourceReference { project.sourceReferenceURL = sourceReference }
-                    filenames.removeFirst()
-                }
-                var bRoll = project.bRollFilenames ?? []
-                bRoll.append(contentsOf: filenames)
-                project.bRollFilenames = bRoll
+            var filenames = destinations.map(\.lastPathComponent)
+            if project.mediaFilename == nil, let primary = filenames.first {
+                project.mediaFilename = primary
+                if let sourceReference { project.sourceReferenceURL = sourceReference }
+                filenames.removeFirst()
             }
-            importedMediaURLs = activeProject?.allMediaFilenames.compactMap(mediaURL(for:)) ?? []
+            var bRoll = project.bRollFilenames ?? []
+            bRoll.append(contentsOf: filenames)
+            project.bRollFilenames = bRoll
 
-            if isAddingPrimary, let primaryURL = importedMediaURLs.first {
+            let mediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
+            if isAddingPrimary, let primaryURL = mediaURLs.first {
                 let duration = try await AVURLAsset(url: primaryURL).load(.duration).seconds
-                updateActive { $0.fitSegments(to: duration) }
+                project.fitSegments(to: duration)
             }
+            project.updatedAt = Date()
+            replaceActiveProject(project, previous: original)
             return true
         } catch {
             destinations.forEach { try? FileManager.default.removeItem(at: $0) }
@@ -326,6 +351,49 @@ final class AppModel {
     private func persistProjects() {
         guard let data = try? JSONEncoder().encode(projects) else { return }
         UserDefaults.standard.set(data, forKey: projectsKey)
+    }
+
+    private func replaceActiveProject(
+        _ project: ClipProject,
+        previous: ClipProject,
+        recordHistory: Bool = true
+    ) {
+        guard project != previous else { return }
+        if recordHistory {
+            appendHistory(previous, to: &undoStack)
+            redoStack.removeAll(keepingCapacity: true)
+        }
+        restoreActiveProject(project)
+    }
+
+    private func restoreActiveProject(_ project: ClipProject) {
+        activeProject = project
+        importedMediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
+        exportURL = nil
+    }
+
+    private func appendHistory(_ project: ClipProject, to stack: inout [ClipProject]) {
+        stack.append(project)
+        if stack.count > historyLimit {
+            stack.removeFirst(stack.count - historyLimit)
+        }
+    }
+
+    private func resetHistory() {
+        undoStack.removeAll(keepingCapacity: true)
+        redoStack.removeAll(keepingCapacity: true)
+    }
+
+    private func cleanupUnreferencedMedia() {
+        guard let directory = try? mediaDirectory(),
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil
+              ) else { return }
+        let referenced = Set(projects.flatMap(\.allMediaFilenames))
+        for file in files where !referenced.contains(file.lastPathComponent) {
+            try? FileManager.default.removeItem(at: file)
+        }
     }
 
     private func normalizedReferenceURL(from value: String) -> URL? {

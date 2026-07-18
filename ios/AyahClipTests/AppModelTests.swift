@@ -57,8 +57,69 @@ final class AppModelTests: XCTestCase {
         let original = model.activeProject?.arabicSize
         model.updateActive { $0.arabicSize = 48 }
         XCTAssertEqual(model.activeProject?.arabicSize, 48)
-        model.updateActive { $0.arabicSize = original ?? 36 }
+        XCTAssertTrue(model.canUndo)
+        XCTAssertFalse(model.canRedo)
+
+        model.undo()
         XCTAssertEqual(model.activeProject?.arabicSize, original)
+        XCTAssertFalse(model.canUndo)
+        XCTAssertTrue(model.canRedo)
+
+        model.redo()
+        XCTAssertEqual(model.activeProject?.arabicSize, 48)
+        XCTAssertTrue(model.canUndo)
+        XCTAssertFalse(model.canRedo)
+    }
+
+    func testNewEditClearsRedoAndHistoryDoesNotCrossProjects() {
+        let model = AppModel()
+        model.createProject()
+        model.updateActive { $0.layout = .sideFade }
+        model.undo()
+        XCTAssertTrue(model.canRedo)
+
+        model.updateActive { $0.captionStyle = .gold }
+        XCTAssertFalse(model.canRedo)
+        XCTAssertTrue(model.canUndo)
+
+        model.createProject()
+        XCTAssertFalse(model.canUndo)
+        XCTAssertFalse(model.canRedo)
+    }
+
+    func testMediaReorderAndRemovalSupportUndoRedo() async throws {
+        let firstSource = try await makeTestVideo(frameCount: 12)
+        let secondSource = try await makeTestVideo(frameCount: 12)
+        let model = AppModel()
+        model.projects = []
+        model.activeProject = nil
+
+        let imported = await model.importMedia(from: [firstSource, secondSource])
+        XCTAssertTrue(imported)
+        let originalOrder = try XCTUnwrap(model.activeProject?.allMediaFilenames)
+        XCTAssertEqual(originalOrder.count, 2)
+
+        await model.moveMedia(from: 1, to: 0)
+        XCTAssertEqual(model.activeProject?.allMediaFilenames, Array(originalOrder.reversed()))
+        model.undo()
+        XCTAssertEqual(model.activeProject?.allMediaFilenames, originalOrder)
+        model.redo()
+        XCTAssertEqual(model.activeProject?.allMediaFilenames, Array(originalOrder.reversed()))
+
+        let removedFilename = try XCTUnwrap(model.activeProject?.allMediaFilenames.first)
+        let removedURL = try XCTUnwrap(model.mediaURL(for: removedFilename))
+        await model.removeMedia(at: 0)
+        XCTAssertEqual(model.activeProject?.allMediaFilenames.count, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: removedURL.path))
+        model.undo()
+        XCTAssertEqual(model.activeProject?.allMediaFilenames.count, 2)
+        XCTAssertTrue(model.importedMediaURLs.contains(removedURL))
+        model.redo()
+        XCTAssertEqual(model.activeProject?.allMediaFilenames.count, 1)
+
+        model.closeEditor()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: removedURL.path))
+        model.projects.forEach(model.delete)
     }
 
     func testNewClipDeepLinkOpensEditor() throws {
