@@ -35,6 +35,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Offline local-media export | Implemented | After Studio is loaded, forced network loss does not prevent an imported local WAV from rendering to a verified MP4; network-backed sources remain explicitly out of scope |
 | Damaged and unsupported import recovery | Implemented | The deployed Import screen rejects corrupt WAV and non-media input, keeps creation disabled, and accepts a valid replacement without requiring a reload |
 | Text edge-case export | Implemented | Al-Baqarah 2:282 wraps into a valid 9:16 MP4, Urdu translation canvas calls remain RTL, and absent translation data exports Arabic without placeholder text |
+| Constrained-network first load | Implemented | At 150 ms latency and roughly 1.6 Mbps download, production exposes a usable Import workflow and populated 114-Surah selector in 3.23 seconds against a 12-second gate |
 
 ## Delivery sequence
 
@@ -52,7 +53,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 ### 2. Editor reliability
 
 - Exercise every toolbar, inspector, timeline, keyboard, upload, restore, and export path. Native autosave and Undo/Redo now have direct model/UI coverage; desktop history remains part of this gate.
-- **Partially completed:** long-Surah navigation, Al-Baqarah 2:282 wrapping/export, Urdu RTL rendering, missing translations, forced network loss after Studio load, storage-quota save failure, corrupt audio, unsupported input, and same-session source replacement have direct browser evidence. Throttled first-load behavior remains to be proven explicitly.
+- **Completed for the enumerated browser edge cases:** long-Surah navigation, Al-Baqarah 2:282 wrapping/export, Urdu RTL rendering, missing translations, constrained first load, forced network loss after Studio load, storage-quota save failure, corrupt audio, unsupported input, and same-session source replacement all have direct browser evidence.
 - Verify preview/export parity at TikTok, Reels, Shorts, and landscape sizes.
 - **Completed for browser performance:** enforce deployed budgets for usable import, local ingestion, Studio transition, playback response, timeline seeking, and exact MP4 preview; the 512 MB-heap three-minute export fixture also passes. Keep poor-network and real-device thermal testing as separate gates; see `docs/2026-07-18-performance-budget.md`.
 

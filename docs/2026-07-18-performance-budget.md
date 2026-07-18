@@ -16,6 +16,7 @@ The test runs three fresh browser journeys sequentially. Every run must remain i
 | Play control changes to Pause | 750 ms | 101 ms |
 | Keyboard timeline seek updates the playhead | 500 ms | 15 ms |
 | Exact MP4 preview opens with readable video metadata | 30,000 ms | 257 ms |
+| Constrained-network Import workflow usable | 12,000 ms | 3,231 ms |
 
 All 18 measured thresholds passed on 2026-07-18. The exact measurements are printed by the Playwright reporter and attached to each test result as `performance-budget.json`.
 
@@ -31,10 +32,11 @@ The test is deliberately skipped unless both `PERFORMANCE_BUDGET=1` and `PLAYWRI
 
 - The short MP4 measurement proves render startup overhead. The complementary low-memory gate also passed on 2026-07-18: installed Chrome with a 512 MB JavaScript heap and reported 4 GB device memory rendered a generated 181-second source to an MP4 larger than 500 KB with a verified duration between 180 and 182 seconds. This is a deterministic stability fixture, not a promise that every three-minute creative export completes in the fixture's wall-clock time.
 - Results depend on network location, CDN state, browser and hardware. The budgets are release regressions, not a universal latency promise to every user.
+- The constrained-network fixture uses 150 ms latency, 200 KB/s download and 75 KB/s upload. It requires the Source media workflow, a populated 114-Surah selector and the local-processing disclosure—not merely server HTML—to become usable.
 - Recognition-model download and ASR execution have separate size, route and corpus gates because including the 131 MB model in an ordinary editor interaction budget would mix two different workflows.
 - Mobile-native rendering uses AVFoundation and remains covered by the iOS export unit/UI suites rather than this browser measurement.
 - `e2e/offline-export-readiness.spec.ts` separately proves that once local media and Studio are loaded, an exact MP4 can still be produced after the browser is forced offline. This does not claim that first-load navigation, remote reciter audio, stock discovery, recognition-model download, or AI captions work without a network.
 
 ## Release decision
 
-The short deployed creator journey is within budget, the constrained-memory three-minute browser export is stable, and an already-open local-media Studio exports while offline. Throttled-network behavior and real-device thermal/memory testing remain separate launch gates and must not be inferred from these results.
+The short deployed creator journey and constrained first load are within budget, the constrained-memory three-minute browser export is stable, and an already-open local-media Studio exports while offline. Real-device thermal/memory testing remains a separate launch gate and must not be inferred from these results.
