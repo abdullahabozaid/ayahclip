@@ -428,8 +428,12 @@ final class AppModelTests: XCTestCase {
         defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }
         let references = [
             " https://vm.tiktok.com/ZM123/#watch ",
+            "https://vt.tiktok.com/ZSabc123/",
+            "https://www.tiktok.com/@ayahclip/video/7626380472108485910?is_from_webapp=1",
             "https://www.instagram.com/reel/ABC123/",
+            "https://www.instagram.com/share/reel/ABC123/?igsh=share",
             "https://youtube.com/shorts/xyz789?feature=share",
+            "https://www.youtube.com/watch?v=xyz789",
             "https://youtu.be/xyz789"
         ]
 
@@ -490,6 +494,11 @@ final class AppModelTests: XCTestCase {
             "https://tiktok.com.evil.example/video/123",
             "https://user:password@youtube.com/shorts/123",
             "https://example.com/video/123",
+            "https://www.tiktok.com/@ayahclip",
+            "https://www.instagram.com/ayahclip/",
+            "https://www.youtube.com/@ayahclip",
+            "https://www.youtube.com/watch",
+            "https://youtu.be/",
             String(repeating: "a", count: 2_049)
         ] {
             let model = AppModel()

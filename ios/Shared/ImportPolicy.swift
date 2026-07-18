@@ -73,10 +73,55 @@ enum SocialReferencePolicy {
         let supported = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be"].contains {
             host == $0 || host.hasSuffix(".\($0)")
         }
-        guard supported else { return nil }
+        guard supported, isPostReference(components, host: host) else { return nil }
         components.scheme = scheme
         components.host = host
         components.fragment = nil
         return components.url
+    }
+
+    private static func isPostReference(_ components: URLComponents, host: String) -> Bool {
+        let pathParts = components.path
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map(String.init)
+        guard !pathParts.isEmpty else { return false }
+
+        if host == "youtu.be" || host.hasSuffix(".youtu.be") {
+            return !pathParts[0].isEmpty
+        }
+
+        if host == "youtube.com" || host.hasSuffix(".youtube.com") {
+            let route = pathParts[0].lowercased()
+            if route == "watch" {
+                return components.queryItems?.contains {
+                    $0.name.lowercased() == "v" && !($0.value ?? "").isEmpty
+                } == true
+            }
+            return ["shorts", "embed", "live"].contains(route) && pathParts.count >= 2
+        }
+
+        if host == "instagram.com" || host.hasSuffix(".instagram.com") {
+            let route = pathParts[0].lowercased()
+            if ["p", "reel", "reels", "tv"].contains(route) {
+                return pathParts.count >= 2
+            }
+            return route == "share" && pathParts.count >= 3 &&
+                ["p", "reel"].contains(pathParts[1].lowercased())
+        }
+
+        if host == "tiktok.com" || host.hasSuffix(".tiktok.com") {
+            if ["vm.tiktok.com", "vt.tiktok.com"].contains(host) {
+                return !pathParts[0].isEmpty
+            }
+            if pathParts[0].lowercased() == "t" {
+                return pathParts.count >= 2
+            }
+            return pathParts.count >= 3 &&
+                pathParts[0].hasPrefix("@") &&
+                pathParts[1].lowercased() == "video" &&
+                pathParts[2].allSatisfy(\.isNumber)
+        }
+
+        return false
     }
 }
