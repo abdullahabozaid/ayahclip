@@ -3,33 +3,14 @@ import { writeFile, mkdir } from "fs/promises";
 import { join, basename, resolve } from "path";
 import { homedir } from "os";
 import { existsSync } from "fs";
+import { localMutationAllowed } from "@/lib/local-origin";
 
 const EXPORTS_DIR = join(homedir(), "Documents", "AyahClip", "Exports");
 const ALLOWED_EXT = new Set([".mp4", ".webm"]);
 const MAX_SIZE = 500 * 1024 * 1024; // 500 MB
 
 export async function POST(req: NextRequest) {
-  // Only the local dev origin (or a device on the LAN, e.g. the phone) may write
-  // to disk. Parse the hostname — a startsWith check matches evil lookalikes
-  // like http://localhost.attacker.com.
-  // Browsers always send Origin on POST (including same-origin fetch), so a
-  // missing Origin means a non-browser client — deny rather than skip the check.
-  const origin = req.headers.get("origin");
-  if (!origin) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  let host: string;
-  try {
-    host = new URL(origin).hostname;
-  } catch {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-  const isLan =
-    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
-    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host);
-  if (!isLocal && !isLan) {
+  if (!localMutationAllowed(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

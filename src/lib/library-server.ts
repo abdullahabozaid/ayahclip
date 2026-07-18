@@ -8,6 +8,7 @@ import { join } from "path";
 import { homedir } from "os";
 import type { NextRequest } from "next/server";
 import type { LibraryClip } from "./clip-library";
+import { isLocalNetworkHostname, localMutationAllowed } from "./local-origin";
 
 const ROOT = join(homedir(), "Documents", "AyahClip", "Library");
 const VIDEOS = join(ROOT, "videos");
@@ -133,35 +134,16 @@ export async function writeFolders(folders: string[]): Promise<void> {
 }
 
 /**
- * Only the local dev origin (or a LAN device, e.g. the phone) may mutate the
- * on-disk store. Browsers always send Origin on POST, so a missing Origin means
- * a non-browser client → deny. Mirrors the save-export route's guard.
+ * Only the exact local origin serving AyahClip may mutate the on-disk store.
+ * Browsers always send Origin on mutations, so a missing Origin means a
+ * non-browser client → deny. Mirrors the save-export route's guard.
  */
 export function originAllowed(req: NextRequest): boolean {
-  const origin = req.headers.get("origin");
-  if (!origin) return false;
-  let host: string;
-  try {
-    host = new URL(origin).hostname;
-  } catch {
-    return false;
-  }
-  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
-  return (
-    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
-    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)
-  );
+  return localMutationAllowed(req);
 }
 
 /** The disk-backed library is a localhost/LAN feature. Public deployments use
  * private browser storage and must never expose a shared server filesystem. */
 export function localRequestAllowed(req: NextRequest): boolean {
-  const host = req.nextUrl.hostname;
-  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
-  return (
-    /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
-    /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host)
-  );
+  return isLocalNetworkHostname(req.nextUrl.hostname);
 }
