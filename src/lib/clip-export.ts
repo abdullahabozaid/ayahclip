@@ -209,6 +209,7 @@ export async function saveRenderedToLibrary(file: File): Promise<boolean> {
       mimeType: file.type,
       size: file.size,
       createdAt: Date.now(),
+      kind: "export",
       thumbnail: await captureThumbnail(file),
       status: "draft",
     };

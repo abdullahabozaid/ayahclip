@@ -492,7 +492,7 @@ export default function StudioPage() {
     <>
     <main data-testid="studio-shell" ref={stageRef} style={{ zoom }} className="studio-shell-layout flex h-dvh flex-col overflow-hidden bg-[var(--ink)] lg:grid lg:grid-cols-[56px_minmax(0,1fr)_304px] lg:grid-rows-[52px_minmax(0,1fr)_188px]">
       {/* Studio top bar — pad for the notch / status bar on mobile */}
-      <header className="flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-2 pt-[env(safe-area-inset-top)] sm:px-3 lg:col-span-3 lg:h-[52px] lg:px-4 lg:pt-0">
+      <header className="relative z-40 flex min-h-[calc(48px+env(safe-area-inset-top))] min-w-0 shrink-0 items-end justify-between gap-2 border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-2 pb-1 pt-[env(safe-area-inset-top)] sm:px-3 lg:col-span-3 lg:h-[52px] lg:min-h-0 lg:items-center lg:px-4 lg:pb-0 lg:pt-0">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button
             onClick={() => router.push(`/surah/${surah.id}`)}
@@ -641,7 +641,7 @@ export default function StudioPage() {
           <button
             onClick={openMp4Preview}
             disabled={mp4Rendering}
-            className="btn-gold flex h-8 items-center gap-1.5 rounded-md px-3 text-xs disabled:opacity-70"
+            className="flex h-9 items-center gap-1.5 rounded-md bg-[var(--gold)] px-3 text-xs font-semibold text-[var(--ink-deep)] disabled:opacity-70 sm:h-8"
             aria-label="Preview the final MP4"
             title="Render and watch the exact MP4 that export produces"
           >
@@ -660,7 +660,7 @@ export default function StudioPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 9V5a1 1 0 011-1h4M4 15v4a1 1 0 001 1h4m6-16h4a1 1 0 011 1v4m0 6v4a1 1 0 01-1 1h-4" />
                   <path d="M10 9.5v5l4.5-2.5z" fill="currentColor" stroke="none" />
                 </svg>
-                <span className="hidden sm:inline">Export MP4</span>
+                <span>{mp4Rendering ? "" : "Export"}</span>
               </>
             )}
           </button>
@@ -780,13 +780,14 @@ export default function StudioPage() {
           Height is bounded so the preview above is always visible; collapse
           shrinks it to just this bar. */}
       {(store.audioSource.mode === "imported" || selectedVerseNumbers.length > 0) && (
-        <div data-testid="studio-timeline" className={`studio-timeline-dock relative z-10 shrink-0 overflow-x-hidden overflow-y-auto border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-2 py-1.5 sm:px-3 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[min(232px,36dvh)]" : "h-12"}`}>
-          <div className="flex items-center gap-2 lg:h-7">
+        <div data-testid="studio-timeline" className={`studio-timeline-dock relative z-20 flex shrink-0 flex-col overflow-hidden border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-2 py-1 sm:px-3 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[min(232px,36dvh)]" : "h-12"}`}>
+          <div className="flex shrink-0 items-center gap-1.5 lg:h-7">
             {/* Collapse / expand the dock */}
             <button
               onClick={() => openTimeline(!timelineOpen)}
               className="flex min-h-10 items-center gap-2 rounded pr-2 text-left lg:min-h-7"
               aria-expanded={timelineOpen}
+              aria-label="Verse Editor"
               title={timelineOpen ? "Minimize editor" : "Show editor"}
             >
               <svg
@@ -798,7 +799,7 @@ export default function StudioPage() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
               </svg>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-soft/80">
+              <span className="text-[11px] font-semibold text-gold-soft/90">
                 Verse Editor
               </span>
             </button>
@@ -829,11 +830,11 @@ export default function StudioPage() {
               </div>
             )}
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1">
               {timelineOpen && (
                 <button
                   onClick={() => setTimelineFullscreen(true)}
-                  className="flex min-h-10 items-center gap-1.5 rounded border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold lg:min-h-7"
+                  className="flex min-h-10 min-w-10 items-center justify-center rounded border border-[var(--hairline)] px-2 text-[11px] text-parchment transition-colors hover:border-gold lg:min-h-7"
                   aria-label="Expand editor"
                   title="Edit in a full-screen editor with more room"
                 >
@@ -843,12 +844,6 @@ export default function StudioPage() {
                   <span className="hidden sm:inline">Expand</span>
                 </button>
               )}
-              <button
-                onClick={() => openTimeline(!timelineOpen)}
-                className="flex min-h-10 items-center gap-1.5 rounded border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment lg:min-h-7"
-              >
-                {timelineOpen ? "Minimize" : "Show"}
-              </button>
             </div>
           </div>
 
@@ -857,7 +852,7 @@ export default function StudioPage() {
               the audio buffer two extra times. The dock is behind the overlay
               anyway; it remounts (fresh from the store) on close. */}
           {timelineOpen && !timelineFullscreen && (
-            <div className="mt-1 min-h-0 overflow-hidden">
+            <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
               {store.audioSource.mode === "imported" ? (
                 editorView === "words" ? <VerseCardEditor /> : <TimelineEditor compact />
               ) : (
@@ -869,15 +864,15 @@ export default function StudioPage() {
       )}
 
       <nav data-testid="studio-mobile-tools" aria-label="Studio tools" className="relative z-20 grid h-[calc(58px+env(safe-area-inset-bottom))] shrink-0 grid-cols-5 items-start border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden">
-        {[
-          ["Media", () => openSettings(true), false],
-          ["Audio", () => openTimeline(true), false],
-          ["Text", () => openSettings(true), false],
-          ["Captions", () => { setEditorView("timeline"); openTimeline(true); }, timelineOpen],
-          ["Format", () => openSettings(!settingsOpen), settingsOpen],
-        ].map(([label, action, active]) => (
+        {([
+          ["Media", () => openSettings(true), false, <path key="media" strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v14H4zM4 15l4-4 4 4 2-2 6 6M15.5 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />],
+          ["Audio", () => openTimeline(true), false, <path key="audio" strokeLinecap="round" strokeLinejoin="round" d="M9 18V6l10-2v12M9 10l10-2M6.5 20A2.5 2.5 0 106.5 15a2.5 2.5 0 000 5zm10-2a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />],
+          ["Text", () => openSettings(true), false, <path key="text" strokeLinecap="round" d="M5 5h14M12 5v14M8 19h8" />],
+          ["Captions", () => { setEditorView("timeline"); openTimeline(true); }, timelineOpen, <path key="captions" strokeLinecap="round" strokeLinejoin="round" d="M4 6h16v12H4zM7 11h4m2 0h4M7 14h3m2 0h5" />],
+          ["Format", () => openSettings(!settingsOpen), settingsOpen, <path key="format" strokeLinecap="round" strokeLinejoin="round" d="M7 3H3v4m14-4h4v4M7 21H3v-4m14 4h4v-4" />],
+        ] as const).map(([label, action, active, icon]) => (
           <button key={label as string} type="button" onClick={action as () => void} aria-label={label === "Format" ? "Toggle settings" : undefined} aria-expanded={label === "Format" ? settingsOpen : undefined} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[10px] font-medium uppercase tracking-tight ${active ? "bg-gold/[0.06] text-gold-soft" : "text-[var(--muted)]"}`}>
-            <span className="text-base leading-none" aria-hidden>{label === "Media" ? "▣" : label === "Audio" ? "♫" : label === "Text" ? "T" : label === "Captions" ? "▤" : "↔"}</span>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>{icon}</svg>
             {label as string}
           </button>
         ))}

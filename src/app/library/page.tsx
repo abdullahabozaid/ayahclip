@@ -62,6 +62,7 @@ export default function LibraryPage() {
   const [view, setView] = useState<"grid" | "calendar">("grid");
   const [reciterFilter, setReciterFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | ClipStatus>("all");
+  const [kindFilter, setKindFilter] = useState<"all" | "import" | "export">("all");
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
@@ -103,6 +104,7 @@ export default function LibraryPage() {
           mimeType: file.type || "video/mp4",
           size: file.size,
           createdAt: Date.now(),
+          kind: "import",
           thumbnail: await captureThumbnail(file),
           status: "draft",
           folder: folderFilter !== "all" && folderFilter !== "none" ? folderFilter : undefined,
@@ -225,6 +227,7 @@ export default function LibraryPage() {
   const filtered = clips.filter(
     (c) =>
       (reciterFilter === "all" || c.reciterName === reciterFilter) &&
+      (kindFilter === "all" || (c.kind ?? "export") === kindFilter) &&
       (statusFilter === "all" || c.status === statusFilter) &&
       (folderFilter === "all" ||
         (folderFilter === "none" ? !c.folder : c.folder === folderFilter))
@@ -331,7 +334,7 @@ export default function LibraryPage() {
 
   return (
     <main className="mx-auto max-w-6xl px-5 pb-24 pt-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl text-parchment">Clip Library</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
@@ -398,6 +401,23 @@ export default function LibraryPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="mb-5 flex w-full gap-1 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1 sm:w-fit" aria-label="Library type">
+        {([
+          ["all", `All (${clips.length})`],
+          ["import", `Imported (${clips.filter((clip) => clip.kind === "import").length})`],
+          ["export", `Exports (${clips.filter((clip) => (clip.kind ?? "export") === "export").length})`],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setKindFilter(id)}
+            className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-medium transition-colors sm:flex-none ${kindFilter === id ? "bg-[var(--gold)] text-[var(--ink-deep)]" : "text-[var(--muted)] hover:text-parchment"}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {deleteRequest && (

@@ -5,6 +5,7 @@ import { get, set, keys, del } from "idb-keyval";
 
 export type ClipStatus = "draft" | "scheduled" | "posted";
 export type ClipPlatform = "tiktok" | "reels" | "shorts" | "other";
+export type ClipKind = "import" | "export";
 
 export interface LibraryClip {
   id: string;
@@ -18,6 +19,9 @@ export interface LibraryClip {
   /** Bytes of the stored video. */
   size: number;
   createdAt: number;
+  /** Whether the file came from the user or an AyahClip render. Older records
+   * omit this field and are treated as exports for backwards compatibility. */
+  kind?: ClipKind;
   /** Tiny JPEG data URL of the first frame, for the library grid. */
   thumbnail?: string;
   status: ClipStatus;

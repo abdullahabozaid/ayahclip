@@ -158,13 +158,15 @@ export async function recognizeQuranPassage(
   const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
     ? "medium"
     : assessment.confidence;
-  const windowCandidates = effectiveConfidence !== "high"
-    ? recoverRecognitionWindowCandidates(recognitionTranscriptWindows(
-      emissions.transcription,
-      silences,
-      buffer.duration,
-    ))
-    : [];
+  // A confident whole-clip transcript can still be confidently wrong when an
+  // intro, repeated phrase, or decoding hallucination dominates it. Always
+  // cross-check pause-bounded windows; the conflict filter deliberately ignores
+  // ordinary overlapping fragments from the same passage.
+  const windowCandidates = recoverRecognitionWindowCandidates(recognitionTranscriptWindows(
+    emissions.transcription,
+    silences,
+    buffer.duration,
+  ));
   const competingWindow = Boolean(
     match && hasCompetingRecognitionWindow(match, windowCandidates),
   );

@@ -38,7 +38,7 @@ test("import clearly supports local audio and phone video formats", async ({ pag
   await page.goto("/import");
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Turn a recitation into a vertical clip" }),
+    page.getByRole("heading", { level: 1, name: "Import a recitation" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose audio or video" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toHaveAttribute(

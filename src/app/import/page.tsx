@@ -240,15 +240,28 @@ export default function ImportPage() {
     setDecoding(true);
     try {
       let audioBlob: Blob = f;
-      // Video → extract the audio track with ffmpeg.wasm so any container works.
+      let buf: AudioBuffer;
+      // Safari and Chromium can decode the AAC track in ordinary MP4/MOV files
+      // directly. This avoids copying a phone-sized video into ffmpeg.wasm — a
+      // large, unnecessary allocation that could terminate the iOS web view.
       if (isVideo) {
-        setDecodeMsg("Extracting audio from video (first time loads ffmpeg)…");
-        const { extractAudioFromVideo } = await import("@/lib/video-audio");
-        audioBlob = await extractAudioFromVideo(f);
-        if (decodeOperationRef.current !== operation) return;
+        setDecodeMsg("Reading video audio…");
+        try {
+          buf = await decodeAudioFile(f);
+        } catch {
+          if (isNativeMobileEditor(window.location.search)) {
+            throw new Error("native-video-decode");
+          }
+          setDecodeMsg("Converting video audio…");
+          const { extractAudioFromVideo } = await import("@/lib/video-audio");
+          audioBlob = await extractAudioFromVideo(f);
+          if (decodeOperationRef.current !== operation) return;
+          buf = await decodeAudioFile(audioBlob);
+        }
+      } else {
+        setDecodeMsg("Reading audio…");
+        buf = await decodeAudioFile(audioBlob);
       }
-      setDecodeMsg("Reading audio…");
-      const buf = await decodeAudioFile(audioBlob);
       if (decodeOperationRef.current !== operation) return;
       setSourceAudio(audioBlob);
       setBuffer(buf);
@@ -256,10 +269,12 @@ export default function ImportPage() {
         sourceKind: isVideo ? "video" : "audio",
         durationBucket: durationBucket(buf.duration),
       });
-    } catch {
+    } catch (cause) {
       if (decodeOperationRef.current !== operation) return;
       setError(
-        "Couldn't read the audio from this file. Try an MP3/M4A/WAV, or a different video."
+        cause instanceof Error && cause.message === "native-video-decode"
+          ? "This video’s audio format is not supported on iPhone. Export it as an MP4 with AAC audio, then try again."
+          : "Couldn't read the audio from this file. Try an MP3/M4A/WAV, or a different video."
       );
     } finally {
       if (decodeOperationRef.current === operation) {
@@ -506,14 +521,14 @@ export default function ImportPage() {
             <p className="mb-2 text-xs uppercase tracking-[0.24em] text-gold-soft/70">
               Import recitation
             </p>
-            <h1 className="font-display max-w-2xl text-4xl tracking-wide text-parchment sm:text-5xl">
-              Turn a recitation into a vertical clip
+            <h1 className="font-display max-w-2xl text-2xl tracking-wide text-parchment sm:text-4xl">
+              Import a recitation
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Upload permitted audio or video, verify the Quran passage by ear, then refine every cut in Studio. Your media stays in this browser.
+              Add media, confirm the verses, then edit.
             </p>
           </div>
-          <ol className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--hairline-soft)] text-xs sm:text-[11px] text-[var(--muted)]">
+          <ol className="hidden grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--hairline-soft)] text-[11px] text-[var(--muted)] sm:grid">
           {[
             ["01", "Add media"],
             ["02", "Confirm verses"],
@@ -543,9 +558,6 @@ export default function ImportPage() {
             <label htmlFor="social-post-url" className="text-xs font-medium text-parchment">
               Import a TikTok or Instagram post
             </label>
-            <p className="mt-1 text-xs leading-4 text-[var(--muted)]">
-              Paste or share a public post link. AyahClip resolves the clean source video and imports it here.
-            </p>
             <div className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row">
               <input
                 id="social-post-url"
@@ -584,7 +596,7 @@ export default function ImportPage() {
               </p>
             )}
             {socialError && <p role="alert" className="mt-2 text-xs leading-4 text-red-300">{socialError}</p>}
-            <p className="mt-2 text-xs leading-4 text-[var(--muted-deep)]">
+            <p className="mt-2 hidden text-xs leading-4 text-[var(--muted-deep)] sm:block">
               Only import media you own or have permission to edit. Private and restricted posts are not supported.
             </p>
           </div>
@@ -618,8 +630,8 @@ export default function ImportPage() {
                   : "MP3, M4A, WAV, MP4, WebM or MOV · processed locally"}
             </span>
           </button>
-          <div className="mt-3 flex items-start justify-between gap-4 text-xs sm:text-[10px] leading-4 text-[var(--muted-deep)]">
-            <p>
+          <div className="mt-3 flex items-start justify-between gap-4 text-[10px] leading-4 text-[var(--muted-deep)]">
+            <p className="hidden sm:block">
               Best under 20 minutes or {Math.round(RECOMMENDED_IMPORT_BYTES / 1024 / 1024)} MB. Longer media can use substantial browser memory during decoding and export.
             </p>
             {decoding && (
@@ -657,7 +669,7 @@ export default function ImportPage() {
                   description="Use the uploaded video intact and keep it lip-synced in Studio."
                 />
               </div>
-              <p className="mt-3 text-xs sm:text-[11px] leading-4 text-[var(--muted-deep)]">
+              <p className="mt-3 hidden text-[11px] leading-4 text-[var(--muted-deep)] sm:block">
                 Using your own YouTube upload? Download it from{" "}
                 <a href="https://support.google.com/youtube/answer/56100" target="_blank" rel="noopener noreferrer" className="text-gold-soft underline-offset-2 hover:underline">
                   YouTube Studio or Google Takeout
@@ -674,7 +686,7 @@ export default function ImportPage() {
             <div>
               <p className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/75">Step 2</p>
               <h2 id="passage-heading" className="mt-1 text-base font-medium text-parchment">Identify and verify the passage</h2>
-              <p className="mt-1 text-xs sm:text-[11px] leading-4 text-[var(--muted)]">Recognition suggests a range. You listen, correct it if needed, then confirm.</p>
+              <p className="mt-1 hidden text-[11px] leading-4 text-[var(--muted)] sm:block">Listen, correct the range if needed, then confirm.</p>
             </div>
             {rangeConfirmed && (
               <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-xs sm:text-[10px] text-emerald-soft">Range confirmed</span>
@@ -685,7 +697,7 @@ export default function ImportPage() {
             <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-parchment">Recognise and align locally</p>
-                <p className="mt-0.5 text-xs sm:text-[11px] leading-4 text-[var(--muted)]">
+                <p className="mt-0.5 hidden text-[11px] leading-4 text-[var(--muted)] sm:block">
                   Finds the Quran range, then places editable ayah boundaries. Audio never leaves this browser.
                 </p>
               </div>

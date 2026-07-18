@@ -12,6 +12,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("ayahclip.onboarding.complete") private var onboardingComplete = false
     @State private var showWatermarkCleanup = false
+    @State private var showWatermarkShortcut = true
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -39,19 +40,34 @@ struct RootView: View {
                 }
             }
 
-            Button {
-                showWatermarkCleanup = true
-            } label: {
-                Image(systemName: "eraser.line.dashed")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.black)
-                    .frame(width: 48, height: 48)
-                    .background(AyahTheme.gold, in: Circle())
-                    .shadow(color: .black.opacity(0.35), radius: 12, y: 5)
+            if showWatermarkShortcut {
+                HStack(spacing: 8) {
+                    Button {
+                        showWatermarkShortcut = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AyahTheme.parchment)
+                            .frame(width: 36, height: 36)
+                            .background(.black.opacity(0.82), in: Circle())
+                    }
+                    .accessibilityLabel("Dismiss watermark shortcut")
+
+                    Button {
+                        showWatermarkCleanup = true
+                    } label: {
+                        Image(systemName: "eraser.line.dashed")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color.black)
+                            .frame(width: 48, height: 48)
+                            .background(AyahTheme.gold, in: Circle())
+                    }
+                    .accessibilityLabel("Clean watermark")
+                }
+                .shadow(color: .black.opacity(0.35), radius: 12, y: 5)
+                .padding(.trailing, 16)
+                .padding(.bottom, 18)
             }
-            .accessibilityLabel("Clean watermark")
-            .padding(.trailing, 16)
-            .padding(.bottom, 18)
         }
         .sheet(isPresented: $showWatermarkCleanup) {
             WatermarkCleanupView()

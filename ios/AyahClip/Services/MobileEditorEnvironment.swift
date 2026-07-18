@@ -81,6 +81,7 @@ final class MobileEditorEnvironment {
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        configuration.allowsInlineMediaPlayback = true
         configuration.setURLSchemeHandler(
             schemeHandler,
             forURLScheme: NativeMediaSchemeHandler.scheme

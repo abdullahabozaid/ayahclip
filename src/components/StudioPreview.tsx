@@ -124,6 +124,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         video.muted = true;
         video.loop = true;
         video.playsInline = true;
+        video.setAttribute("playsinline", "");
+        video.setAttribute("webkit-playsinline", "");
         video.crossOrigin = "anonymous";
         video.addEventListener("loadeddata", () => {
           video.play().catch(() => {});
@@ -185,6 +187,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     // Loop unless synced or the user wants the last frame held when it ends.
     video.loop = !synced && store.videoLoopMode !== "freeze";
     video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
     video.crossOrigin = "anonymous";
     videoRef.current = video;
 
