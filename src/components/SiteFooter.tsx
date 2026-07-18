@@ -8,6 +8,7 @@ const CREDITS: { label: string; href: string }[] = [
   { label: "Reciter audio: EveryAyah.com", href: "https://everyayah.com" },
   { label: "Timed chapter audio: MP3Quran.net", href: "https://mp3quran.net" },
   { label: "Stock media: Pexels", href: "https://www.pexels.com" },
+  { label: "Pexels license", href: "https://www.pexels.com/license/" },
   {
     label: "Arabic speech recognition: FastConformer (CC-BY-4.0)",
     href: "https://creativecommons.org/licenses/by/4.0/",

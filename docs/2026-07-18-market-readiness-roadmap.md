@@ -50,7 +50,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 - Add a reviewable ingestion pipeline before exposing dynamic stock search.
 - Add saved style presets for split composition, reciter portrait, rotating B-roll, image sequences, and restrained glow typography.
 - **Completed for the shipped font and glow system:** shared Arabic/translation options, genuine Arabic weights, strict font readiness, long-text wrapping, RTL translation, missing-translation fallback and Lora plus white-glow exact-MP4 parity are covered. Continue to test new fonts and treatments against the same gate.
-- Add explicit media provenance and licensing notes where third-party sources are used.
+- **Completed for bundled media:** every curated Pexels photo and video records its immutable source ID and exact source page; the public footer names Pexels and links its license. Apply the same record to every future third-party asset.
 
 ### 2. Editor reliability
 

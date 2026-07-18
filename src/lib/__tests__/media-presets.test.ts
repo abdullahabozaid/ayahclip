@@ -47,6 +47,14 @@ describe("curated media presets", () => {
       .toBeLessThan(55 * 1024 * 1024);
   });
 
+  it("keeps every reviewed stock photo traceable to its exact Pexels source", () => {
+    expect(new Set(STOCK_IMAGES.map((item) => item.id)).size).toBe(STOCK_IMAGES.length);
+    expect(new Set(STOCK_IMAGES.map((item) => item.sourceId)).size).toBe(STOCK_IMAGES.length);
+    expect(STOCK_IMAGES.every((item) =>
+      item.sourcePageUrl === `https://www.pexels.com/photo/${item.sourceId}/`
+    )).toBe(true);
+  });
+
   it("does not restore media rejected during visual review", () => {
     expect(STOCK_IMAGES.some((item) => item.id === "lanterns-2")).toBe(false);
     expect(VIDEO_PRESETS.some((item) => item.id === "mosque")).toBe(false);
