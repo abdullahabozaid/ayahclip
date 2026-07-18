@@ -969,35 +969,49 @@ private struct ExportControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("1080 × 1920 · 30 fps").font(.subheadline.weight(.semibold)).foregroundStyle(AyahTheme.parchment)
-                    Text("TikTok, Reels, and Shorts safe").font(.caption).foregroundStyle(AyahTheme.muted)
-                }
-                Spacer()
-                if let url = model.exportURL {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("1080 × 1920 · 30 fps").font(.subheadline.weight(.semibold)).foregroundStyle(AyahTheme.parchment)
+                Text("TikTok, Reels, and Shorts safe").font(.caption).foregroundStyle(AyahTheme.muted)
+            }
+
+            if let url = model.exportURL {
+                HStack(spacing: 8) {
+                    Button {
+                        Task { await model.saveExportToPhotos() }
+                    } label: {
+                        Label(model.isSavingToPhotos ? "Saving…" : "Save video", systemImage: "arrow.down.to.line")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(AyahTheme.gold)
+                    .disabled(model.isSavingToPhotos)
+                    .accessibilityIdentifier("save-export-to-photos")
+
                     ShareLink(item: url) {
                         Label("Share", systemImage: "square.and.arrow.up")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 16)
-                            .frame(minHeight: 44)
+                            .frame(maxWidth: .infinity, minHeight: 44)
                             .foregroundStyle(AyahTheme.inkDeep)
                             .background(AyahTheme.gold)
-                            .clipShape(Capsule())
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                } else if model.isExporting {
-                    ProgressView()
-                        .tint(AyahTheme.gold)
-                } else {
-                    Button(model.importedMediaURL == nil ? "Add media" : "Render MP4") {
-                        Task { await model.exportActiveProject() }
-                    }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AyahTheme.gold)
-                        .foregroundStyle(AyahTheme.inkDeep)
                 }
+                .font(.subheadline.weight(.semibold))
+            } else if model.isExporting {
+                HStack(spacing: 10) {
+                    ProgressView().tint(AyahTheme.gold)
+                    Text("Rendering MP4…").font(.subheadline).foregroundStyle(AyahTheme.muted)
+                }
+                .frame(minHeight: 44)
+            } else {
+                Button(model.importedMediaURL == nil ? "Add media" : "Render MP4") {
+                    Task { await model.exportActiveProject() }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AyahTheme.gold)
+                .foregroundStyle(AyahTheme.inkDeep)
+                .frame(minHeight: 44)
             }
-            Text(model.exportURL == nil ? "Render once, then share the finished captioned MP4 to any installed app." : "Captioned MP4 ready. Share or save it using the system sheet.")
+            Text(model.exportURL == nil ? "Render once, then share the finished captioned MP4 to any installed app." : "Captioned MP4 ready. Save a copy to Photos or send it through the system Share Sheet.")
                 .font(.caption2)
                 .foregroundStyle(AyahTheme.muted)
         }

@@ -268,6 +268,16 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(UserDefaults.standard.string(forKey: "ayahclip.lastReference.v1"))
     }
 
+    func testSavingRequiresRenderedExport() async {
+        let model = AppModel()
+        model.exportURL = nil
+
+        await model.saveExportToPhotos()
+
+        XCTAssertEqual(model.notice, "Render the video before saving it to Photos.")
+        XCTAssertFalse(model.isSavingToPhotos)
+    }
+
     func testImportedMediaRetainsSavedSocialReference() async throws {
         UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1")
         defer { UserDefaults.standard.removeObject(forKey: "ayahclip.lastReference.v1") }

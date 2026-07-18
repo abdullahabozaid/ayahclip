@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Observation
+import Photos
 
 @MainActor
 @Observable
@@ -21,6 +22,7 @@ final class AppModel {
     var notice: String?
     var isImporting = false
     var isExporting = false
+    var isSavingToPhotos = false
     var exportURL: URL?
 
     private let projectsKey = "ayahclip.projects.v2"
@@ -257,6 +259,30 @@ final class AppModel {
             exportURL = try await VideoExportService.render(sourceURLs: importedMediaURLs, project: project)
         } catch {
             notice = "Export failed: \(error.localizedDescription)"
+        }
+    }
+
+    func saveExportToPhotos() async {
+        guard let exportURL else {
+            notice = "Render the video before saving it to Photos."
+            return
+        }
+
+        isSavingToPhotos = true
+        defer { isSavingToPhotos = false }
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else {
+            notice = "Photos access is off. Allow AyahClip to add photos in Settings, then try again."
+            return
+        }
+
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: exportURL)
+            }
+            notice = "Video saved to Photos."
+        } catch {
+            notice = "Could not save the video to Photos: \(error.localizedDescription)"
         }
     }
 
