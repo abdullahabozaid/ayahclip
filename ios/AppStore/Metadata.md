@@ -52,7 +52,7 @@ This is the first native iPhone beta. Please test:
 7. Open the full-screen preview and verify the 9:16 canvas and captions.
 8. Export the MP4, save it to Photos, and open the saved video from the camera roll.
 9. Cancel a render in progress and confirm it does not appear in another project.
-10. Send an original movie or post link to AyahClip from the iOS Share Sheet.
+10. Send up to eight original movies to AyahClip from the iOS Share Sheet and verify they arrive in order. Also share a TikTok, Instagram, or YouTube post link and verify it is saved only as a reference.
 11. Duplicate and delete a project from the Projects screen.
 
 Please report any mismatch between the editor preview and the exported MP4, clipped text, mistimed ayat, failed imports, or failed exports.
@@ -63,7 +63,7 @@ AyahClip requires no account or login.
 
 To review the core flow, launch the app, complete onboarding, tap **New Quran clip**, and choose a movie from Photos or Files. The editor opens after import. Caption text, layouts, styles, and timing controls are available beneath the preview. Use the expand button on the preview for distraction-free playback. Tap **Export** to render a local MP4, then choose **Save video** to add it to Photos or **Share** to open the system Share Sheet.
 
-The Share extension is named **Import to AyahClip**. It accepts one movie, web URL, or text item. Original movies are copied into the private App Group inbox; URLs and text are stored as references. The main app consumes the inbox when it becomes active.
+The Share extension is named **Import to AyahClip**. It accepts up to eight original movies, or one web URL or text item containing a supported TikTok, Instagram, or YouTube link. Original movies are copied in order into the private App Group inbox after the same 4 GB per-clip, eight-clip, and free-storage checks used by the editor. Supported URLs are normalized and stored only as references. The main app consumes the inbox when it becomes active.
 
 The beta intentionally does not download content from TikTok, Instagram, or YouTube and does not remove third-party watermarks. This protects creator rights and complies with platform policies.
 

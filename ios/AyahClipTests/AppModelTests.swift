@@ -5,6 +5,24 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testSharedImportPolicyMatchesEditorLimits() throws {
+        XCTAssertEqual(MediaImportPolicy.maxMediaCount, 8)
+        XCTAssertNoThrow(try MediaImportPolicy.validateBatch(attachedCount: 6, incomingCount: 2))
+        XCTAssertThrowsError(try MediaImportPolicy.validateBatch(attachedCount: 7, incomingCount: 2))
+        XCTAssertNoThrow(try MediaImportPolicy.validateFile(
+            fileBytes: 4 * 1_024 * 1_024 * 1_024,
+            availableBytes: 6 * 1_024 * 1_024 * 1_024
+        ))
+        XCTAssertThrowsError(try MediaImportPolicy.validateFile(
+            fileBytes: 4 * 1_024 * 1_024 * 1_024 + 1,
+            availableBytes: 8 * 1_024 * 1_024 * 1_024
+        ))
+        XCTAssertThrowsError(try MediaImportPolicy.validateFile(
+            fileBytes: 2 * 1_024 * 1_024 * 1_024,
+            availableBytes: 2 * 1_024 * 1_024 * 1_024
+        ))
+    }
+
     func testStarterProjectHasOrderedVerseSegments() {
         let segments = ClipProject.starter.segments
         XCTAssertEqual(segments.map(\.verse), [1, 2, 3])

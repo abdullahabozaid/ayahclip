@@ -15,9 +15,11 @@
 		2D59A3F74A57116315B160A7 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EAF34BB4FE6B64FF5A06E6B /* RootView.swift */; };
 		408D85AA7F430D4BB736E920 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A43E7B39917DA60AE46A85 /* EditorView.swift */; };
 		45EF8D8B7CB403748466D75C /* VideoExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25E9C1DCA52A394EAE426B3 /* VideoExportService.swift */; };
+		500A15ABB69E5717DB669D36 /* ImportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212E1AC15620BA68063B7061 /* ImportPolicy.swift */; };
 		562DD0475C936BE6D2D2D283 /* ClipProject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A134191131CC037D7EDFEAE /* ClipProject.swift */; };
 		6645FDD5C187D1206F8FD116 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E3A9EA9F165064212185BB49 /* PrivacyInfo.xcprivacy */; };
 		711E63BF9C20C293057B8DEF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B3E09647E3D3A59A2BDAACF /* AppModel.swift */; };
+		732D609D99E4E124943CF035 /* ImportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212E1AC15620BA68063B7061 /* ImportPolicy.swift */; };
 		7D87D1AC05DC9D287C35BE97 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45C4A362C08918BA7A1DACC7 /* AppModelTests.swift */; };
 		821B06CAA6697FB287E28D27 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 622BA8E6624825D55A04DAB8 /* SettingsView.swift */; };
 		8FCC71577BE126BA19A4B65D /* AyahClipUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB8C45FE09072DE78783BF8 /* AyahClipUITests.swift */; };
@@ -68,6 +70,7 @@
 
 /* Begin PBXFileReference section */
 		0E89336E43AA96C601DD95A8 /* AyahClipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AyahClipApp.swift; sourceTree = "<group>"; };
+		212E1AC15620BA68063B7061 /* ImportPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportPolicy.swift; sourceTree = "<group>"; };
 		4327B53EAD20575F8F2644FC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		447AB318F1DC4DE2CBF5B82D /* AyahClip.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AyahClip.entitlements; sourceTree = "<group>"; };
 		45C4A362C08918BA7A1DACC7 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
@@ -142,6 +145,14 @@
 			path = Design;
 			sourceTree = "<group>";
 		};
+		5F503823304B2C6B45709C62 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				212E1AC15620BA68063B7061 /* ImportPolicy.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		716E2335FDCA1BF7C20FCEE8 /* Views */ = {
 			isa = PBXGroup;
 			children = (
@@ -210,6 +221,7 @@
 				7F2A8E491A42E1AAAA60A766 /* AyahClipTests */,
 				09FBB134B5C21A6575A32B76 /* AyahClipUITests */,
 				BE60AE0DD3EB7155FAE0E8DD /* fonts */,
+				5F503823304B2C6B45709C62 /* Shared */,
 				907AB05F6309555C9B44527D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -391,6 +403,7 @@
 				20D7827FA6971421100DE8D6 /* AyahTheme.swift in Sources */,
 				562DD0475C936BE6D2D2D283 /* ClipProject.swift in Sources */,
 				408D85AA7F430D4BB736E920 /* EditorView.swift in Sources */,
+				500A15ABB69E5717DB669D36 /* ImportPolicy.swift in Sources */,
 				C7C6AA357409BFDF41322897 /* ImportView.swift in Sources */,
 				26F6DA2716F7244A0AE98AB2 /* OnboardingView.swift in Sources */,
 				11AEF5791BFEFF520B58A781 /* ProjectsView.swift in Sources */,
@@ -404,6 +417,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				732D609D99E4E124943CF035 /* ImportPolicy.swift in Sources */,
 				E2C65AE6EC062E1E94369C14 /* ShareViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

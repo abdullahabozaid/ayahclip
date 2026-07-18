@@ -19,6 +19,7 @@ targets:
     platform: iOS
     sources:
       - path: AyahClip
+      - path: Shared
       - path: ../public/fonts/UthmanicHafs1Ver18.ttf
         buildPhase: resources
     info:
@@ -89,6 +90,7 @@ targets:
     platform: iOS
     sources:
       - path: AyahClipShare
+      - path: Shared
     info:
       path: AyahClipShare/Info.plist
       properties:
@@ -102,7 +104,7 @@ targets:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
               NSExtensionActivationSupportsText: true
-              NSExtensionActivationSupportsMovieWithMaxCount: 1
+              NSExtensionActivationSupportsMovieWithMaxCount: 8
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.ayahclip.mobile.share

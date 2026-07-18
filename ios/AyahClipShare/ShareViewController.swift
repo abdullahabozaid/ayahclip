@@ -6,6 +6,12 @@ final class ShareViewController: UIViewController {
     private let doneButton = UIButton(type: .system)
     private let suiteName = "group.app.ayahclip.mobile"
 
+    private enum ReceivedItem {
+        case video
+        case reference
+        case unsupported
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         configureView()
@@ -50,32 +56,56 @@ final class ShareViewController: UIViewController {
         let providers = extensionContext?.inputItems
             .compactMap { $0 as? NSExtensionItem }
             .flatMap { $0.attachments ?? [] } ?? []
-        guard let provider = providers.first else {
+        guard !providers.isEmpty else {
             showResult("Nothing was shared. Try the original video file or a post link.")
             return
         }
 
-        do {
-            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-                let item = try await provider.loadItem(forTypeIdentifier: UTType.movie.identifier)
-                guard let source = item as? URL else { throw CocoaError(.fileReadUnknown) }
-                try storeFile(source)
-                showResult("Video saved privately. Open AyahClip to begin editing.")
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                let item = try await provider.loadItem(forTypeIdentifier: UTType.url.identifier)
-                guard let url = item as? URL else { throw CocoaError(.fileReadUnknown) }
-                storeLink(url.absoluteString)
-                showResult("Post reference saved. Open AyahClip and attach the original file you own.")
-            } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
-                let item = try await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier)
-                guard let text = item as? String else { throw CocoaError(.fileReadUnknown) }
-                storeLink(text)
-                showResult("Reference saved. Open AyahClip to continue.")
-            } else {
-                showResult("This item is not a supported video or link.")
+        var videoCount = 0
+        var referenceCount = 0
+        var failureCount = 0
+        for provider in providers {
+            do {
+                switch try await receive(provider) {
+                case .video: videoCount += 1
+                case .reference: referenceCount += 1
+                case .unsupported: failureCount += 1
+                }
+            } catch {
+                failureCount += 1
             }
-        } catch {
-            showResult("AyahClip could not receive this item: \(error.localizedDescription)")
+        }
+
+        if videoCount > 0 {
+            let noun = videoCount == 1 ? "video" : "videos"
+            let failedNoun = failureCount == 1 ? "item" : "items"
+            let suffix = failureCount > 0
+                ? " \(failureCount) \(failedNoun) could not be copied."
+                : ""
+            showResult("\(videoCount) \(noun) saved privately. Open AyahClip to begin editing.\(suffix)")
+        } else if referenceCount > 0 {
+            showResult("Post reference saved. Open AyahClip and attach the original file you own.")
+        } else {
+            showResult("No supported video or TikTok, Instagram, or YouTube link was found.")
+        }
+    }
+
+    private func receive(_ provider: NSItemProvider) async throws -> ReceivedItem {
+        if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+            let item = try await provider.loadItem(forTypeIdentifier: UTType.movie.identifier)
+            guard let source = item as? URL else { throw CocoaError(.fileReadUnknown) }
+            try storeFile(source)
+            return .video
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+            let item = try await provider.loadItem(forTypeIdentifier: UTType.url.identifier)
+            guard let url = item as? URL else { throw CocoaError(.fileReadUnknown) }
+            return storeLink(url.absoluteString) ? .reference : .unsupported
+        } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+            let item = try await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier)
+            guard let text = item as? String else { throw CocoaError(.fileReadUnknown) }
+            return storeLink(text) ? .reference : .unsupported
+        } else {
+            return .unsupported
         }
     }
 
@@ -87,11 +117,7 @@ final class ShareViewController: UIViewController {
         ) else { throw CocoaError(.fileNoSuchFile) }
         let inbox = group.appendingPathComponent("Incoming", isDirectory: true)
         try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
-        let ext = source.pathExtension.isEmpty ? "mov" : source.pathExtension
-        let destination = inbox.appendingPathComponent("\(UUID().uuidString).\(ext)")
-        try FileManager.default.copyItem(at: source, to: destination)
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            try? FileManager.default.removeItem(at: destination)
             throw CocoaError(.fileWriteUnknown)
         }
         var queuedFiles = defaults.stringArray(forKey: "pendingSharedFiles") ?? []
@@ -99,13 +125,28 @@ final class ShareViewController: UIViewController {
            !queuedFiles.contains(legacyFile) {
             queuedFiles.insert(legacyFile, at: 0)
         }
+        try MediaImportPolicy.validateBatch(attachedCount: queuedFiles.count, incomingCount: 1)
+        let sourceBytes = Int64(
+            try source.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        )
+        let availableBytes = try inbox.resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+        ).volumeAvailableCapacityForImportantUsage
+        try MediaImportPolicy.validateFile(fileBytes: sourceBytes, availableBytes: availableBytes)
+
+        let ext = source.pathExtension.isEmpty ? "mov" : source.pathExtension
+        let destination = inbox.appendingPathComponent("\(UUID().uuidString).\(ext)")
+        try FileManager.default.copyItem(at: source, to: destination)
         queuedFiles.append(destination.lastPathComponent)
         defaults.set(queuedFiles, forKey: "pendingSharedFiles")
         defaults.removeObject(forKey: "pendingSharedFile")
     }
 
-    private func storeLink(_ value: String) {
-        UserDefaults(suiteName: suiteName)?.set(value, forKey: "pendingSharedLink")
+    @discardableResult
+    private func storeLink(_ value: String) -> Bool {
+        guard let url = SocialReferencePolicy.normalizedURL(from: value) else { return false }
+        UserDefaults(suiteName: suiteName)?.set(url.absoluteString, forKey: "pendingSharedLink")
+        return true
     }
 
     @MainActor
