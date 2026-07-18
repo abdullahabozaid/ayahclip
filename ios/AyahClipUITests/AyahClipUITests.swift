@@ -57,6 +57,20 @@ final class AyahClipUITests: XCTestCase {
         XCTAssertTrue(canvas.exists)
         XCTAssertEqual(canvas.frame.width / canvas.frame.height, 9.0 / 16.0, accuracy: 0.02)
 
+        let fullscreen = app.buttons["Open full-screen preview"]
+        XCTAssertTrue(fullscreen.exists)
+        fullscreen.tap()
+        let fullscreenCanvas = app.descendants(matching: .any)["fullscreen-editor-canvas"]
+        XCTAssertTrue(fullscreenCanvas.waitForExistence(timeout: 3))
+        XCTAssertEqual(fullscreenCanvas.frame.width / fullscreenCanvas.frame.height, 9.0 / 16.0, accuracy: 0.02)
+        XCTAssertTrue(app.buttons["Play full-screen preview"].exists)
+        let fullscreenAttachment = XCTAttachment(screenshot: app.screenshot())
+        fullscreenAttachment.name = "Full-screen editor preview"
+        fullscreenAttachment.lifetime = .keepAlways
+        add(fullscreenAttachment)
+        app.buttons["Close full-screen preview"].tap()
+        XCTAssertTrue(app.buttons["Export"].waitForExistence(timeout: 3))
+
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Compact editor"
         attachment.lifetime = .keepAlways

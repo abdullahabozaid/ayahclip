@@ -25,11 +25,12 @@ Built for calm, deliberate editing:
 
 - Uthmanic Arabic typography with English translations
 - Verse-by-verse timing controls
+- Distraction-free full-screen 9:16 preview
 - Centered, side-fade, and lower-third layouts
 - Soft glow, crisp outline, gold, and clean caption styles
 - Local Photos and Files import
 - Share Sheet import for original media and reference links
-- On-device project storage and video export
+- On-device project storage, video export, and explicit Save to Photos
 - No account required
 
 AyahClip does not download other creators’ posts or remove platform watermarks. Import original media you own or have permission to use. TikTok, Instagram, and YouTube links are saved only as references while you locate the source file.
@@ -47,9 +48,10 @@ This is the first native iPhone beta. Please test:
 3. Edit Arabic and English captions.
 4. Switch between centered, side-fade, and lower-third layouts.
 5. Adjust verse start and end points on the timeline.
-6. Export and share the 9:16 MP4.
-7. Send an original movie or post link to AyahClip from the iOS Share Sheet.
-8. Duplicate and delete a project from the Projects screen.
+6. Open the full-screen preview and verify the 9:16 canvas and captions.
+7. Export the MP4, save it to Photos, and open the saved video from the camera roll.
+8. Send an original movie or post link to AyahClip from the iOS Share Sheet.
+9. Duplicate and delete a project from the Projects screen.
 
 Please report any mismatch between the editor preview and the exported MP4, clipped text, mistimed ayat, failed imports, or failed exports.
 
@@ -57,7 +59,7 @@ Please report any mismatch between the editor preview and the exported MP4, clip
 
 AyahClip requires no account or login.
 
-To review the core flow, launch the app, complete onboarding, tap **New Quran clip**, and choose a movie from Photos or Files. The editor opens after import. Caption text, layouts, styles, and timing controls are available beneath the preview. Tap **Export** to render a local MP4 and open the system share sheet.
+To review the core flow, launch the app, complete onboarding, tap **New Quran clip**, and choose a movie from Photos or Files. The editor opens after import. Caption text, layouts, styles, and timing controls are available beneath the preview. Use the expand button on the preview for distraction-free playback. Tap **Export** to render a local MP4, then choose **Save video** to add it to Photos or **Share** to open the system Share Sheet.
 
 The Share extension is named **Import to AyahClip**. It accepts one movie, web URL, or text item. Original movies are copied into the private App Group inbox; URLs and text are stored as references. The main app consumes the inbox when it becomes active.
 

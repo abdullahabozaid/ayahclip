@@ -9,6 +9,7 @@ struct EditorView: View {
     @State private var playhead = 0.28
     @State private var duration = 16.0
     @State private var showCaptionEditor = false
+    @State private var showFullscreenPreview = false
     @State private var selectedSegmentID: UUID?
     @State private var presentedTool: EditorTool?
     @State private var playerLoadID = UUID()
@@ -40,6 +41,17 @@ struct EditorView: View {
                 showCaptionEditor: $showCaptionEditor
             )
                 .environment(model)
+        }
+        .fullScreenCover(isPresented: $showFullscreenPreview) {
+            FullscreenPreview(
+                player: player,
+                project: project,
+                duration: duration,
+                playhead: $playhead,
+                isPlaying: $isPlaying,
+                onTogglePlayback: togglePlayback,
+                onSeek: seekPlayer
+            )
         }
         .interactiveDismissDisabled()
     }
@@ -107,6 +119,17 @@ struct EditorView: View {
                         RoundedRectangle(cornerRadius: 7, style: .continuous)
                             .stroke(.white.opacity(0.14), lineWidth: 0.5)
                     }
+                Button { showFullscreenPreview = true } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                        .foregroundStyle(.white)
+                        .background(.black.opacity(0.68))
+                        .clipShape(Circle())
+                }
+                .accessibilityLabel("Open full-screen preview")
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -264,6 +287,113 @@ struct EditorView: View {
                 isPlaying = false
             }
         }
+    }
+
+    private func timecode(_ seconds: Double) -> String {
+        let value = max(0, Int(seconds.rounded(.down)))
+        return String(format: "%02d:%02d", value / 60, value % 60)
+    }
+}
+
+private struct FullscreenPreview: View {
+    @Environment(\.dismiss) private var dismiss
+    let player: AVPlayer?
+    let project: ClipProject
+    let duration: Double
+    @Binding var playhead: Double
+    @Binding var isPlaying: Bool
+    let onTogglePlayback: () -> Void
+    let onSeek: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            GeometryReader { proxy in
+                let availableHeight = max(240, proxy.size.height - 150)
+                let canvasHeight = min(availableHeight, proxy.size.width * 16 / 9)
+                let canvasWidth = canvasHeight * 9 / 16
+                preview
+                    .frame(width: canvasWidth, height: canvasHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.bottom, 72)
+            }
+
+            VStack(spacing: 0) {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                            .background(.black.opacity(0.65))
+                            .clipShape(Circle())
+                    }
+                    .accessibilityLabel("Close full-screen preview")
+                    Spacer()
+                    Text("Preview")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.78))
+                    Spacer()
+                    Color.clear.frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                Spacer()
+
+                HStack(spacing: 14) {
+                    Button(action: onTogglePlayback) {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                            .background(.white.opacity(0.12))
+                            .clipShape(Circle())
+                    }
+                    .accessibilityLabel(isPlaying ? "Pause full-screen preview" : "Play full-screen preview")
+
+                    VStack(spacing: 5) {
+                        CompactSlider(
+                            value: $playhead,
+                            range: 0...1,
+                            accessibilityLabel: "Full-screen playhead",
+                            onCommit: onSeek
+                        )
+                        HStack {
+                            Text(timecode(duration * playhead))
+                            Spacer()
+                            Text(timecode(duration))
+                        }
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.62))
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(.black.opacity(0.84))
+            }
+            .foregroundStyle(.white)
+        }
+        .statusBarHidden()
+    }
+
+    private var preview: some View {
+        ZStack {
+            if let player {
+                AspectFillPlayer(player: player)
+            } else {
+                LinearGradient(
+                    colors: [.black, Color(red: 0.04, green: 0.12, blue: 0.20), .black],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            CaptionPreviewOverlay(project: project, time: duration * playhead)
+        }
+        .background(.black)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Full-screen 9 by 16 Quran clip preview")
+        .accessibilityIdentifier("fullscreen-editor-canvas")
     }
 
     private func timecode(_ seconds: Double) -> String {
