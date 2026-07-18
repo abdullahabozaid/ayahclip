@@ -106,6 +106,9 @@ test("a real local audio file survives import, template choice, save, and reopen
 
   await expect(page).toHaveURL(/\/studio/);
   await expect(page.getByText("Verse Editor", { exact: true })).toBeVisible();
+  const inspectorToggle = page.getByRole("button", { name: "Toggle settings", exact: true });
+  if ((await inspectorToggle.getAttribute("aria-expanded")) === "false") await inspectorToggle.click();
+  await page.getByRole("button", { name: "Text", exact: true }).click();
   await expect(page.getByRole("button", { name: "Compare all five on this ayah" })).toBeVisible();
   await expect.poll(() => productEvents.map((event) => event.event)).toEqual(
     expect.arrayContaining([

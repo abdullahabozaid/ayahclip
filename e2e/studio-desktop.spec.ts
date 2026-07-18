@@ -53,6 +53,8 @@ test("desktop Studio keeps platform frames visible and supports repeated caption
   await importIntoStudio(page);
   const settings = page.getByRole("button", { name: "Toggle settings" });
   if ((await settings.getAttribute("aria-expanded")) === "true") await settings.click();
+  const verseEditor = page.getByRole("button", { name: "Verse Editor" });
+  if ((await verseEditor.getAttribute("aria-expanded")) === "false") await verseEditor.click();
 
   await expect(page.getByRole("button", { name: "100%", exact: true })).toBeVisible();
   for (const mode of ["Phone", "TikTok", "Reels"] as const) {

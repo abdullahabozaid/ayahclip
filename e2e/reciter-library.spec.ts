@@ -11,6 +11,8 @@ test("the direct Surah workflow exposes the broad reciter catalog and preserves 
 
   await page.getByRole("button", { name: "1", exact: true }).first().click();
   await page.getByRole("link", { name: "Open studio" }).click();
+  await page.getByRole("button", { name: "Toggle settings", exact: true }).click();
+  await page.getByRole("button", { name: "Clip", exact: true }).click();
 
   const studioReciter = page.getByLabel("Reciter");
   await expect(studioReciter).toHaveValue("yasser-dossary");

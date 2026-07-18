@@ -15,16 +15,19 @@ npm run dev                  # http://localhost:3000
 
 ## Environment variables
 
-See [`.env.example`](.env.example). Both are optional for basic use:
+See [`.env.example`](.env.example). All are optional for basic use:
 
 | Variable | Purpose |
 |---|---|
 | `PEXELS_API_KEY` | Enables the stock photo/video background library. Free key at <https://www.pexels.com/api/>. Server-side only — never exposed to the client. |
+| `OPENAI_API_KEY` | Optionally enables AI-shaped framing for social captions. The exact Quran excerpt and reference are assembled by AyahClip; media never leaves the browser. Without a key, reviewed editorial options remain available. |
+| `OPENAI_CAPTION_MODEL` | Optional Responses API model override. Defaults to the cost-sensitive `gpt-5.6-luna`. |
 | `NEXT_PUBLIC_ASR_MODEL_URL` | Optional absolute URL to the ASR model (see below). Leave blank to serve it same-origin from `public/asr/`. |
 | `NEXT_PUBLIC_SITE_URL` | Canonical production origin for Open Graph, Twitter, and canonical metadata. Defaults to `https://ayahclip.vercel.app`. |
 
-The app runs without either: backgrounds fall back to presets/gradients, and
-local verse recognition is only needed for imported audio.
+The app runs without these keys: backgrounds fall back to curated presets,
+social captions use reviewed editorial patterns, and local verse recognition
+is only needed for imported audio.
 
 ## The Arabic ASR model (~131 MB)
 
@@ -71,6 +74,9 @@ Deploy notes:
 - Any Next.js host works. If you bundle the model in `public/asr/`, confirm the
   host allows a ~131 MB static file; otherwise use `NEXT_PUBLIC_ASR_MODEL_URL`.
 - Set `PEXELS_API_KEY` in the host's environment for the stock library.
+- Set `OPENAI_API_KEY` only if AI-shaped social caption framing is wanted. The
+  endpoint is same-origin, payload-limited, rate-limited, no-store, and falls
+  back to reviewed local copy when the provider is unavailable.
 - Export uses WebCodecs (faster-than-real-time H.264/AAC) where supported, with
   a `MediaRecorder` fallback — no server-side rendering or transcoding.
 - On public deployments, saved projects and exported-library videos stay private

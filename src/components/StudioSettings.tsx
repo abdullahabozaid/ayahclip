@@ -16,6 +16,7 @@ import type { Background } from "@/types";
 import { DEFAULT_MEDIA_FRAME, DEFAULT_SPLIT_MASK, normalizeMediaFrame, normalizeSplitMask, type MediaFrameShape } from "@/lib/canvas-utils";
 import { formatClipDuration, importedClipDurationSeconds } from "@/lib/clip-duration";
 import { ArabicFontSpecimen } from "./ArabicFontSpecimen";
+import { SocialCaptionGenerator } from "./SocialCaptionGenerator";
 
 /** Capture the current preview frame as the clip's dashboard cover thumbnail. */
 function SetCoverButton() {
@@ -107,7 +108,7 @@ const ARABIC_FONT_OPTIONS = [
 
 function Section({
   title,
-  defaultOpen = true,
+  defaultOpen = false,
   id,
   children,
 }: {
@@ -118,10 +119,11 @@ function Section({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div id={id} className="scroll-mt-4 border-b border-[var(--hairline-soft)]">
+    <div id={id} className="scroll-mt-32 border-b border-[var(--hairline-soft)]">
       <button
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between py-4"
+        aria-expanded={open}
       >
         <span className="text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/80">
           {title}
@@ -319,17 +321,40 @@ export function StudioSettings() {
               <p className="text-[10px] text-[var(--muted)]">Choose a starting look, then adjust only what you need.</p>
             </div>
           </div>
-          <nav className="grid grid-cols-4 gap-1 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1" aria-label="Editor settings sections">
+          <nav className="grid grid-cols-5 gap-1 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1" aria-label="Editor settings sections">
             {([
               { id: "studio-presets-section", label: "Looks" },
               { id: "studio-typography-section", label: "Text" },
               { id: "studio-background-section", label: "Media" },
               { id: "studio-audio-section", label: "Clip" },
+              { id: "studio-publishing-section", label: "Share" },
             ] as const).map((item) => (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => document.getElementById(item.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                onClick={() => {
+                  const section = document.getElementById(item.id);
+                  for (const sectionId of [
+                    "studio-presets-section",
+                    "studio-typography-section",
+                    "studio-background-section",
+                    "studio-audio-section",
+                    "studio-publishing-section",
+                  ]) {
+                    if (sectionId === item.id) continue;
+                    const otherTrigger = document
+                      .getElementById(sectionId)
+                      ?.querySelector<HTMLButtonElement>(":scope > button");
+                    if (otherTrigger?.getAttribute("aria-expanded") === "true") otherTrigger.click();
+                  }
+                  const trigger = section?.querySelector<HTMLButtonElement>(":scope > button");
+                  if (trigger?.getAttribute("aria-expanded") === "false") trigger.click();
+                  // Opening an accordion changes the scroll height. Wait for
+                  // that layout before positioning the chosen tool at the top.
+                  requestAnimationFrame(() =>
+                    section?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  );
+                }}
                 className="min-h-10 rounded-lg px-1 text-[11px] font-medium text-[var(--muted)] transition-colors hover:bg-white/[0.05] hover:text-parchment focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
               >
                 {item.label}
@@ -393,7 +418,7 @@ export function StudioSettings() {
         )}
 
         {/* Saved layout presets (font size, position, line height — no colors) */}
-        <Section title="Presets" id="studio-presets-section">
+        <Section title="Presets" id="studio-presets-section" defaultOpen>
           <StylePanel />
         </Section>
 
@@ -1366,6 +1391,10 @@ export function StudioSettings() {
             onEditCurrent={handleCurrentBackgroundEdit}
             revokePrevious={!store.backgroundSequenceEnabled}
           />
+        </Section>
+
+        <Section title="Publishing" id="studio-publishing-section" defaultOpen={false}>
+          <SocialCaptionGenerator />
         </Section>
       </div>
 

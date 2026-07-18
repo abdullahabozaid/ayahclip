@@ -723,15 +723,15 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
 
   const framed = frameMode !== "studio";
   const canReframe = store.background.type === "image" || store.background.type === "video";
-  const preferredWidth = framed ? 348 : size.w >= size.h ? 460 : 360;
+  const preferredWidth = framed ? 360 : size.w >= size.h ? 520 : 420;
   const chromeWidthRatio = framed ? 1.09 : 1;
   const chromeHeightRatio = framed ? 16 / 9 + 0.09 : size.h / size.w;
   const controlsHeight = (canReframe ? 64 : 0) + (rows.length > 0 ? 64 : 0);
   const widthFromStage = stageSize.width > 0
-    ? Math.max(140, (stageSize.width - 48) / chromeWidthRatio)
+    ? Math.max(140, (stageSize.width - 32) / chromeWidthRatio)
     : preferredWidth;
   const widthFromHeight = stageSize.height > 0
-    ? Math.max(140, (stageSize.height - 48 - controlsHeight) / chromeHeightRatio)
+    ? Math.max(140, (stageSize.height - 32 - controlsHeight) / chromeHeightRatio)
     : preferredWidth;
   const displayWidth = Math.round(Math.min(preferredWidth, widthFromStage, widthFromHeight));
   const frameGuide = mediaFrameRect(size.w, size.h, store.mediaFrame);

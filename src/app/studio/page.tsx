@@ -68,8 +68,9 @@ export default function StudioPage() {
   const [mp4Error, setMp4Error] = useState<string | null>(null);
   const [frameMode, setFrameMode] = useState<FrameMode>("studio");
   const [showSafeZones, setShowSafeZones] = useState(false);
-  // Keep the phone canvas fully visible on first load. Wide workspaces open the
-  // dock automatically because they have room for canvas + inspector + editor.
+  // Keep the canvas as the visual centre of the workspace on first load. The
+  // dock remains one click away, but no longer steals a third of a laptop
+  // viewport before the creator asks to edit timing details.
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineFullscreen, setTimelineFullscreen] = useState(false);
   // Two ways to edit imported verses: "words" (per-verse cards: split text,
@@ -88,7 +89,6 @@ export default function StudioPage() {
 
   useEffect(() => {
     trackOncePerJourney("studio_opened");
-    if (isDesktopWorkspace()) setTimelineOpen(true);
   }, []);
 
   // Phones keep one editing surface open at a time. Desktop has enough room for
@@ -622,7 +622,7 @@ export default function StudioPage() {
 
       <div className="relative flex min-h-0 flex-1">
         {/* Preview stage */}
-        <section className="bg-mihrab-still relative flex flex-1 flex-col items-center justify-start overflow-y-auto p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:justify-center">
+        <section className="bg-mihrab-still relative flex flex-1 flex-col items-center justify-start overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:justify-center">
           <StudioPreview frameMode={frameMode} showSafeZones={showSafeZones} />
 
           {/* Mobile frame selector */}
@@ -749,7 +749,7 @@ export default function StudioPage() {
               the audio buffer two extra times. The dock is behind the overlay
               anyway; it remounts (fresh from the store) on close. */}
           {timelineOpen && !timelineFullscreen && (
-            <div className="mt-3 max-h-[34vh] overflow-y-auto pr-0.5 lg:max-h-[32vh]">
+            <div className="mt-3 max-h-[30vh] overflow-y-auto pr-0.5 lg:max-h-[26vh]">
               {store.audioSource.mode === "imported" ? (
                 editorView === "words" ? <VerseCardEditor /> : <TimelineEditor />
               ) : (
