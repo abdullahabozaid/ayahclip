@@ -78,6 +78,31 @@ final class AyahClipUITests: XCTestCase {
     }
 
     @MainActor
+    func testEditorRemainsCompactAtLargestAccessibilityTextSize() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-ayahclip.onboarding.complete", "true",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"
+        ]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["New Quran clip"].waitForExistence(timeout: 5))
+        app.buttons["New Quran clip"].tap()
+        let title = app.staticTexts["editor-project-title"]
+        let export = app.buttons["Export"]
+        XCTAssertTrue(title.waitForExistence(timeout: 3))
+        XCTAssertTrue(export.exists)
+        XCTAssertLessThanOrEqual(title.frame.height, 24)
+        XCTAssertLessThanOrEqual(export.frame.height, 40)
+        XCTAssertTrue(app.descendants(matching: .any)["editor-canvas"].exists)
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Compact editor at largest accessibility text"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testStyleControlsOpenAsFocusedSheet() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ayahclip.onboarding.complete", "true"]

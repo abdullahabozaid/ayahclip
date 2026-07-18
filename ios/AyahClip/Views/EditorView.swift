@@ -27,6 +27,10 @@ struct EditorView: View {
                 toolDock
             }
         }
+        // The editing surface is a spatial canvas: system text scaling must not
+        // change caption composition or push fixed timeline controls off-screen.
+        // Import, Projects, Settings, and onboarding continue to honor Dynamic Type.
+        .dynamicTypeSize(.large)
         .onAppear {
             preparePlayer()
             selectedSegmentID = selectedSegmentID ?? project.segments.first?.id
@@ -72,6 +76,7 @@ struct EditorView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(AyahTheme.parchment)
                     .lineLimit(1)
+                    .accessibilityIdentifier("editor-project-title")
                 Text("\(project.surahName) · \(project.verseRange)")
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(AyahTheme.muted)
@@ -375,6 +380,7 @@ private struct FullscreenPreview: View {
             .foregroundStyle(.white)
         }
         .statusBarHidden()
+        .dynamicTypeSize(.large)
     }
 
     private var preview: some View {
@@ -502,7 +508,7 @@ private struct CaptionPreviewOverlay: View {
                 Text(project.captions(at: time)?.arabic ?? "")
                     .font(.custom(
                         "UthmanicHafs1Ver18",
-                        size: project.arabicSize * 2.4 * scale * (project.layout == .sideFade ? 0.72 : 1)
+                        fixedSize: project.arabicSize * 2.4 * scale * (project.layout == .sideFade ? 0.72 : 1)
                     ))
                     .multilineTextAlignment(.center)
                     .lineSpacing(2 * scale)
