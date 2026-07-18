@@ -23,7 +23,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Word-level timing | Implemented for supported subset | 12 Quran.com timing-capable recitations, labelled honestly |
 | Whole-verse captions | Implemented | Unsupported word-timing voices no longer inherit another reciter's timings |
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
-| Curated stock B-roll | Implemented, expansion pending | 20 Pexels photos and 11 Pexels videos visually reviewed as people-free; two provenance-free copied social videos were removed from the public bundle |
+| Curated stock B-roll | Implemented, continuing curation | 20 Pexels photos and 16 Pexels videos; the motion set now covers water, waterfall, coast, clouds, mountains, trails, dark drives, night sky, architecture, forest and abstract footage. Every admitted video records its immutable Pexels source ID, direct source page, file size and semantic tags; sampled-frame review found no visible people. Two legacy 98–144 MB renditions were replaced with 720p variants, and a 147 MB trail candidate was rejected before admission. |
 | Multi-clip B-roll timeline | Implemented | Audio-led sequence, split/reorder/trim workflow |
 | Native iOS beta | Implemented, distribution signing pending | 33 unit and 8 UI tests pass, including maximum Dynamic Type, debounced draft autosave/background flush, bounded Undo/Redo, enforced import limits, ordered multi-movie Share Sheet delivery, direct and caption-wrapped TikTok/Instagram/YouTube reference validation, and project-owned cancellable exports; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
 | TestFlight distribution | Blocked by account configuration | The Mac has a valid Apple Distribution certificate but no AyahClip provisioning profiles or registered iPhone; a signed archive and App Store Connect record for `app.ayahclip.mobile` are still required |
@@ -44,7 +44,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 - Replace the EveryAyah-only folder field with a source descriptor and shared preview/export resolver before admitting another provider.
 - Add source health checks, provenance, coverage, CORS, and rights evidence for every enabled recitation.
 - Build searchable English/Arabic reciter selection with recent, favourite, place, style, and timing-capability organization after the resolver is proven.
-- Expand curated people-free B-roll by category: water, mountains, clouds, drives, architecture, night, and abstract shapes.
+- **Completed for the curated starter catalogue:** people-free motion coverage now includes water, waterfall, coast, mountains, trails, clouds, dark drives, architecture, night sky, forest and abstract footage. Keep future additions behind the same provenance, sampled-frame and browser-size gates.
 - Add a reviewable ingestion pipeline before exposing dynamic stock search.
 - Add saved style presets for split composition, reciter portrait, rotating B-roll, image sequences, and restrained glow typography.
 - Complete Arabic/English font pairing, weights, wrapping, safe-area, and export-parity tests.

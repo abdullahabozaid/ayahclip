@@ -8,9 +8,43 @@ import { VIDEO_PRESETS } from "@/lib/video-presets";
 describe("curated media presets", () => {
   it("exports only manually reviewed people-free media", () => {
     expect(STOCK_IMAGES.length).toBeGreaterThanOrEqual(20);
-    expect(VIDEO_PRESETS.length).toBeGreaterThanOrEqual(10);
+    expect(VIDEO_PRESETS.length).toBeGreaterThanOrEqual(16);
     expect(STOCK_IMAGES.every((item) => item.peopleFree)).toBe(true);
     expect(VIDEO_PRESETS.every((item) => item.peopleFree)).toBe(true);
+  });
+
+  it("covers the people-free motion categories promised by the product", () => {
+    const tags = new Set(VIDEO_PRESETS.flatMap((item) => item.tags));
+    const requiredTags = [
+      "water",
+      "waterfall",
+      "drive",
+      "mountains",
+      "trail",
+      "clouds",
+      "night",
+      "stars",
+      "abstract",
+      "architecture",
+    ] as const;
+
+    for (const requiredTag of requiredTags) {
+      expect(tags.has(requiredTag), requiredTag).toBe(true);
+    }
+
+    expect(VIDEO_PRESETS.filter((item) => item.category === "night").length)
+      .toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps reviewed motion assets distinct, traceable, and bounded for browser use", () => {
+    expect(new Set(VIDEO_PRESETS.map((item) => item.id)).size).toBe(VIDEO_PRESETS.length);
+    expect(new Set(VIDEO_PRESETS.map((item) => item.videoUrl)).size).toBe(VIDEO_PRESETS.length);
+    expect(VIDEO_PRESETS.every((item) =>
+      item.sourcePageUrl === `https://www.pexels.com/video/${item.sourceId}/`
+    )).toBe(true);
+    expect(VIDEO_PRESETS.every((item) => item.fileSizeBytes > 0)).toBe(true);
+    expect(Math.max(...VIDEO_PRESETS.map((item) => item.fileSizeBytes)))
+      .toBeLessThan(55 * 1024 * 1024);
   });
 
   it("does not restore media rejected during visual review", () => {
