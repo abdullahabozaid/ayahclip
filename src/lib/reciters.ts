@@ -51,15 +51,21 @@ export const RECITER_REGIONS: ReadonlyArray<{
  * playback, preview and export.
  */
 export const reciters: Reciter[] = [
+  { id: "abdelbari-toubayti", name: "Abdelbari Al-Toubayti", arabicName: "عبدالبارئ الثبيتي", audioSource: mp3QuranChapter(49, "https://server6.mp3quran.net/thubti/"), region: "haramain", style: "Murattal" },
+  { id: "abdullah-khayyat", name: "Abdullah Khayyat", arabicName: "عبدالله خياط", audioSource: mp3QuranChapter(61, "https://server12.mp3quran.net/kyat/"), region: "haramain", style: "Murattal" },
   { id: "juhany", name: "Abdullah Awad Al-Juhany", arabicName: "عبد الله عواد الجهني", audioSource: everyAyah("Abdullaah_3awwaad_Al-Juhaynee_128kbps"), region: "haramain", style: "Murattal" },
   { id: "abdullah-buaijan", name: "Abdullah Al-Buaijan", arabicName: "عبد الله البعيجان", audioSource: mp3QuranChapter(58, "https://server8.mp3quran.net/buajan/"), region: "haramain", style: "Murattal" },
+  { id: "abdulwadood-haneef", name: "Abdulwadood Haneef", arabicName: "عبدالودود حنيف", audioSource: mp3QuranChapter(71, "https://server8.mp3quran.net/wdod/"), region: "haramain", style: "Murattal" },
   { id: "sudais", name: "Abdul Rahman Al-Sudais", arabicName: "عبد الرحمن السديس", audioSource: everyAyah("Abdurrahmaan_As-Sudais_192kbps"), region: "haramain", style: "Murattal", quranComRecitationId: 3 },
   { id: "ali-jaber", name: "Ali Jaber", arabicName: "علي جابر", audioSource: everyAyah("Ali_Jaber_64kbps"), region: "haramain", style: "Murattal" },
   { id: "hudhaify", name: "Ali Al-Hudhaify", arabicName: "علي الحذيفي", audioSource: everyAyah("Hudhaify_128kbps"), region: "haramain", style: "Murattal" },
   { id: "ibrahim-akhdar", name: "Ibrahim Al-Akhdar", arabicName: "إبراهيم الأخضر", audioSource: everyAyah("Ibrahim_Akhdar_32kbps"), region: "haramain", style: "Murattal" },
   { id: "maher-muaiqly", name: "Maher Al-Muaiqly", arabicName: "ماهر المعيقلي", audioSource: everyAyah("MaherAlMuaiqly128kbps"), region: "haramain", style: "Murattal" },
   { id: "muhammad-ayyub", name: "Muhammad Ayyub", arabicName: "محمد أيوب", audioSource: everyAyah("Muhammad_Ayyoub_128kbps"), region: "haramain", style: "Murattal" },
+  { id: "mohammad-khalil-al-qari", name: "Muhammad Khalil Al-Qari", arabicName: "محمد خليل القارئ", audioSource: mp3QuranChapter(229, "https://server8.mp3quran.net/m_qari/"), region: "haramain", style: "Murattal" },
   { id: "muhsin-qasim", name: "Muhsin Al-Qasim", arabicName: "محسن القاسم", audioSource: everyAyah("Muhsin_Al_Qasim_192kbps"), region: "haramain", style: "Murattal" },
+  { id: "emad-hafez", name: "Emad Zuhair Hafez", arabicName: "عماد زهير حافظ", audioSource: mp3QuranChapter(78, "https://server6.mp3quran.net/hafz/"), region: "haramain", style: "Murattal" },
+  { id: "khalid-almohana", name: "Khalid Al-Mohana", arabicName: "خالد المهنا", audioSource: mp3QuranChapter(159, "https://server11.mp3quran.net/mohna/"), region: "haramain", style: "Murattal" },
   { id: "salah-budair", name: "Salah Al-Budair", arabicName: "صلاح البدير", audioSource: everyAyah("Salah_Al_Budair_128kbps"), region: "haramain", style: "Murattal" },
   { id: "shuraym", name: "Saud Ash-Shuraym", arabicName: "سعود الشريم", audioSource: everyAyah("Saood_ash-Shuraym_128kbps"), region: "haramain", style: "Murattal", quranComRecitationId: 10 },
   { id: "bandar-balilah", name: "Bandar Balilah", arabicName: "بندر بليله", audioSource: mp3QuranChapter(217, "https://server6.mp3quran.net/balilah/"), region: "haramain", style: "Murattal" },

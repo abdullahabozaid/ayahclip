@@ -74,9 +74,15 @@ describe("reciter audio sources", () => {
 
   it("admits only audited complete MP3Quran timed reads", () => {
     const expected = [
+      ["abdelbari-toubayti", 49, "https://server6.mp3quran.net/thubti/"],
       ["abdullah-buaijan", 58, "https://server8.mp3quran.net/buajan/"],
+      ["abdullah-khayyat", 61, "https://server12.mp3quran.net/kyat/"],
+      ["abdulwadood-haneef", 71, "https://server8.mp3quran.net/wdod/"],
+      ["emad-hafez", 78, "https://server6.mp3quran.net/hafz/"],
       ["idrees-abkr", 12, "https://server6.mp3quran.net/abkr/"],
+      ["khalid-almohana", 159, "https://server11.mp3quran.net/mohna/"],
       ["khalid-jileel", 20, "https://server10.mp3quran.net/jleel/"],
+      ["mohammad-khalil-al-qari", 229, "https://server8.mp3quran.net/m_qari/"],
       ["bandar-balilah", 217, "https://server6.mp3quran.net/balilah/"],
       ["raad-kurdi", 221, "https://server6.mp3quran.net/kurdi/"],
       ["mansour-salimi", 245, "https://server14.mp3quran.net/mansor/"],

@@ -1,9 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const RECITERS = [
+  { id: "abdelbari-toubayti", name: "Abdelbari Al-Toubayti", duration: 5.103 },
   { id: "abdullah-buaijan", name: "Abdullah Al-Buaijan", duration: 6.5 },
+  { id: "abdullah-khayyat", name: "Abdullah Khayyat", duration: 4.242 },
+  { id: "abdulwadood-haneef", name: "Abdulwadood Haneef", duration: 4.221 },
+  { id: "emad-hafez", name: "Emad Zuhair Hafez", duration: 7.269 },
   { id: "idrees-abkr", name: "Idrees Abkr", duration: 4.8 },
+  { id: "khalid-almohana", name: "Khalid Al-Mohana", duration: 7.035 },
   { id: "khalid-jileel", name: "Khalid Al-Jileel", duration: 4.54 },
+  { id: "mohammad-khalil-al-qari", name: "Muhammad Khalil Al-Qari", duration: 8.1 },
   { id: "bandar-balilah", name: "Bandar Balilah", duration: 6.88 },
   { id: "raad-kurdi", name: "Raad Al-Kurdi", duration: 1.64 },
   { id: "ahmad-nufais", name: "Ahmad Al-Nufais", duration: 8.36 },
