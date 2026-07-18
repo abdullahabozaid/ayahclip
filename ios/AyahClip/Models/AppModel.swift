@@ -32,6 +32,7 @@ final class AppModel {
     private let historyLimit = 100
     private var undoStack: [ClipProject] = []
     private var redoStack: [ClipProject] = []
+    @ObservationIgnored private var autosaveTask: Task<Void, Never>?
 
     init() {
         loadProjects()
@@ -86,6 +87,7 @@ final class AppModel {
     }
 
     func closeEditor() {
+        autosaveTask?.cancel()
         saveActiveProject()
         activeProject = nil
         importedMediaURLs = []
@@ -370,6 +372,7 @@ final class AppModel {
         activeProject = project
         importedMediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
         exportURL = nil
+        scheduleAutosave()
     }
 
     private func appendHistory(_ project: ClipProject, to stack: inout [ClipProject]) {
@@ -382,6 +385,18 @@ final class AppModel {
     private func resetHistory() {
         undoStack.removeAll(keepingCapacity: true)
         redoStack.removeAll(keepingCapacity: true)
+    }
+
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        autosaveTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(400))
+            } catch {
+                return
+            }
+            self?.saveActiveProject()
+        }
     }
 
     private func cleanupUnreferencedMedia() {

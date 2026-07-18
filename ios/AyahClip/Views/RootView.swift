@@ -79,6 +79,10 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await model.consumeSharedInbox() }
+            } else {
+                // Flush the current draft before suspension; the regular editor
+                // path also debounces writes while the user is actively editing.
+                model.saveActiveProject()
             }
         }
         .fullScreenCover(isPresented: Binding(

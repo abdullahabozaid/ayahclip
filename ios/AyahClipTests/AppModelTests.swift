@@ -87,6 +87,22 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.canRedo)
     }
 
+    func testActiveDraftAutosavesWithoutClosingEditor() async throws {
+        let model = AppModel()
+        model.projects = []
+        model.createProject()
+        let projectID = try XCTUnwrap(model.activeProject?.id)
+        model.updateActive { $0.title = "Autosaved draft" }
+
+        try await Task.sleep(for: .milliseconds(550))
+
+        let reloaded = AppModel()
+        let restored = try XCTUnwrap(reloaded.projects.first(where: { $0.id == projectID }))
+        XCTAssertEqual(restored.title, "Autosaved draft")
+        reloaded.delete(restored)
+        model.activeProject = nil
+    }
+
     func testMediaReorderAndRemovalSupportUndoRedo() async throws {
         let firstSource = try await makeTestVideo(frameCount: 12)
         let secondSource = try await makeTestVideo(frameCount: 12)
