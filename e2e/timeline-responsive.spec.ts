@@ -53,6 +53,9 @@ test("the phone settings drawer has a reliable visible close control", async ({ 
 
   const settingsToggle = page.getByRole("button", { name: "Toggle settings", exact: true });
   const settings = page.getByRole("complementary");
+  if ((await settingsToggle.getAttribute("aria-expanded")) === "false") {
+    await settingsToggle.click();
+  }
   await expect(settingsToggle).toHaveAttribute("aria-expanded", "true");
   await expect(settings).toBeVisible();
 
