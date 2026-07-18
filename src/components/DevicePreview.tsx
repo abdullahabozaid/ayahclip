@@ -47,7 +47,7 @@ export function DevicePreview({
       style={{
         width,
         aspectRatio: framed ? "9 / 16" : aspect,
-        borderRadius: framed ? screenRadius : 12,
+        borderRadius: framed ? screenRadius : 0,
       }}
     >
       {children}
@@ -93,7 +93,7 @@ export function DevicePreview({
 
   if (!framed) {
     return (
-      <div className="overflow-hidden rounded-xl border border-[var(--hairline)] shadow-[0_30px_60px_-25px_rgba(0,0,0,0.9)]">
+      <div data-testid="studio-canvas-frame" className="overflow-hidden bg-black">
         {screen}
       </div>
     );

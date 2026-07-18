@@ -128,9 +128,10 @@ interface TimelineEditorProps {
   /** When true, the track + cards grow to use the available vertical space —
    *  intended for the FullscreenTimeline overlay (`Expand` from the dock). */
   fullscreen?: boolean;
+  compact?: boolean;
 }
 
-export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {}) {
+export function TimelineEditor({ fullscreen = false, compact = false }: TimelineEditorProps = {}) {
   const store = useAppStore();
   const imported = store.audioSource.mode === "imported" ? store.audioSource : null;
   const url = imported?.url ?? null;
@@ -1232,7 +1233,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
   const busy = redetecting || deepProgress != null;
 
   return (
-    <div className={`${fullscreen ? "space-y-3" : "space-y-2"} pb-1`}>
+    <div className={`${fullscreen ? "space-y-3" : compact ? "space-y-1" : "space-y-2"} pb-1`}>
       {fullscreen && (
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[var(--hairline-soft)] pb-3">
         <div>
@@ -1253,11 +1254,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       )}
       {/* Primary transport — the controls used 80% of the time stay in front.
           Pause rebuild, recitation alignment, and trim live in a collapsible cluster. */}
-      <div className={`flex flex-wrap items-center ${fullscreen ? "gap-3" : "gap-2"}`}>
+      <div className={`flex items-center ${fullscreen ? "flex-wrap gap-3" : compact ? "gap-1.5 overflow-hidden" : "flex-wrap gap-2"}`}>
         <button
           onClick={togglePlay}
           disabled={loading || duration === 0}
-          className="btn-gold flex h-11 w-11 items-center justify-center rounded-full disabled:opacity-40 sm:h-10 sm:w-10"
+          className={`btn-gold flex shrink-0 items-center justify-center rounded-full disabled:opacity-40 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-10 sm:w-10"}`}
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? (
@@ -1275,7 +1276,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           type="button"
           onClick={addSplit}
           disabled={loading || duration === 0 || !timings[activeIdx]}
-          className="flex min-h-11 items-center gap-2 rounded-lg border border-gold/55 bg-gold/10 px-3.5 text-[11px] font-semibold text-gold-soft transition-colors hover:bg-gold/15 disabled:opacity-35 sm:min-h-10"
+          className={`flex shrink-0 items-center gap-1.5 rounded border border-gold/55 bg-gold/10 text-[11px] font-semibold text-gold-soft transition-colors hover:bg-gold/15 disabled:opacity-35 ${compact ? "h-8 px-2.5" : "min-h-11 px-3.5 sm:min-h-10"}`}
           title="Create a caption cut at the fixed gold playhead (Shift+S)"
         >
           <TlIcon d={TL_ICON.scissors} /> Split at playhead
@@ -1293,11 +1294,11 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
 
         {/* Undo / Redo — paired buttons next to the transport so the user
             never has to hunt for them. Disabled state reads naturally. */}
-        <div className="flex items-center">
+        <div className={compact ? "hidden items-center md:flex" : "flex items-center"}>
           <button
             onClick={undo}
             disabled={historyRef.current.length === 0}
-            className="btn-ghost flex h-11 w-11 items-center justify-center rounded-l-full border-r-0 text-[13px] disabled:opacity-30 sm:h-9 sm:w-9"
+            className={`btn-ghost flex items-center justify-center rounded-l border-r-0 text-[13px] disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
             aria-label="Undo edit"
             title="Undo (⌘Z)"
           >
@@ -1308,7 +1309,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           <button
             onClick={redo}
             disabled={futureRef.current.length === 0}
-            className="btn-ghost flex h-11 w-11 items-center justify-center rounded-r-full text-[13px] disabled:opacity-30 sm:h-9 sm:w-9"
+            className={`btn-ghost flex items-center justify-center rounded-r text-[13px] disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
             aria-label="Redo edit"
             title="Redo (⌘⇧Z)"
           >
@@ -1318,22 +1319,44 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           </button>
         </div>
 
-        <span className="tabular-nums text-[12px] text-[var(--muted)]">
+        {compact && (
+          <button
+            type="button"
+            onClick={() => deleteVerse(activeIdx)}
+            disabled={timings.length <= 1}
+            className="btn-ghost hidden h-8 items-center gap-1 rounded px-2 text-[11px] transition-colors hover:border-[var(--gold)] hover:text-gold-soft disabled:opacity-30 xl:flex"
+            aria-label="Delete"
+            title="Remove the selected ayah from the clip"
+          >
+            <TlIcon d={TL_ICON.trash} /> Delete
+          </button>
+        )}
+
+        <span className={`tabular-nums text-[12px] text-[var(--muted)] ${compact ? "hidden lg:inline" : ""}`}>
           {fmt(headTime)} <span className="text-[var(--muted-deep)]">/ {fmt(duration)}</span>
         </span>
 
         {!fullscreen && (
-          <span className="hidden rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 text-[10px] tabular-nums text-[var(--muted-deep)] md:inline-flex">
-            {timings.length} ayah{timings.length === 1 ? "" : "s"} · {timings.reduce((count, timing) => count + (timing.splits?.length ?? 0), 0)} cuts
-          </span>
+          <>
+            <span className="hidden rounded border border-[var(--hairline-soft)] px-2 py-1 text-[10px] tabular-nums text-[var(--muted-deep)] md:inline-flex">
+              {compact
+                ? `${1 + (timings[activeIdx]?.splits?.length ?? 0)} segments`
+                : `${timings.length} ayah${timings.length === 1 ? "" : "s"} · ${timings.reduce((count, timing) => count + (timing.splits?.length ?? 0), 0)} cuts`}
+            </span>
+            {compact && (
+              <span className="hidden text-[10px] tabular-nums text-[var(--muted-deep)] xl:inline-flex">
+                {timings.length} ayah{timings.length === 1 ? "" : "s"} · {timings.reduce((count, timing) => count + (timing.splits?.length ?? 0), 0)} cuts
+              </span>
+            )}
+          </>
         )}
 
         {/* Right cluster: Tools toggle + zoom */}
-        <div className="ml-auto flex items-center gap-2.5 max-sm:ml-0 max-sm:w-full max-sm:justify-between">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <button
             onClick={() => setToolsOpen((v) => !v)}
             disabled={loading || duration === 0}
-            className={`flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 sm:min-h-9 ${
+            className={`items-center gap-1.5 rounded-full px-3.5 text-[11px] transition-colors disabled:opacity-40 sm:min-h-9 ${compact ? "hidden min-h-8 md:flex" : "flex min-h-11"} ${
               toolsOpen ? "border border-gold/40 bg-[var(--gold)]/[0.08] text-parchment" : "btn-ghost"
             }`}
             aria-expanded={toolsOpen}
@@ -1353,17 +1376,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
           <button
             onClick={() => setPrecisionMode((value) => !value)}
             aria-pressed={precisionMode}
-            className={`flex min-h-11 items-center rounded-full border px-3 text-[11px] transition-colors sm:min-h-9 ${
+            aria-label="Precision"
+            className={`flex items-center rounded-full border text-[11px] transition-colors ${compact ? "h-8 w-8 justify-center p-0 md:w-auto md:px-3" : "min-h-11 px-3 sm:min-h-9"} ${
               precisionMode
                 ? "border-gold/50 bg-gold/10 text-parchment"
                 : "border-[var(--hairline)] text-[var(--muted)] hover:border-gold hover:text-parchment"
             }`}
             title="Slow boundary and split dragging for precise adjustments (Shift also works)"
           >
-            Precision
+            <span aria-hidden={compact} className={compact ? "hidden md:inline" : ""}>Precision</span>
+            {compact && <span aria-hidden className="font-serif text-sm md:hidden">P</span>}
           </button>
-          <div className="flex items-center gap-1">
-            <button
+          <div className={compact ? "hidden items-center gap-1 md:flex" : "flex items-center gap-1"}>
+            {!compact && <button
               onClick={() => {
                 const tm = timings[activeIdx];
                 const span = tm ? tm.end - tm.start : 0;
@@ -1377,19 +1402,19 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               title="Zoom to the selected verse"
             >
               <TlIcon d={TL_ICON.focus} className="h-3.5 w-3.5" /> Focus
-            </button>
-            <button
+            </button>}
+            {!compact && <button
               onClick={() => setZoom(1)}
               disabled={zoom <= 1}
               className="hidden h-9 items-center rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold disabled:opacity-30 sm:flex"
               title="Fit the whole clip"
             >
               Fit
-            </button>
+            </button>}
             <button
               onClick={() => setZoom((z) => Math.max(1, +(z / 1.5).toFixed(2)))}
               disabled={zoom <= 1}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 sm:h-9 sm:w-9"
+              className={`flex items-center justify-center rounded border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
               aria-label="Zoom out"
             >
               −
@@ -1400,7 +1425,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
             <button
               onClick={() => setZoom((z) => Math.min(24, +(z * 1.5).toFixed(2)))}
               disabled={zoom >= 24}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 sm:h-9 sm:w-9"
+              className={`flex items-center justify-center rounded border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
               aria-label="Zoom in"
             >
               +
@@ -1532,7 +1557,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
       {/* Selected-verse inspector — one quiet strip with breathing room.
           Each time is its own button: click to snap that boundary to the
           playhead. No repeated "at playhead" labels. */}
-      {timings[activeIdx] && (() => {
+      {!compact && timings[activeIdx] && (() => {
         const v = timings[activeIdx];
         const len = Math.max(0, v.end - v.start);
         const splitCount = v.splits?.length ?? 0;
@@ -1752,8 +1777,8 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
                 startPan(e); // drag left/right to scrub (scroll under the centre line)
               }
             }}
-            className={`relative cursor-ew-resize touch-none overflow-hidden rounded-xl border border-[var(--hairline)] bg-[linear-gradient(180deg,rgba(201,162,75,0.025),rgba(5,5,7,0.96))] ${
-              fullscreen ? "h-[clamp(200px,40dvh,440px)]" : "h-24"
+            className={`relative cursor-ew-resize touch-none overflow-hidden border border-[var(--hairline)] bg-[var(--ink-deep)] ${
+              fullscreen ? "h-[clamp(200px,40dvh,440px)] rounded-xl" : compact ? "h-14 rounded-sm" : "h-24 rounded-xl"
             }`}
           >
             <canvas
@@ -1936,7 +1961,7 @@ export function TimelineEditor({ fullscreen = false }: TimelineEditorProps = {})
               verse's on-screen text (broken into split-segments) is visible
               inline with its time range. No playback needed to confirm what
               will appear when. */}
-          <div className={`relative mt-1.5 rounded-md bg-[var(--ink-deep)]/60 ring-1 ring-[var(--hairline-soft)] ${fullscreen ? "h-11" : "h-9"}`}>
+          <div className={`relative mt-1 rounded-sm bg-[var(--ink-deep)]/60 ring-1 ring-[var(--hairline-soft)] ${fullscreen ? "h-11" : compact ? "h-7" : "h-9"}`}>
             {timings.map((tg, i) => {
               const verse = store.verses.find((v) => v.verse_number === tg.verseNumber);
               if (!verse) return null;

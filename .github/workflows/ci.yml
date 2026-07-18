@@ -12,7 +12,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -26,4 +26,9 @@ jobs:
       - run: npm run check:stock-media
       - run: npm run build
       - run: npx playwright install --with-deps chromium webkit
-      - run: npm run test:e2e
+      - name: Run deterministic browser suite
+        run: npm run test:ci:e2e
+      - name: Record release-only encoder coverage
+        run: |
+          echo "## Browser coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "Hosted Linux runs deterministic UI and workflow coverage. Exact MP4 byte, offline render, caption-edge render, and device export checks remain mandatory in the installed-Google-Chrome release suites." >> "$GITHUB_STEP_SUMMARY"

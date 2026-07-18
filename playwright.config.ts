@@ -4,8 +4,11 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Hosted Linux Chromium does not expose a production-capable MP4 encoder.
+  // Keep byte-level export tests in the Google Chrome release gate instead of
+  // spending three minutes per retry on a capability the runner cannot gain.
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
@@ -15,9 +18,11 @@ export default defineConfig({
   projects: [
     {
       name: process.env.GOOGLE_CHROME ? "google-chrome" : "chromium",
-      testIgnore: process.env.PLAYWRIGHT_BASE_URL
-        ? /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts/
-        : /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts|production-smoke\.spec\.ts/,
+      testIgnore: process.env.CI_BROWSER_SUITE
+        ? /curated-video-presets\.spec\.ts|export-format-parity\.spec\.ts|offline-export-readiness\.spec\.ts|text-edge-export\.spec\.ts|device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts|production-smoke\.spec\.ts/
+        : process.env.PLAYWRIGHT_BASE_URL
+          ? /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts/
+          : /device-export-readiness\.spec\.ts|long-export-readiness\.spec\.ts|production-smoke\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         ...(process.env.GOOGLE_CHROME ? { channel: "chrome" as const } : {}),

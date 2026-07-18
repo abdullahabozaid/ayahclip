@@ -247,3 +247,24 @@ input[type="range"].slider-gold::-moz-range-thumb {
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (min-width: 1024px) and (max-height: 780px) {
+  .studio-shell-layout {
+    grid-template-rows: 52px minmax(0, 1fr) 164px;
+  }
+
+  .studio-timeline-dock {
+    height: 164px;
+  }
+}
+
+.studio-shell-layout {
+  contain: strict;
+}
+
+html.studio-active,
+body.studio-active,
+body.studio-active #main-content {
+  height: 100dvh;
+  overflow: hidden !important;
+}

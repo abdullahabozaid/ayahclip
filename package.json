@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:ci:e2e": "CI_BROWSER_SUITE=1 playwright test",
     "test:accessibility": "playwright test e2e/accessibility.spec.ts --project=chromium --workers=1",
     "test:google-chrome": "GOOGLE_CHROME=1 playwright test --project=google-chrome",
     "test:production-google": "PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 playwright test e2e/google-readiness.spec.ts e2e/production-smoke.spec.ts",

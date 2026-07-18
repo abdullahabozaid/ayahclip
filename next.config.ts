@@ -1,5 +1,15 @@
 import type { NextConfig } from "next";
 
+const isHostedProduction = process.env.VERCEL_ENV === "production";
+
+const contentSecurityPolicy = [
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self' https://checkout.stripe.com",
+  ...(isHostedProduction ? ["upgrade-insecure-requests"] : []),
+].join("; ");
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Allow phones/other devices on the LAN to load the dev server's assets
@@ -15,7 +25,7 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           {
             key: "Content-Security-Policy",
-            value: "base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://checkout.stripe.com; upgrade-insecure-requests",
+            value: contentSecurityPolicy,
           },
           {
             key: "Strict-Transport-Security",

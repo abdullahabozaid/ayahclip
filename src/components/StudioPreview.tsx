@@ -742,10 +742,10 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
 
   const framed = frameMode !== "studio";
   const canReframe = store.background.type === "image" || store.background.type === "video";
-  const preferredWidth = framed ? 360 : size.w >= size.h ? 520 : 420;
+  const preferredWidth = framed ? 292 : size.w >= size.h ? 520 : 292;
   const chromeWidthRatio = framed ? 1.09 : 1;
   const chromeHeightRatio = framed ? 16 / 9 + 0.09 : size.h / size.w;
-  const controlsHeight = (canReframe ? 64 : 0) + (rows.length > 0 ? 64 : 0);
+  const controlsHeight = (canReframe && framed ? 64 : 0) + (rows.length > 0 ? 64 : 0);
   const widthFromStage = stageSize.width > 0
     ? Math.max(140, (stageSize.width - 32) / chromeWidthRatio)
     : preferredWidth;
@@ -826,7 +826,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   };
 
   return (
-    <div ref={previewRootRef} className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-4">
+    <div ref={previewRootRef} className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-2">
       <DevicePreview
         frameMode={frameMode}
         width={displayWidth}
@@ -864,7 +864,7 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         )}
       </DevicePreview>
 
-      {canReframe && (
+      {canReframe && framed && (
         <div className="-mt-2 flex max-w-full flex-col items-center gap-2 text-[11px] lg:flex-row lg:gap-3">
           <div className="flex rounded-full border border-[var(--hairline)] bg-[var(--ink-deep)] p-1" aria-label="Canvas drag tool">
             <button

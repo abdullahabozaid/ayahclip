@@ -89,6 +89,17 @@ export default function StudioPage() {
 
   useEffect(() => {
     trackOncePerJourney("studio_opened");
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.documentElement.classList.add("studio-active");
+    document.body.classList.add("studio-active");
+    if (isDesktopWorkspace()) {
+      setSettingsOpen(true);
+      setTimelineOpen(true);
+    }
+    return () => {
+      document.documentElement.classList.remove("studio-active");
+      document.body.classList.remove("studio-active");
+    };
   }, []);
 
   // Phones keep one editing surface open at a time. Desktop has enough room for
@@ -106,8 +117,13 @@ export default function StudioPage() {
   const pendingTemplateName = store.pendingTemplateMedia?.templateName;
   useEffect(() => {
     if (!pendingTemplateName) return;
-    setSettingsOpen(true);
-    if (!isDesktopWorkspace()) setTimelineOpen(false);
+    if (isDesktopWorkspace()) {
+      setSettingsOpen(true);
+    } else {
+      // Template application can finish a beat after navigation. Never let
+      // that async completion reopen the inspector over a phone preview.
+      setSettingsOpen(false);
+    }
   }, [pendingTemplateName]);
 
   // Whole-editor zoom: a header control plus Cmd/Ctrl + scroll (or trackpad
@@ -406,22 +422,23 @@ export default function StudioPage() {
 
   return (
     <>
-    <main ref={stageRef} style={{ zoom }} className="flex h-dvh flex-col bg-[var(--ink)]">
+    <main data-testid="studio-shell" ref={stageRef} style={{ zoom }} className="studio-shell-layout flex h-dvh flex-col overflow-hidden bg-[var(--ink)] lg:grid lg:grid-cols-[56px_minmax(0,1fr)_304px] lg:grid-rows-[52px_minmax(0,1fr)_188px]">
       {/* Studio top bar — pad for the notch / status bar on mobile */}
-      <header className="flex shrink-0 items-center justify-between border-b border-[var(--hairline-soft)] bg-[var(--ink)]/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-3 pt-[env(safe-area-inset-top)] lg:col-span-3 lg:h-[52px] lg:px-4 lg:pt-0">
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push(`/surah/${surah.id}`)}
-            className="flex min-h-11 items-center gap-1.5 rounded-full px-1 text-sm text-[var(--muted)] transition-colors hover:text-parchment sm:min-h-9"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment sm:w-auto sm:px-2 lg:h-8"
+            aria-label="Back to verses"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m6 6-6-6 6-6" />
             </svg>
-            Verses
+            <span className="hidden sm:inline">Verses</span>
           </button>
           <button
             onClick={() => router.push("/")}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment sm:h-9 sm:w-9"
+            className="hidden h-8 w-8 items-center justify-center rounded-md border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment sm:flex"
             aria-label="Exit editor"
             title={store.projectId ? "Exit; saved-project edits are kept" : "Exit without saving this draft"}
           >
@@ -429,15 +446,15 @@ export default function StudioPage() {
               <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
-          <div className="hidden items-baseline gap-2 sm:flex">
-            <span className="font-display text-lg tracking-wide text-parchment">{surah.name_simple}</span>
-            <span className="text-sm text-[var(--muted)]">· {verseRange}</span>
+          <div className="flex min-w-0 flex-col leading-tight sm:flex-row sm:items-baseline sm:gap-2">
+            <span className="truncate text-sm font-semibold text-parchment">{surah.name_simple}</span>
+            <span className="truncate text-[10px] uppercase tracking-[0.12em] text-[var(--muted-deep)] sm:text-[11px] sm:normal-case sm:tracking-normal">{verseRange}</span>
           </div>
         </div>
 
         {/* Preview-as frame selector */}
         <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1 md:flex">
+          <div className="hidden items-center gap-0.5 rounded-md border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-0.5 md:flex">
             {FRAME_MODES.map((m) => {
               const disabled = m.id !== "studio" && !framesAllowed;
               return (
@@ -446,7 +463,7 @@ export default function StudioPage() {
                   onClick={() => setFrameMode(m.id)}
                   disabled={disabled}
                   title={disabled ? "Switch to 9:16 to preview device frames" : undefined}
-                  className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                  className={`rounded px-3 py-1.5 text-[11px] transition-colors ${
                     frameMode === m.id
                       ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                       : disabled
@@ -461,12 +478,12 @@ export default function StudioPage() {
           </div>
 
           {/* Whole-editor zoom (also Cmd/Ctrl + scroll over the studio) */}
-          <div className="hidden items-center gap-0.5 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1 md:flex">
+          <div className="hidden items-center gap-0.5 rounded-md border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-0.5 md:flex">
             <button
               onClick={() => adjustZoom(-ZOOM_STEP)}
               disabled={zoom <= ZOOM_MIN}
               aria-label="Zoom out"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:text-parchment disabled:opacity-30"
+              className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] transition-colors hover:text-parchment disabled:opacity-30"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" d="M5 12h14" />
@@ -483,7 +500,7 @@ export default function StudioPage() {
               onClick={() => adjustZoom(ZOOM_STEP)}
               disabled={zoom >= ZOOM_MAX}
               aria-label="Zoom in"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:text-parchment disabled:opacity-30"
+              className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted)] transition-colors hover:text-parchment disabled:opacity-30"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" d="M12 5v14M5 12h14" />
@@ -530,7 +547,7 @@ export default function StudioPage() {
           <button
             onClick={handleSaveClick}
             disabled={saveState === "saving"}
-            className={`flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm transition-colors disabled:opacity-60 sm:min-h-9 ${
+            className={`hidden h-8 items-center gap-1.5 rounded-md px-3 text-xs transition-colors disabled:opacity-60 sm:flex ${
               saveState === "saved"
                 ? "bg-emerald-accent/20 text-emerald-soft ring-1 ring-emerald-soft/40"
                 : saveState === "error"
@@ -556,7 +573,7 @@ export default function StudioPage() {
           <button
             onClick={openMp4Preview}
             disabled={mp4Rendering}
-            className="btn-ghost flex min-h-11 items-center gap-1.5 rounded-full px-3 disabled:opacity-70 sm:min-h-9"
+            className="btn-gold flex h-8 items-center gap-1.5 rounded-md px-3 text-xs disabled:opacity-70"
             aria-label="Preview the final MP4"
             title="Render and watch the exact MP4 that export produces"
           >
@@ -575,14 +592,14 @@ export default function StudioPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 9V5a1 1 0 011-1h4M4 15v4a1 1 0 001 1h4m6-16h4a1 1 0 011 1v4m0 6v4a1 1 0 01-1 1h-4" />
                   <path d="M10 9.5v5l4.5-2.5z" fill="currentColor" stroke="none" />
                 </svg>
-                <span className="hidden text-xs sm:inline">Final MP4</span>
+                <span>Export MP4</span>
               </>
             )}
           </button>
 
           <button
             onClick={() => openSettings(!settingsOpen)}
-            className={`flex min-h-11 items-center gap-2 rounded-full px-3 text-sm transition-colors sm:min-h-9 ${
+            className={`hidden h-8 items-center gap-2 rounded-md px-3 text-xs transition-colors sm:flex ${
               settingsOpen
                 ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                 : "btn-ghost"
@@ -603,6 +620,31 @@ export default function StudioPage() {
         </div>
       </header>
 
+      <aside aria-label="Studio tools" className="hidden border-r border-[var(--hairline-soft)] bg-[var(--ink)] lg:row-span-2 lg:row-start-2 lg:flex lg:flex-col">
+        {[
+          ["Layouts", "layout", () => openSettings(true)],
+          ["Media", "image", () => openSettings(true)],
+          ["Audio", "music", () => openTimeline(true)],
+          ["Text", "type", () => openSettings(true)],
+          ["Captions", "captions", () => openTimeline(true)],
+        ].map(([label, icon, action], index) => (
+          <button key={label as string} type="button" onClick={action as () => void} aria-label={`Open ${String(label).toLowerCase()} tool`} className={`flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors hover:bg-white/[0.03] hover:text-parchment ${index === 0 ? "bg-gold/[0.06] text-gold" : "text-[var(--muted)]"}`}>
+            <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+              {icon === "layout" && <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M8 4v16M8 10h13" /></>}
+              {icon === "image" && <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m3 17 5-4 4 3 3-2 6 5" /></>}
+              {icon === "music" && <><path d="M9 18V5l10-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></>}
+              {icon === "type" && <><path d="M4 6V4h16v2M12 4v16M8 20h8" /></>}
+              {icon === "captions" && <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 10h4M13 10h4M7 14h3M12 14h5" /></>}
+            </svg>
+            {label as string}
+          </button>
+        ))}
+        <button type="button" onClick={() => openSettings(true)} aria-label="Open configuration tool" className="mt-auto flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment">
+          <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 7h10M18 7h2M4 12h3M11 12h9M4 17h8M16 17h4" /><circle cx="16" cy="7" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="14" cy="17" r="2" /></svg>
+          Config
+        </button>
+      </aside>
+
       {mp4Error && (
         <div role="alert" className="flex items-start gap-3 border-b border-red-500/25 bg-red-500/[0.08] px-4 py-2.5 text-[11px] leading-relaxed text-red-100/90">
           <span className="min-w-0 flex-1">{mp4Error}</span>
@@ -620,29 +662,11 @@ export default function StudioPage() {
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1 lg:contents">
         {/* Preview stage */}
-        <section className="bg-mihrab-still relative flex flex-1 flex-col items-center justify-start overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:justify-center">
+        <section data-testid="studio-stage" className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-[#060608] p-3 lg:col-start-2 lg:row-start-2 lg:p-3">
           <StudioPreview frameMode={frameMode} showSafeZones={showSafeZones} />
 
-          {/* Mobile frame selector */}
-          {framesAllowed && (
-            <div className="mt-6 flex items-center gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1 md:hidden">
-              {FRAME_MODES.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setFrameMode(m.id)}
-                  className={`min-h-11 rounded-full px-3 text-xs transition-colors ${
-                    frameMode === m.id
-                      ? "bg-[var(--gold)] text-[var(--ink-deep)]"
-                      : "text-[var(--muted)] hover:text-parchment"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          )}
         </section>
 
         {/* Dim the preview behind the settings drawer on small screens */}
@@ -658,10 +682,11 @@ export default function StudioPage() {
             squeezes the preview on phones. */}
         <aside
           id="studio-settings"
-          className={`z-30 overflow-y-auto bg-[var(--ink)] transition-all duration-300 lg:static lg:z-auto lg:shrink-0 lg:border-l lg:border-[var(--hairline-soft)] lg:shadow-none ${
+          data-testid="studio-inspector"
+          className={`z-30 min-h-0 overflow-y-auto bg-[var(--ink)] transition-[width,transform] duration-200 lg:static lg:col-start-3 lg:row-span-2 lg:row-start-2 lg:z-auto lg:w-[304px] lg:border-l lg:border-[var(--hairline-soft)] lg:shadow-none ${
             settingsOpen
-              ? "absolute inset-y-0 right-0 w-[88%] max-w-[360px] border-l border-[var(--hairline-soft)] shadow-2xl lg:w-[360px] lg:max-w-none lg:shadow-none"
-              : "w-0 overflow-hidden border-l-0"
+              ? "absolute inset-y-0 right-0 w-[88%] max-w-[360px] border-l border-[var(--hairline-soft)] lg:w-[304px] lg:max-w-none"
+              : "w-0 overflow-hidden border-l-0 lg:w-[304px] lg:border-l"
           }`}
         >
           {settingsOpen && (
@@ -687,12 +712,12 @@ export default function StudioPage() {
           Height is bounded so the preview above is always visible; collapse
           shrinks it to just this bar. */}
       {(store.audioSource.mode === "imported" || selectedVerseNumbers.length > 0) && (
-        <div className="shrink-0 border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] sm:px-5">
-          <div className="flex items-center gap-2">
+        <div data-testid="studio-timeline" className={`studio-timeline-dock shrink-0 overflow-x-hidden overflow-y-auto border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-3 py-1.5 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[260px]" : "h-12"}`}>
+          <div className="flex items-center gap-2 lg:h-7">
             {/* Collapse / expand the dock */}
             <button
               onClick={() => openTimeline(!timelineOpen)}
-              className="flex min-h-11 items-center gap-2 rounded-full pr-2 text-left sm:min-h-8"
+              className="flex min-h-10 items-center gap-2 rounded pr-2 text-left lg:min-h-7"
               aria-expanded={timelineOpen}
               title={timelineOpen ? "Minimize editor" : "Show editor"}
             >
@@ -705,7 +730,7 @@ export default function StudioPage() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
               </svg>
-              <span className="text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/80">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-soft/80">
                 Verse Editor
               </span>
             </button>
@@ -740,7 +765,7 @@ export default function StudioPage() {
               {timelineOpen && (
                 <button
                   onClick={() => setTimelineFullscreen(true)}
-                  className="flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold sm:min-h-8"
+                  className="flex min-h-10 items-center gap-1.5 rounded border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold lg:min-h-7"
                   aria-label="Expand editor"
                   title="Edit in a full-screen editor with more room"
                 >
@@ -752,7 +777,7 @@ export default function StudioPage() {
               )}
               <button
                 onClick={() => openTimeline(!timelineOpen)}
-                className="flex min-h-11 items-center gap-1.5 rounded-full border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment sm:min-h-8"
+                className="flex min-h-10 items-center gap-1.5 rounded border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment lg:min-h-7"
               >
                 {timelineOpen ? "Minimize" : "Show"}
               </button>
@@ -764,9 +789,9 @@ export default function StudioPage() {
               the audio buffer two extra times. The dock is behind the overlay
               anyway; it remounts (fresh from the store) on close. */}
           {timelineOpen && !timelineFullscreen && (
-            <div className="mt-3 max-h-[30vh] overflow-y-auto pr-0.5 lg:max-h-[26vh]">
+            <div className="mt-1 min-h-0 overflow-hidden">
               {store.audioSource.mode === "imported" ? (
-                editorView === "words" ? <VerseCardEditor /> : <TimelineEditor />
+                editorView === "words" ? <VerseCardEditor /> : <TimelineEditor compact />
               ) : (
                 <ReciterVerseEditor />
               )}
@@ -774,6 +799,21 @@ export default function StudioPage() {
           )}
         </div>
       )}
+
+      <nav data-testid="studio-mobile-tools" aria-label="Studio tools" className="flex h-14 shrink-0 items-center justify-around border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-1 pb-[env(safe-area-inset-bottom)] lg:hidden">
+        {[
+          ["Media", () => openSettings(true), false],
+          ["Audio", () => openTimeline(true), false],
+          ["Text", () => openSettings(true), false],
+          ["Captions", () => { setEditorView("timeline"); openTimeline(true); }, timelineOpen],
+          ["Format", () => openSettings(!settingsOpen), settingsOpen],
+        ].map(([label, action, active]) => (
+          <button key={label as string} type="button" onClick={action as () => void} aria-label={label === "Format" ? "Toggle settings" : undefined} aria-expanded={label === "Format" ? settingsOpen : undefined} className={`flex min-h-11 w-16 flex-col items-center justify-center gap-0.5 text-[10px] font-medium uppercase tracking-tight ${active ? "text-gold-soft" : "text-[var(--muted)]"}`}>
+            <span className="text-base leading-none" aria-hidden>{label === "Media" ? "▣" : label === "Audio" ? "♫" : label === "Text" ? "T" : label === "Captions" ? "▤" : "↔"}</span>
+            {label as string}
+          </button>
+        ))}
+      </nav>
 
     </main>
 
