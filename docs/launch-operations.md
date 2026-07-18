@@ -92,6 +92,8 @@ Run the installed Google Chrome and Google Search metadata gate before a public 
 npm run test:google-chrome
 ```
 
+This command intentionally selects only the installed `google-chrome` project. Mobile Chromium and iPhone WebKit remain part of `npm run test:e2e` and the separate export matrix, so a mobile-engine failure cannot be mistaken for a Google Chrome failure or silently removed from the release gate.
+
 After the production deployment is ready, verify the deployed routes, security headers and a real MP4 render in installed Google Chrome:
 
 ```bash

@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:accessibility": "playwright test e2e/accessibility.spec.ts --project=chromium --workers=1",
-    "test:google-chrome": "GOOGLE_CHROME=1 playwright test",
+    "test:google-chrome": "GOOGLE_CHROME=1 playwright test --project=google-chrome",
     "test:production-google": "PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 playwright test e2e/google-readiness.spec.ts e2e/production-smoke.spec.ts",
     "test:production-performance": "PERFORMANCE_BUDGET=1 PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 playwright test e2e/performance-budget.spec.ts --project=google-chrome --workers=1 --repeat-each=3",
     "test:production-resilience": "PLAYWRIGHT_BASE_URL=https://ayahclip.vercel.app GOOGLE_CHROME=1 playwright test e2e/throttled-first-load.spec.ts e2e/offline-export-readiness.spec.ts e2e/import-failure-readiness.spec.ts e2e/text-edge-export.spec.ts --project=google-chrome --workers=1",
