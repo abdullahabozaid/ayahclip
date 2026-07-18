@@ -48,6 +48,7 @@ targets:
               - ayahclip
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        UIRequiresFullScreen: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.ayahclip.mobile
