@@ -41,7 +41,7 @@ export const RECITER_REGIONS: ReadonlyArray<{
   { id: "egypt", label: "Egyptian masters", description: "Murattal, Mujawwad and teaching recordings" },
   { id: "gulf", label: "Gulf reciters", description: "Contemporary reciters from across the Gulf" },
   { id: "levant", label: "Levant", description: "Reciters and teachers from the Levant" },
-  { id: "international", label: "Around the world", description: "Distinct recitation traditions beyond the Arab world" },
+  { id: "international", label: "Around the world", description: "Reciters from the wider Arab world and beyond" },
 ] as const;
 
 /**
@@ -69,6 +69,7 @@ export const reciters: Reciter[] = [
   { id: "salah-budair", name: "Salah Al-Budair", arabicName: "صلاح البدير", audioSource: everyAyah("Salah_Al_Budair_128kbps"), region: "haramain", style: "Murattal" },
   { id: "shuraym", name: "Saud Ash-Shuraym", arabicName: "سعود الشريم", audioSource: everyAyah("Saood_ash-Shuraym_128kbps"), region: "haramain", style: "Murattal", quranComRecitationId: 10 },
   { id: "bandar-balilah", name: "Bandar Balilah", arabicName: "بندر بليله", audioSource: mp3QuranChapter(217, "https://server6.mp3quran.net/balilah/"), region: "haramain", style: "Murattal" },
+  { id: "muhammad-burhaji", name: "Muhammad Burhaji", arabicName: "محمد برهجي", audioSource: mp3QuranChapter(340, "https://server16.mp3quran.net/M_Burhaji/Rewayat-Hafs-A-n-Assem/"), region: "haramain", style: "Murattal" },
 
   { id: "basit-murattal", name: "Abdul Basit (Murattal)", arabicName: "عبد الباسط عبد الصمد", audioSource: everyAyah("Abdul_Basit_Murattal_192kbps"), region: "egypt", style: "Murattal", quranComRecitationId: 2 },
   { id: "basit-mujawwad", name: "Abdul Basit (Mujawwad)", arabicName: "عبد الباسط عبد الصمد", audioSource: everyAyah("Abdul_Basit_Mujawwad_128kbps"), region: "egypt", style: "Mujawwad", quranComRecitationId: 1 },
@@ -92,6 +93,7 @@ export const reciters: Reciter[] = [
   { id: "ajmy", name: "Ahmed Al-Ajmi", arabicName: "أحمد العجمي", audioSource: everyAyah("ahmed_ibn_ali_al_ajamy_128kbps"), region: "gulf", style: "Murattal" },
   { id: "ahmad-nufais", name: "Ahmad Al-Nufais", arabicName: "أحمد النفيس", audioSource: mp3QuranChapter(259, "https://server16.mp3quran.net/nufais/Rewayat-Hafs-A-n-Assem/"), region: "gulf", style: "Murattal" },
   { id: "ahmad-hawashi", name: "Ahmad Al-Hawashi", arabicName: "أحمد الحواشي", audioSource: mp3QuranChapter(6, "https://server11.mp3quran.net/hawashi/"), region: "gulf", style: "Murattal" },
+  { id: "abdullah-al-khalaf", name: "Abdullah Al-Khalaf", arabicName: "عبدالله الخلف", audioSource: mp3QuranChapter(244, "https://server14.mp3quran.net/khalf/"), region: "gulf", style: "Murattal" },
   { id: "akram-alaqmi", name: "Akram Al-Alaqmi", arabicName: "أكرم العلاقمي", audioSource: everyAyah("Akram_AlAlaqimy_128kbps"), region: "gulf", style: "Murattal" },
   { id: "anas-emadi", name: "Anas Al-Emadi", arabicName: "أنس العمادي", audioSource: mp3QuranChapter(314, "https://server16.mp3quran.net/a_alemadi/Rewayat-Hafs-A-n-Assem/"), region: "gulf", style: "Murattal" },
   { id: "abdulaziz-turki", name: "Abdulaziz Al-Turki", arabicName: "عبد العزيز التركي", audioSource: mp3QuranChapter(282, "https://server16.mp3quran.net/a_turki/Rewayat-Hafs-A-n-Assem/"), region: "gulf", style: "Murattal" },
@@ -105,6 +107,7 @@ export const reciters: Reciter[] = [
   { id: "rifai", name: "Hani Ar-Rifai", arabicName: "هاني الرفاعي", audioSource: everyAyah("Hani_Rifai_192kbps"), region: "gulf", style: "Murattal", quranComRecitationId: 5 },
   { id: "khalid-qahtani", name: "Khalid Al-Qahtani", arabicName: "خالد القحطاني", audioSource: everyAyah("Khaalid_Abdullaah_al-Qahtaanee_192kbps"), region: "gulf", style: "Murattal" },
   { id: "khalid-jileel", name: "Khalid Al-Jileel", arabicName: "خالد الجليل", audioSource: mp3QuranChapter(20, "https://server10.mp3quran.net/jleel/"), region: "gulf", style: "Murattal" },
+  { id: "khalid-abdulkafi", name: "Khalid Abdulkafi", arabicName: "خالد عبدالكافي", audioSource: mp3QuranChapter(22, "https://server11.mp3quran.net/kafi/"), region: "gulf", style: "Murattal" },
   { id: "muhammad-abdulkarim", name: "Muhammad Abdul Karim", arabicName: "محمد عبد الكريم", audioSource: everyAyah("Muhammad_AbdulKareem_128kbps"), region: "gulf", style: "Murattal" },
   { id: "nabil-rifai", name: "Nabil Ar-Rifai", arabicName: "نبيل الرفاعي", audioSource: everyAyah("Nabil_Rifa3i_48kbps"), region: "gulf", style: "Murattal" },
   { id: "nasser-qatami", name: "Nasser Al-Qatami", arabicName: "ناصر القطامي", audioSource: everyAyah("Nasser_Alqatami_128kbps"), region: "gulf", style: "Murattal" },
@@ -112,6 +115,9 @@ export const reciters: Reciter[] = [
   { id: "salah-bukhatir", name: "Salah Bukhatir", arabicName: "صلاح بو خاطر", audioSource: everyAyah("Salaah_AbdulRahman_Bukhatir_128kbps"), region: "gulf", style: "Murattal" },
   { id: "yasser-dossary", name: "Yasser Al-Dosari", arabicName: "ياسر الدوسري", audioSource: everyAyah("Yasser_Ad-Dussary_128kbps"), region: "gulf", style: "Murattal" },
   { id: "mansour-salimi", name: "Mansour Al-Salimi", arabicName: "منصور السالمي", audioSource: mp3QuranChapter(245, "https://server14.mp3quran.net/mansor/"), region: "gulf", style: "Murattal" },
+  { id: "majed-al-zamil", name: "Majed Al-Zamil", arabicName: "ماجد الزامل", audioSource: mp3QuranChapter(139, "https://server9.mp3quran.net/zaml/"), region: "gulf", style: "Murattal" },
+  { id: "saleh-alshamrani", name: "Saleh Alshamrani", arabicName: "صالح الشمراني", audioSource: mp3QuranChapter(300, "https://server16.mp3quran.net/shamrani/Rewayat-Hafs-A-n-Assem/"), region: "gulf", style: "Murattal" },
+  { id: "hassan-aldaghriri", name: "Hassan Aldaghriri", arabicName: "حسن الدغريري", audioSource: mp3QuranChapter(10905, "https://server16.mp3quran.net/H-Aldaghriri/Rewayat-Hafs-A-n-Assem/"), region: "gulf", style: "Murattal" },
   { id: "khalifa-tunaiji", name: "Khalifa Al-Tunaiji", arabicName: "خليفة الطنيجي", audioSource: everyAyah("khalefa_al_tunaiji_64kbps"), region: "gulf", style: "Murattal" },
   { id: "tawfeeq-as-sayegh", name: "Tawfeeq As-Sayegh", arabicName: "توفيق الصايغ", audioSource: mp3QuranChapter(17, "https://server6.mp3quran.net/twfeeq/"), region: "gulf", style: "Murattal" },
 
@@ -119,7 +125,11 @@ export const reciters: Reciter[] = [
   { id: "yaser-salamah", name: "Yaser Salamah", arabicName: "ياسر سلامة", audioSource: everyAyah("Yaser_Salamah_128kbps"), region: "levant", style: "Murattal" },
 
   { id: "raad-kurdi", name: "Raad Al-Kurdi", arabicName: "رعد محمد الكردي", audioSource: mp3QuranChapter(221, "https://server6.mp3quran.net/kurdi/"), region: "international", style: "Murattal" },
+  { id: "alzain-mohammad-ahmad", name: "Alzain Mohammad Ahmad", arabicName: "الزين محمد أحمد", audioSource: mp3QuranChapter(13, "https://server9.mp3quran.net/alzain/"), region: "international", style: "Murattal" },
+  { id: "ahmad-deban", name: "Ahmad Deban", arabicName: "أحمد ديبان", audioSource: mp3QuranChapter(265, "https://server16.mp3quran.net/deban/Rewayat-Hafs-A-n-Assem/"), region: "international", style: "Murattal" },
   { id: "abdulrasheed-soufi", name: "Abdulrasheed Soufi", arabicName: "عبدالرشيد صوفي", audioSource: mp3QuranChapter(258, "https://server16.mp3quran.net/soufi/Rewayat-Hafs-A-n-Assem/"), region: "international", style: "Murattal" },
+  { id: "sayed-ahmad-hashemi", name: "Sayed Ahmad Hashemi", arabicName: "سيد أحمد هاشمي", audioSource: mp3QuranChapter(294, "https://server16.mp3quran.net/s_hashemi/Rewayat-Hafs-A-n-Assem/"), region: "international", style: "Murattal" },
+  { id: "wadeea-al-yamani", name: "Wadeea Al-Yamani", arabicName: "وديع اليمني", audioSource: mp3QuranChapter(219, "https://server6.mp3quran.net/wdee3/"), region: "international", style: "Murattal" },
   { id: "peshawa-qadr-kurdi", name: "Peshawa Qadr Al-Kurdi", arabicName: "بيشه وا قادر الكردي", audioSource: mp3QuranChapter(268, "https://server16.mp3quran.net/peshawa/Rewayat-Hafs-A-n-Assem/"), region: "international", style: "Murattal" },
   { id: "karim-mansouri", name: "Karim Mansouri", arabicName: "كريم منصوري", audioSource: everyAyah("Karim_Mansoori_40kbps"), region: "international", style: "Mujawwad" },
   { id: "parhizgar", name: "Shahriar Parhizgar", arabicName: "شهريار پرهيزكار", audioSource: everyAyah("Parhizgar_48kbps"), region: "international", style: "Murattal" },

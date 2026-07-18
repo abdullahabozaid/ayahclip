@@ -23,6 +23,16 @@ const RECITERS = [
   { id: "haitham-al-dokhin", name: "Haitham Al-Dokhin", duration: 5.28 },
   { id: "tawfeeq-as-sayegh", name: "Tawfeeq As-Sayegh", duration: 4.42 },
   { id: "abdulrasheed-soufi", name: "Abdulrasheed Soufi", duration: 4.92 },
+  { id: "muhammad-burhaji", name: "Muhammad Burhaji", duration: 5.418 },
+  { id: "abdullah-al-khalaf", name: "Abdullah Al-Khalaf", duration: 5.78 },
+  { id: "khalid-abdulkafi", name: "Khalid Abdulkafi", duration: 4.956 },
+  { id: "majed-al-zamil", name: "Majed Al-Zamil", duration: 4.2 },
+  { id: "saleh-alshamrani", name: "Saleh Alshamrani", duration: 5.04 },
+  { id: "hassan-aldaghriri", name: "Hassan Aldaghriri", duration: 4.82 },
+  { id: "alzain-mohammad-ahmad", name: "Alzain Mohammad Ahmad", duration: 5.6 },
+  { id: "ahmad-deban", name: "Ahmad Deban", duration: 5.84 },
+  { id: "sayed-ahmad-hashemi", name: "Sayed Ahmad Hashemi", duration: 6.76 },
+  { id: "wadeea-al-yamani", name: "Wadeea Al-Yamani", duration: 6.58 },
 ] as const;
 
 function collectPageErrors(page: Page): string[] {

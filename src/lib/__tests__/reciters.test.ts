@@ -97,6 +97,16 @@ describe("reciter audio sources", () => {
       ["haitham-al-dokhin", 273, "https://server16.mp3quran.net/h_dukhain/Rewayat-Hafs-A-n-Assem/"],
       ["tawfeeq-as-sayegh", 17, "https://server6.mp3quran.net/twfeeq/"],
       ["abdulrasheed-soufi", 258, "https://server16.mp3quran.net/soufi/Rewayat-Hafs-A-n-Assem/"],
+      ["muhammad-burhaji", 340, "https://server16.mp3quran.net/M_Burhaji/Rewayat-Hafs-A-n-Assem/"],
+      ["abdullah-al-khalaf", 244, "https://server14.mp3quran.net/khalf/"],
+      ["khalid-abdulkafi", 22, "https://server11.mp3quran.net/kafi/"],
+      ["majed-al-zamil", 139, "https://server9.mp3quran.net/zaml/"],
+      ["saleh-alshamrani", 300, "https://server16.mp3quran.net/shamrani/Rewayat-Hafs-A-n-Assem/"],
+      ["hassan-aldaghriri", 10905, "https://server16.mp3quran.net/H-Aldaghriri/Rewayat-Hafs-A-n-Assem/"],
+      ["alzain-mohammad-ahmad", 13, "https://server9.mp3quran.net/alzain/"],
+      ["ahmad-deban", 265, "https://server16.mp3quran.net/deban/Rewayat-Hafs-A-n-Assem/"],
+      ["sayed-ahmad-hashemi", 294, "https://server16.mp3quran.net/s_hashemi/Rewayat-Hafs-A-n-Assem/"],
+      ["wadeea-al-yamani", 219, "https://server6.mp3quran.net/wdee3/"],
     ] as const;
 
     const chapterReciters = reciters.filter((item) => item.audioSource.kind === "chapter-cues");
