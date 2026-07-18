@@ -18,6 +18,8 @@ export default function SurahPage() {
   const [surah, setSurah] = useState<Surah | null>(null);
   const [verses, setVerses] = useState<Verse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const selectedVerseNumbers = useAppStore((s) => s.selectedVerseNumbers);
   const toggleVerse = useAppStore((s) => s.toggleVerse);
@@ -32,20 +34,50 @@ export default function SurahPage() {
 
   useEffect(() => {
     clearSelection();
+  }, [clearSelection, surahId]);
+
+  useEffect(() => {
+    let active = true;
+    if (!Number.isInteger(surahId) || surahId < 1 || surahId > 114) {
+      setSurah(null);
+      setVerses([]);
+      setLoadError(false);
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setLoading(true);
+    setLoadError(false);
     const lang = getTranslationLanguage(translationLanguage);
-    Promise.all([fetchSurahs(), fetchVerses(surahId, lang.resourceId)]).then(
-      ([surahs, fetchedVerses]) => {
+    Promise.all([fetchSurahs(), fetchVerses(surahId, lang.resourceId)])
+      .then(([surahs, fetchedVerses]) => {
+        if (!active) return;
         const found = surahs.find((s) => s.id === surahId);
-        if (found) {
-          setSurah(found);
-          setSurahStore(found);
+        if (!found) {
+          setSurah(null);
+          setVerses([]);
+          setLoading(false);
+          return;
         }
+        if (fetchedVerses.length === 0) throw new Error("The Quran API returned no verses");
+        setSurah(found);
+        setSurahStore(found);
         setVerses(fetchedVerses);
         setVersesStore(fetchedVerses);
         setLoading(false);
-      }
-    );
-  }, [clearSelection, setSurahStore, setVersesStore, surahId, translationLanguage]);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadError(true);
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loadAttempt, setSurahStore, setVersesStore, surahId, translationLanguage]);
 
   return (
     <main className="bg-mihrab min-h-[calc(100dvh-65px)]">
@@ -67,6 +99,21 @@ export default function SurahPage() {
               <div key={i} className="shimmer h-28 rounded-2xl" />
             ))}
           </div>
+        ) : loadError ? (
+          <section role="alert" className="mx-auto max-w-xl border-y border-[var(--hairline-soft)] py-10 text-center">
+            <p className="text-xs uppercase tracking-[0.2em] text-gold-soft/75">Connection interrupted</p>
+            <h1 className="mt-3 text-2xl font-medium text-parchment">Couldn’t load this surah</h1>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[var(--muted)]">
+              Check your connection and try again. Your choices remain in this browser.
+            </p>
+            <button
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              className="btn-gold mt-6 min-h-11 rounded-full px-6 text-sm"
+            >
+              Try again
+            </button>
+          </section>
         ) : surah ? (
           <>
             <header className="mb-8 text-center">

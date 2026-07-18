@@ -15,13 +15,28 @@ export default function BrowsePage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [openJuz, setOpenJuz] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
-    fetchSurahs().then((data) => {
-      setSurahs(data);
-      setLoading(false);
-    });
-  }, []);
+    let active = true;
+    setLoading(true);
+    setLoadError(false);
+    fetchSurahs()
+      .then((data) => {
+        if (!active) return;
+        setSurahs(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadError(true);
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadAttempt]);
 
   // Static "first surah — last surah" label for each Juz (independent of filters).
   const rangeLabel = useMemo(() => {
@@ -137,6 +152,21 @@ export default function BrowsePage() {
               <div key={i} className="shimmer h-[72px] rounded-2xl" />
             ))}
           </div>
+        ) : loadError ? (
+          <section role="alert" className="border-y border-[var(--hairline-soft)] py-10 text-center">
+            <p className="text-xs uppercase tracking-[0.2em] text-gold-soft/75">Connection interrupted</p>
+            <h2 className="mt-3 text-xl font-medium text-parchment">Couldn’t load the Quran index</h2>
+            <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[var(--muted)]">
+              Check your connection and try again. No media or project data leaves this browser.
+            </p>
+            <button
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              className="btn-gold mt-6 min-h-11 rounded-full px-6 text-sm"
+            >
+              Try again
+            </button>
+          </section>
         ) : (
           <JuzAccordion groups={visibleGroups} isOpen={isOpen} onToggle={toggle} />
         )}
