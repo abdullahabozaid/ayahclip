@@ -101,6 +101,19 @@ struct ClipProject: Identifiable, Codable, Equatable {
         translation: "Blessed is He in whose hand is dominion, and He is over all things competent."
     )
 
+    static func freshStarter() -> ClipProject {
+        var project = starter
+        project.id = UUID()
+        project.createdAt = Date()
+        project.updatedAt = project.createdAt
+        project.segments = project.segments.map { segment in
+            var copy = segment
+            copy.id = UUID()
+            return copy
+        }
+        return project
+    }
+
     var allMediaFilenames: [String] {
         ([mediaFilename].compactMap { $0 } + (bRollFilenames ?? []))
             .reduce(into: []) { filenames, filename in

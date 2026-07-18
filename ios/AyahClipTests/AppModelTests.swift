@@ -70,6 +70,33 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.activeProject?.title, ClipProject.starter.title)
     }
 
+    func testEachNewClipSavesAsAnIndependentProject() throws {
+        let model = AppModel()
+        model.projects = []
+
+        model.createProject()
+        let firstID = try XCTUnwrap(model.activeProject?.id)
+        let firstSegmentIDs = try XCTUnwrap(model.activeProject?.segments.map(\.id))
+        model.updateActive { $0.title = "First clip" }
+        model.saveActiveProject()
+
+        model.createProject()
+        let secondID = try XCTUnwrap(model.activeProject?.id)
+        let secondSegmentIDs = try XCTUnwrap(model.activeProject?.segments.map(\.id))
+        model.updateActive { $0.title = "Second clip" }
+        model.saveActiveProject()
+
+        XCTAssertNotEqual(firstID, secondID)
+        XCTAssertTrue(Set(firstSegmentIDs).isDisjoint(with: Set(secondSegmentIDs)))
+        XCTAssertEqual(model.projects.count, 2)
+        XCTAssertEqual(Set(model.projects.map(\.title)), Set(["First clip", "Second clip"]))
+        let reloaded = AppModel()
+        XCTAssertEqual(reloaded.projects.count, 2)
+        XCTAssertEqual(Set(reloaded.projects.map(\.id)), Set([firstID, secondID]))
+        reloaded.projects.forEach(reloaded.delete)
+        model.activeProject = nil
+    }
+
     func testVideoExportProducesVerticalCaptionedMP4() async throws {
         let source = try await makeTestVideo()
         let output = try await VideoExportService.render(sourceURL: source, project: .starter)
@@ -379,6 +406,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.projects.count, 1)
         XCTAssertFalse(model.projects.contains(where: { $0.id == original.id }))
         model.projects.forEach(model.delete)
+    }
+
+    func testDeletingOriginalKeepsMediaUsedByDuplicate() async throws {
+        let source = try await makeTestVideo()
+        let model = AppModel()
+        model.projects = []
+        model.activeProject = nil
+        let imported = await model.importMedia(from: source)
+        XCTAssertTrue(imported)
+        model.saveActiveProject()
+        let original = try XCTUnwrap(model.projects.first)
+        let filename = try XCTUnwrap(original.mediaFilename)
+        let storedURL = try XCTUnwrap(model.mediaURL(for: filename))
+
+        model.duplicate(original)
+        let duplicate = try XCTUnwrap(model.projects.first)
+        model.delete(original)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: storedURL.path))
+        XCTAssertEqual(duplicate.mediaFilename, filename)
+        model.delete(duplicate)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: storedURL.path))
+        model.activeProject = nil
     }
 
     private func averageLuminance(image: CGImage, xRange: Range<Int>) -> Double {

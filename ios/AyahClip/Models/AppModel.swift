@@ -34,7 +34,7 @@ final class AppModel {
     }
 
     func createProject() {
-        activeProject = .starter
+        activeProject = .freshStarter()
         importedMediaURLs = []
     }
 
@@ -159,7 +159,7 @@ final class AppModel {
                 }
             }
 
-            if activeProject == nil { activeProject = .starter }
+            if activeProject == nil { activeProject = .freshStarter() }
             let isAddingPrimary = activeProject?.mediaFilename == nil
             let sourceReference = normalizedReferenceURL(from: pendingLink)?.absoluteString
             updateActive { project in
