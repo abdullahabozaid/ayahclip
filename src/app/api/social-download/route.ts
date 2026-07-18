@@ -221,9 +221,11 @@ export async function POST(request: Request) {
 
     let usedFastPath = false;
     if (source.platform === "youtube" && startSeconds !== undefined && endSeconds !== undefined) {
+      let fastPathStage = "probe";
       try {
         const probeResult = await execFileAsync(ytDlpPath, buildYoutubeProbeArgs(source.url.toString()), commandOptions);
         if (youtubeFastPathAllowed(parseYoutubeProbe(probeResult.stdout))) {
+          fastPathStage = "download";
           const sourceTemplate = join(workDirectory, "source.%(ext)s");
           await execFileAsync(
             ytDlpPath,
@@ -231,8 +233,10 @@ export async function POST(request: Request) {
             commandOptions,
           );
           const sourceFiles = await readdir(workDirectory);
+          fastPathStage = "locate-source";
           const sourceFilename = sourceFiles.find((item) => item.startsWith("source.") && item.endsWith(".mp4"));
           if (!sourceFilename) throw new Error("No MP4 source was returned for the fast path");
+          fastPathStage = "cut";
           await execFileAsync(
             process.env.AYAHCLIP_FFMPEG_PATH || "ffmpeg",
             buildExactCutArgs({
@@ -243,10 +247,15 @@ export async function POST(request: Request) {
             }),
             commandOptions,
           );
+          fastPathStage = "cleanup-source";
           await rm(join(workDirectory, sourceFilename), { force: true });
           usedFastPath = true;
         }
-      } catch {
+      } catch (error) {
+        console.warn("[source-import] YouTube fast path unavailable", {
+          stage: fastPathStage,
+          errorType: error instanceof Error ? error.name : "UnknownError",
+        });
         // Metadata can be missing or a source can change between probing and
         // download. The bounded range path below remains the safe fallback.
         const partialFiles = await readdir(workDirectory);
