@@ -2,6 +2,14 @@ import { expect, test } from "@playwright/test";
 
 const productionOrigin = "https://ayahclip.vercel.app";
 
+function pngDimensions(bytes: Buffer): { width: number; height: number } {
+  expect(bytes.subarray(1, 4).toString("ascii")).toBe("PNG");
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20),
+  };
+}
+
 test("Googlebot can discover the public product through robots and sitemap", async ({ request }) => {
   const robotsResponse = await request.get("/robots.txt", {
     headers: { "User-Agent": "Googlebot" },
@@ -34,6 +42,7 @@ test("indexable pages publish distinct titles, descriptions, and canonical URLs"
     { path: "/browse", title: /Browse the Quran/, canonical: "/browse" },
     { path: "/import", title: /Import a recitation/, canonical: "/import" },
     { path: "/styles", title: /Templates/, canonical: "/styles" },
+    { path: "/support", title: /Support AyahClip/, canonical: "/support" },
     { path: "/privacy", title: /Privacy/, canonical: "/privacy" },
     { path: "/terms", title: /Terms/, canonical: "/terms" },
   ];
@@ -64,6 +73,10 @@ test("private editor and browser-storage pages explicitly opt out of indexing", 
 test("the browser manifest describes an installable AyahClip surface", async ({ request, page }) => {
   await page.goto("/");
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute(
+    "href",
+    /\/apple-icon\.png(?:\?|$)/,
+  );
 
   const response = await request.get("/manifest.webmanifest");
   expect(response.status()).toBe(200);
@@ -76,7 +89,23 @@ test("the browser manifest describes an installable AyahClip surface", async ({ 
     background_color: "#08090d",
     theme_color: "#08090d",
   });
+  const expectedIcons = [
+    { src: "/icons/icon-192.png", size: 192 },
+    { src: "/icons/icon-512.png", size: 512 },
+  ];
   expect(manifest.icons).toEqual(
-    expect.arrayContaining([expect.objectContaining({ src: "/favicon.ico", type: "image/x-icon" })]),
+    expectedIcons.map(({ src, size }) => ({
+      src,
+      sizes: `${size}x${size}`,
+      type: "image/png",
+      purpose: "any",
+    })),
   );
+
+  for (const { src, size } of expectedIcons) {
+    const iconResponse = await request.get(src);
+    expect(iconResponse.status()).toBe(200);
+    expect(iconResponse.headers()["content-type"]).toContain("image/png");
+    expect(pngDimensions(await iconResponse.body())).toEqual({ width: size, height: size });
+  }
 });
