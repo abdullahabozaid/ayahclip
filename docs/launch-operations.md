@@ -76,7 +76,7 @@ npm run test:e2e
 
 `npm run test:e2e` includes Android Chromium and iPhone WebKit device profiles. On a capable local host they require real encoded video bytes and duration. GitHub's isolated Linux runner has no usable mobile H.264/AAC encoder, so CI verifies the complete touch workflow and enabled export controls while leaving byte-level encoding to the matrix below.
 
-The accessibility gate scans WCAG A and AA rules at desktop and phone widths across the public pages, Surah picker, Template Studio, Library, and a real imported-audio Studio state. It also proves the app-shell skip link transfers keyboard focus past repeated navigation. It runs with reduced motion so contrast is measured in the stable interface rather than halfway through a page entrance animation. Automated scans do not replace complete keyboard-only and VoiceOver testing on physical devices.
+The accessibility gate runs 26 WCAG A and AA scans at desktop and phone widths across the public pages, Surah picker, Template Studio, Library, a real imported-audio Studio, and its expanded timeline. It also proves the app-shell skip link transfers keyboard focus past repeated navigation and that the expanded editor receives and contains focus, closes with Escape, and restores focus to its opener. It runs with reduced motion so contrast is measured in the stable interface rather than halfway through a page entrance animation. Automated scans do not replace complete keyboard-only and VoiceOver testing on physical devices.
 
 Run the several-minute constrained-memory gate before an export-related release:
 

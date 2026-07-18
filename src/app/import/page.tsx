@@ -965,7 +965,7 @@ export default function ImportPage() {
             </p>
             <button
               onClick={create}
-              disabled={!buffer || building || !rangeConfirmed}
+              disabled={!buffer || building || !rangeConfirmed || !surah}
               className="btn-gold min-h-12 shrink-0 rounded-xl px-6 text-sm disabled:opacity-40"
             >
               {building

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAppStore } from "@/lib/store";
 import { TimelineEditor } from "./TimelineEditor";
 import { VerseCardEditor } from "./VerseCardEditor";
@@ -20,17 +20,55 @@ interface FullscreenTimelineProps {
  * "Expand" button; ESC or the top-right Close button exits.
  */
 export function FullscreenTimeline({ onClose, editorView = "timeline" }: FullscreenTimelineProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const surah = useAppStore((s) => s.surah);
   const selectedVerseNumbers = useAppStore((s) => s.selectedVerseNumbers);
   const isImported = useAppStore((s) => s.audioSource.mode === "imported");
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [])].filter((element) => element.getClientRects().length > 0);
+      if (focusable.length === 0) {
+        e.preventDefault();
+        closeButtonRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !dialogRef.current?.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !dialogRef.current?.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", onKey);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isImported) return;
@@ -74,6 +112,7 @@ export function FullscreenTimeline({ onClose, editorView = "timeline" }: Fullscr
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex flex-col bg-[var(--ink)]"
       role="dialog"
       aria-modal="true"
@@ -96,6 +135,8 @@ export function FullscreenTimeline({ onClose, editorView = "timeline" }: Fullscr
           )}
         </div>
         <button
+          ref={closeButtonRef}
+          type="button"
           onClick={onClose}
           className="flex h-10 items-center gap-2 rounded-full border border-[var(--hairline)] px-4 text-sm text-parchment transition-colors hover:border-gold"
           title="Return to the studio"
