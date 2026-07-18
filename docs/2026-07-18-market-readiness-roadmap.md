@@ -82,7 +82,7 @@ Public launch requires all of the following:
 
 - Green unit, integration, browser E2E, native UI, accessibility, security, and export-parity suites.
 - No critical or high-severity open defects.
-- Privacy policy, terms, attribution/licensing, support, deletion, backups, and incident response in place.
+- Privacy policy, terms, attribution/licensing, privacy-safe public support, account-free deletion and recovery limits, and the incident/rollback runbook in place. Complete a documented rollback drill before broad launch.
 - Real-device tests across supported iPhone/iPad and desktop browser ranges.
 - Controlled beta feedback reviewed and launch decision recorded.
 

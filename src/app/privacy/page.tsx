@@ -67,12 +67,13 @@ export default function PrivacyPage() {
             <section id="storage" className="scroll-mt-28">
               <h2 className="font-display text-2xl text-parchment">Storage and deletion</h2>
               <p className="mt-4">Projects, source blobs, templates and local library clips remain in browser storage until you delete them or clear the site&rsquo;s data. Removing a project from AyahClip removes its associated local project data. Files you already downloaded or shared must be removed from their destination separately.</p>
+              <p className="mt-3">AyahClip does not keep a cloud backup of these projects and cannot restore them after deletion or cleared site data. Keep your original media and completed exports in storage you control.</p>
             </section>
 
             <section id="choices" className="scroll-mt-28">
               <h2 className="font-display text-2xl text-parchment">Your choices</h2>
               <p className="mt-4">You can turn anonymous diagnostics off above, enable Do Not Track, delete individual projects, or clear AyahClip&rsquo;s site data in your browser. The <Link href="/diagnostics" className="text-gold-soft underline-offset-4 hover:underline">troubleshooting report</Link> is created locally and is copied only when you press its button.</p>
-              <p className="mt-3">Questions about this policy can be raised through the project&rsquo;s public support channel. Do not include recitation recordings or private project content unless you intentionally choose to share them.</p>
+              <p className="mt-3">Questions about this policy can be raised through the <Link href="/support" className="text-gold-soft underline-offset-4 hover:underline">public support page</Link>. Do not include recitation recordings, private links, credentials or unpublished project content in a public report.</p>
             </section>
           </article>
         </div>

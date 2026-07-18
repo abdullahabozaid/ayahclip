@@ -1,0 +1,66 @@
+name: AyahClip support request
+description: Report a reproducible problem or ask for help without uploading private media.
+title: "[Support] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve AyahClip. Do not attach recitation recordings, unpublished clips, project files, private links, API keys, or account credentials.
+  - type: dropdown
+    id: request-type
+    attributes:
+      label: What do you need help with?
+      options:
+        - Import or Quran range confirmation
+        - Timeline or caption editing
+        - Preview or export
+        - Reciter or stock media availability
+        - Accessibility
+        - Quran text or translation accuracy
+        - Something else
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - iPhone or iPad app
+        - iPhone or iPad browser
+        - Android browser
+        - macOS browser
+        - Windows browser
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What happened?
+      description: List the smallest sequence that reproduces the problem. Describe private media rather than attaching it.
+      placeholder: |
+        1. Opened Import
+        2. Selected a local MP4
+        3. Confirmed the Quran range
+        4. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Local diagnostics, optional
+      description: Paste the text from AyahClip's Diagnostics page. Review it before posting. Do not attach media or private URLs.
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed private media, unpublished links, credentials, and personal information from this report.
+          required: true

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { SupportForm } from "@/components/SupportForm";
 import { isStripeConfigured } from "@/lib/stripe";
 
@@ -51,8 +52,45 @@ export default function SupportPage() {
           <SupportForm checkoutAvailable={checkoutAvailable} />
         </div>
 
+        <section
+          aria-labelledby="technical-support"
+          className="rise mt-14 border-y border-[var(--hairline-soft)] py-8"
+          style={{ animationDelay: "120ms" }}
+        >
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-gold-soft/80">
+            Product help
+          </p>
+          <h2 id="technical-support" className="mt-2 text-xl font-medium text-parchment">
+            Something did not work?
+          </h2>
+          <p className="mt-3 max-w-[62ch] text-sm leading-6 text-[var(--muted)]">
+            Start with the local diagnostics report. If the problem remains, open a structured
+            support request with your platform and the steps that reproduce it.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/diagnostics"
+              className="btn-ghost inline-flex min-h-11 items-center rounded-full px-5 text-sm"
+            >
+              Open diagnostics
+            </Link>
+            <a
+              href="https://github.com/abdullahabozaid/ayahclip/issues/new?template=support.yml"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-ghost inline-flex min-h-11 items-center rounded-full px-5 text-sm"
+            >
+              Request help
+            </a>
+          </div>
+          <p className="mt-4 text-xs leading-5 text-[var(--muted-deep)]">
+            Never attach private recordings, unpublished clips, project files, credentials, or
+            personal links. Describe the source instead.
+          </p>
+        </section>
+
         {/* Where it goes */}
-        <section className="rise mt-16" style={{ animationDelay: "160ms" }}>
+        <section className="rise mt-16" style={{ animationDelay: "180ms" }}>
           <div className="gold-rule mx-auto max-w-xs" />
           <h2 className="font-display mt-10 text-center text-2xl text-parchment">
             Where your support goes

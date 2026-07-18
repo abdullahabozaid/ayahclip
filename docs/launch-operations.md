@@ -2,6 +2,8 @@
 
 This runbook covers the public creator journey, privacy-safe product events, client error monitoring, and the export release matrix.
 
+For incident severity, rollback, credential rotation, creator-data recovery limits, and restore drills, use [`docs/incident-response-and-data-continuity.md`](./incident-response-and-data-continuity.md). Browser-local projects are not cloud backups and cannot be restored by the operator after deletion or cleared site data.
+
 ## Creator journey
 
 Use [`docs/public-beta-field-test.md`](./public-beta-field-test.md) for the unassisted ordinary-creator protocol, physical-device matrix, pass thresholds, and privacy-safe result sheet. Automated events support that evidence; they do not replace direct observation on real devices.
