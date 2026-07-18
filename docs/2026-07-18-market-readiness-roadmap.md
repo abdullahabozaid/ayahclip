@@ -31,7 +31,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Security/backend baseline | Implemented, distributed WAF pending | Zero production dependency advisories; no tracked secrets; headers, local-filesystem isolation, request limits and API boundary tests documented in `docs/2026-07-18-security-backend-audit.md` |
 | Operator analytics | Implemented for account-free beta | Authenticated local report aggregates production Runtime Logs into activation, successful exports, return-visit proxy, funnel, assistance, device/browser/source, and fixed failure metrics without publishing journey IDs or adding a public admin surface; true account retention remains intentionally unavailable without accounts |
 | Account-free browser isolation | Implemented | Three simultaneous production browser contexts retain distinct personal B-roll shelves; the test explicitly does not claim future authenticated tenant isolation |
-| Short-journey performance budgets | Implemented | Three deployed Chrome journeys pass import, ingestion, Studio transition, playback, timeline-seek, and exact-MP4 budgets; long-export and constrained-device gates remain separate |
+| Web performance and sustained export | Implemented, real-device gate pending | Three deployed Chrome journeys pass import, ingestion, Studio transition, playback, timeline-seek and exact-MP4 budgets; a 512 MB-heap Chrome fixture exports a verified 181-second MP4 |
 
 ## Delivery sequence
 
@@ -51,7 +51,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 - Exercise every toolbar, inspector, timeline, keyboard, upload, restore, and export path. Native autosave and Undo/Redo now have direct model/UI coverage; desktop history remains part of this gate.
 - Test long Surahs, long translations, right-to-left text, missing translations, network loss, storage quota, corrupt files, and unsupported codecs.
 - Verify preview/export parity at TikTok, Reels, Shorts, and landscape sizes.
-- **Completed for the short creator journey:** enforce deployed budgets for usable import, local ingestion, Studio transition, playback response, timeline seeking, and exact MP4 preview. Keep long-export, constrained-device, poor-network, and thermal testing as separate gates; see `docs/2026-07-18-performance-budget.md`.
+- **Completed for browser performance:** enforce deployed budgets for usable import, local ingestion, Studio transition, playback response, timeline seeking, and exact MP4 preview; the 512 MB-heap three-minute export fixture also passes. Keep poor-network and real-device thermal testing as separate gates; see `docs/2026-07-18-performance-budget.md`.
 
 ### 3. Mobile creation and sharing
 

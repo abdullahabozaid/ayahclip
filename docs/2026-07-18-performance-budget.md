@@ -29,11 +29,11 @@ The test is deliberately skipped unless both `PERFORMANCE_BUDGET=1` and `PLAYWRI
 
 ## Boundaries
 
-- The MP4 measurement proves the short-form render path and its startup overhead. It does not replace the low-memory long-export suite or prove acceptable export time for multi-minute source media.
+- The short MP4 measurement proves render startup overhead. The complementary low-memory gate also passed on 2026-07-18: installed Chrome with a 512 MB JavaScript heap and reported 4 GB device memory rendered a generated 181-second source to an MP4 larger than 500 KB with a verified duration between 180 and 182 seconds. This is a deterministic stability fixture, not a promise that every three-minute creative export completes in the fixture's wall-clock time.
 - Results depend on network location, CDN state, browser and hardware. The budgets are release regressions, not a universal latency promise to every user.
 - Recognition-model download and ASR execution have separate size, route and corpus gates because including the 131 MB model in an ordinary editor interaction budget would mix two different workflows.
 - Mobile-native rendering uses AVFoundation and remains covered by the iOS export unit/UI suites rather than this browser measurement.
 
 ## Release decision
 
-The short deployed creator journey is within budget. Long-export stress, poor-network behavior, and real-device thermal/memory testing remain separate launch gates and must not be inferred from this result.
+The short deployed creator journey is within budget and the constrained-memory three-minute browser export is stable. Poor-network behavior and real-device thermal/memory testing remain separate launch gates and must not be inferred from these results.
