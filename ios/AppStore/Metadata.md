@@ -82,7 +82,7 @@ Version 0.1.0 is an iPhone portrait beta. Build 6 mounts the complete ayahclip.c
 
 - **Version/build:** 0.1.0 (6)
 - **Uploaded:** 18 July 2026
-- **App Store Connect state:** Uploaded; Apple processing for AyahClip Internal
+- **App Store Connect state:** Testing in AyahClip Internal (1 invite)
 - **Internal group:** AyahClip Internal (1 tester, iPhone 14 Pro)
 - **Main bundle ID:** `app.ayahclip.mobile`
 - **Share extension bundle ID:** `app.ayahclip.mobile.share`
