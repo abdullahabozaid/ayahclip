@@ -50,6 +50,11 @@ test("deployed AyahClip completes a real MP4 journey in Google Chrome", async ({
   expect(homepage.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(homepage.headers()["permissions-policy"]).toContain("browsing-topics=()");
 
+  const model = await request.head("/api/asr-model");
+  expect(model.status()).toBe(200);
+  expect(model.headers()["content-type"]).toContain("application/octet-stream");
+  expect(model.headers()["cache-control"]).toContain("immutable");
+
   await page.goto("/import");
   await page.locator('input[type="file"]').setInputFiles({
     name: "production-smoke.wav",

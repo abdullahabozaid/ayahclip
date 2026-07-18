@@ -13,6 +13,7 @@ Date: 2026-07-18
 - Caption requests cap bodies at 12 KB, reject cross-site browser requests, use structured output, set `store: false`, and fall back to reviewed local editorial copy if OpenAI is absent or unavailable.
 - Pexels search, caption generation, telemetry and Stripe checkout now share bounded warm-instance throttling. Cross-site browser requests cannot spend Pexels or caption quota.
 - Checkout validates the exact same origin, normalizes the donation amount, constructs return URLs from the deployment origin, keeps the Stripe key server-only, and never returns payment-provider errors or request identifiers to the public client.
+- Production recognition resolves the reviewed 131,652,337-byte model through a same-origin route. The route rejects upstream size drift, redacts upstream failures, marks the response immutable for browser/CDN caching, and adds `nosniff`; move the asset to CORS-enabled object storage before broad traffic to control bandwidth cost.
 - `e2e/security-boundaries.spec.ts` verifies cross-site Pexels/checkout rejection, oversized telemetry rejection, public filesystem isolation, and public save-to-disk denial. Production smoke tests verify security headers and a real MP4 render in installed Google Chrome.
 
 ## Remaining launch controls

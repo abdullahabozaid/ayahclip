@@ -93,4 +93,6 @@ Application throttles protect a warm function instance. Before spending against 
 
 `/robots.txt` advertises `/sitemap.xml`; the sitemap contains only public, indexable product pages. Browser-local libraries, editing surfaces, diagnostics and thank-you routes publish `noindex`. To connect Google Search Console, set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` to the verification token supplied by Google, redeploy, confirm the verification meta tag, and submit `https://ayahclip.vercel.app/sitemap.xml`. Indexing itself remains Google's decision and can take time.
 
+As of 2026-07-18, the production Vercel project does not contain `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`. The deployed Google readiness suite proves crawl/index metadata, but Search Console ownership and sitemap submission remain an owner action until Google supplies that token.
+
 Browser profiles are not physical phones. Before announcing broad availability, repeat a short import, final-preview, Save Video and camera-roll playback check on current iPhone Safari and Android Chrome hardware. Record the operating-system version, browser version, source format, clip duration, output type and result. Do not call the physical-device gate complete from emulation alone.
