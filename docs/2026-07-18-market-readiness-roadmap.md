@@ -33,6 +33,8 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Account-free browser isolation | Implemented | Three simultaneous production browser contexts retain distinct personal B-roll shelves; the test explicitly does not claim future authenticated tenant isolation |
 | Web performance and sustained export | Implemented, real-device gate pending | Three deployed Chrome journeys pass import, ingestion, Studio transition, playback, timeline-seek and exact-MP4 budgets; a 512 MB-heap Chrome fixture exports a verified 181-second MP4 |
 | Offline local-media export | Implemented | After Studio is loaded, forced network loss does not prevent an imported local WAV from rendering to a verified MP4; network-backed sources remain explicitly out of scope |
+| Damaged and unsupported import recovery | Implemented | The deployed Import screen rejects corrupt WAV and non-media input, keeps creation disabled, and accepts a valid replacement without requiring a reload |
+| Text edge-case export | Implemented | Al-Baqarah 2:282 wraps into a valid 9:16 MP4, Urdu translation canvas calls remain RTL, and absent translation data exports Arabic without placeholder text |
 
 ## Delivery sequence
 
@@ -50,7 +52,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 ### 2. Editor reliability
 
 - Exercise every toolbar, inspector, timeline, keyboard, upload, restore, and export path. Native autosave and Undo/Redo now have direct model/UI coverage; desktop history remains part of this gate.
-- Test long Surahs, long translations, right-to-left text, missing translations, network loss, storage quota, corrupt files, and unsupported codecs.
+- **Partially completed:** long-Surah navigation, Al-Baqarah 2:282 wrapping/export, Urdu RTL rendering, missing translations, forced network loss after Studio load, storage-quota save failure, corrupt audio, unsupported input, and same-session source replacement have direct browser evidence. Throttled first-load behavior remains to be proven explicitly.
 - Verify preview/export parity at TikTok, Reels, Shorts, and landscape sizes.
 - **Completed for browser performance:** enforce deployed budgets for usable import, local ingestion, Studio transition, playback response, timeline seeking, and exact MP4 preview; the 512 MB-heap three-minute export fixture also passes. Keep poor-network and real-device thermal testing as separate gates; see `docs/2026-07-18-performance-budget.md`.
 
