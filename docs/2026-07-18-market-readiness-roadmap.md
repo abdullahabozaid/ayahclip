@@ -36,13 +36,14 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Damaged and unsupported import recovery | Implemented | The deployed Import screen rejects corrupt WAV and non-media input, keeps creation disabled, and accepts a valid replacement without requiring a reload |
 | Text edge-case export | Implemented | Al-Baqarah 2:282 wraps into a valid 9:16 MP4, Urdu translation canvas calls remain RTL, and absent translation data exports Arabic without placeholder text |
 | Typography and glow fidelity | Implemented | Five Arabic modes share one weight contract; fixed-weight Quran faces never synthesize bold; strict export verifies both Quran and selected self-hosted translation faces; Outfit is selectable in both editors; Lora plus white glow is proven in an exact MP4. See `docs/2026-07-18-typography-rendering-audit.md`. |
+| Social format parity | Implemented | The live preview canvas and exact MP4 are verified at the same canonical dimensions for 9:16 (1080×1920), 16:9 (1920×1080), 1:1 (1080×1080), and 4:5 (1080×1350). |
 | Constrained-network first load | Implemented | At 150 ms latency and roughly 1.6 Mbps download, production exposes a usable Import workflow and populated 114-Surah selector in 3.23 seconds against a 12-second gate |
 
 ## Delivery sequence
 
 ### 1. Desktop content and creation breadth
 
-- Replace the EveryAyah-only folder field with a source descriptor and shared preview/export resolver before admitting another provider.
+- **Completed:** reciters use an explicit EveryAyah verse-file or MP3Quran chapter-cue source descriptor with shared, provenance-aware preview and export resolution.
 - Add source health checks, provenance, coverage, CORS, and rights evidence for every enabled recitation.
 - Build searchable English/Arabic reciter selection with recent, favourite, place, style, and timing-capability organization after the resolver is proven.
 - **Completed for the curated starter catalogue:** people-free motion coverage now includes water, waterfall, coast, mountains, trails, clouds, dark drives, architecture, night sky, forest and abstract footage. Keep future additions behind the same provenance, sampled-frame and browser-size gates.
@@ -55,7 +56,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 
 - Exercise every toolbar, inspector, timeline, keyboard, upload, restore, and export path. Native autosave and Undo/Redo now have direct model/UI coverage; desktop history remains part of this gate.
 - **Completed for the enumerated browser edge cases:** long-Surah navigation, Al-Baqarah 2:282 wrapping/export, Urdu RTL rendering, missing translations, constrained first load, forced network loss after Studio load, storage-quota save failure, corrupt audio, unsupported input, and same-session source replacement all have direct browser evidence.
-- Verify preview/export parity at TikTok, Reels, Shorts, and landscape sizes.
+- **Completed:** preview and exact-MP4 dimensions match at 9:16, 16:9, 1:1, and 4:5; `e2e/export-format-parity.spec.ts` guards the canonical output matrix.
 - **Completed for browser performance:** enforce deployed budgets for usable import, local ingestion, Studio transition, playback response, timeline seeking, and exact MP4 preview; the 512 MB-heap three-minute export fixture also passes. Keep poor-network and real-device thermal testing as separate gates; see `docs/2026-07-18-performance-budget.md`.
 
 ### 3. Mobile creation and sharing
