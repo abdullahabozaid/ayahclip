@@ -53,6 +53,7 @@ import {
   startCreatorJourney,
   trackProductEvent,
 } from "@/lib/telemetry";
+import { isSupportedVideoFile } from "@/lib/media-file";
 
 interface RecognitionResult {
   transcript: string;
@@ -384,7 +385,7 @@ export default function ImportPage() {
     setRangeConfirmed(false);
     setBuildError(null);
     if (videoUrl) URL.revokeObjectURL(videoUrl);
-    const isVideo = f.type.startsWith("video/");
+    const isVideo = isSupportedVideoFile(f);
     setVideoUrl(isVideo ? URL.createObjectURL(f) : null);
     setVideoMode("replace-visuals");
     setDecoding(true);

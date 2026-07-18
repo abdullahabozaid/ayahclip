@@ -64,13 +64,19 @@ test("creators can build and reuse a personal B-roll shelf without native dialog
   await expect(page.getByText("Build your B-roll shelf")).toBeVisible();
 
   const input = page.locator('input[type="file"][multiple]');
+  await expect(input).toHaveAttribute(
+    "accept",
+    "image/*,video/mp4,video/webm,video/quicktime,.mov,.m4v",
+  );
   await input.setInputFiles([
     { name: "waterfall.jpg", mimeType: "image/jpeg", buffer: Buffer.from("image") },
     { name: "night-drive.mp4", mimeType: "video/mp4", buffer: Buffer.from("video") },
+    { name: "phone-reciter.MOV", mimeType: "video/quicktime", buffer: Buffer.from("video") },
   ]);
 
   await expect(page.getByRole("button", { name: "Use waterfall.jpg" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Use night-drive.mp4" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use phone-reciter.MOV" })).toBeVisible();
   await page.getByRole("button", { name: "Use waterfall.jpg" }).click();
   await expect(page.getByText("In use")).toBeVisible();
 

@@ -7,6 +7,7 @@ import { VIDEO_PRESETS, VIDEO_CATEGORIES } from "@/lib/video-presets";
 import { StockLibrary } from "./StockLibrary";
 import { BackgroundEditor } from "./BackgroundEditor";
 import { BrollLibrary } from "./BrollLibrary";
+import { isSupportedVideoFile, VIDEO_FILE_ACCEPT } from "@/lib/media-file";
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -280,6 +281,11 @@ function VideoSection({
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!isSupportedVideoFile(file)) {
+      setUploadError("Choose an MP4, WebM, MOV, or M4V video.");
+      e.target.value = "";
+      return;
+    }
     if (file.size > 50 * 1024 * 1024) {
       setUploadError("Choose a video under 50 MB.");
       e.target.value = "";
@@ -343,7 +349,7 @@ function VideoSection({
       <input
         ref={videoInputRef}
         type="file"
-        accept="video/mp4,video/webm"
+        accept={VIDEO_FILE_ACCEPT}
         onChange={handleVideoUpload}
         className="sr-only"
         aria-hidden="true"
@@ -355,7 +361,7 @@ function VideoSection({
         className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-white/10 p-4 transition-colors hover:border-white/20 focus-visible:border-gold"
       >
         <span className="text-lg text-[var(--muted-deep)]">+</span>
-        <span className="text-xs text-[var(--muted)]">Upload video (MP4/WebM, max 50MB)</span>
+        <span className="text-xs text-[var(--muted)]">Upload video (MP4, WebM, MOV or M4V · max 50MB)</span>
       </button>
       {uploadError && <p className="text-xs text-red-400" role="alert">{uploadError}</p>}
     </div>

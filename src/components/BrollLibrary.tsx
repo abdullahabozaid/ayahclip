@@ -8,6 +8,7 @@ import {
   saveBrollAsset,
   type BrollAsset,
 } from "@/lib/broll-library";
+import { isImageFile, isSupportedVideoFile, VIDEO_FILE_ACCEPT } from "@/lib/media-file";
 import type { Background } from "@/types";
 
 interface BrollLibraryProps {
@@ -73,11 +74,11 @@ export function BrollLibrary({ value, onSelect }: BrollLibraryProps) {
     const accepted: File[] = [];
 
     for (const file of Array.from(files)) {
-      const isVideo = file.type.startsWith("video/");
-      const isImage = file.type.startsWith("image/");
+      const isVideo = isSupportedVideoFile(file);
+      const isImage = isImageFile(file);
       const limit = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
       if ((!isVideo && !isImage) || file.size > limit) {
-        setError("Some files were skipped. Use images under 20 MB or MP4/WebM videos under 50 MB.");
+        setError("Some files were skipped. Use images under 20 MB or MP4, WebM, MOV, or M4V videos under 50 MB.");
         continue;
       }
       accepted.push(file);
@@ -123,7 +124,7 @@ export function BrollLibrary({ value, onSelect }: BrollLibraryProps) {
         <input
           ref={inputRef}
           type="file"
-          accept="image/*,video/mp4,video/webm"
+          accept={`image/*,${VIDEO_FILE_ACCEPT}`}
           multiple
           onChange={(event) => void handleFiles(event.target.files)}
           className="sr-only"
