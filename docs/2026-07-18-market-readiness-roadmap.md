@@ -35,6 +35,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Offline local-media export | Implemented | After Studio is loaded, forced network loss does not prevent an imported local WAV from rendering to a verified MP4; network-backed sources remain explicitly out of scope |
 | Damaged and unsupported import recovery | Implemented | The deployed Import screen rejects corrupt WAV and non-media input, keeps creation disabled, and accepts a valid replacement without requiring a reload |
 | Text edge-case export | Implemented | Al-Baqarah 2:282 wraps into a valid 9:16 MP4, Urdu translation canvas calls remain RTL, and absent translation data exports Arabic without placeholder text |
+| Typography and glow fidelity | Implemented | Five Arabic modes share one weight contract; fixed-weight Quran faces never synthesize bold; strict export verifies both Quran and selected self-hosted translation faces; Outfit is selectable in both editors; Lora plus white glow is proven in an exact MP4. See `docs/2026-07-18-typography-rendering-audit.md`. |
 | Constrained-network first load | Implemented | At 150 ms latency and roughly 1.6 Mbps download, production exposes a usable Import workflow and populated 114-Surah selector in 3.23 seconds against a 12-second gate |
 
 ## Delivery sequence
@@ -47,7 +48,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 - **Completed for the curated starter catalogue:** people-free motion coverage now includes water, waterfall, coast, mountains, trails, clouds, dark drives, architecture, night sky, forest and abstract footage. Keep future additions behind the same provenance, sampled-frame and browser-size gates.
 - Add a reviewable ingestion pipeline before exposing dynamic stock search.
 - Add saved style presets for split composition, reciter portrait, rotating B-roll, image sequences, and restrained glow typography.
-- Complete Arabic/English font pairing, weights, wrapping, safe-area, and export-parity tests.
+- **Completed for the shipped font and glow system:** shared Arabic/translation options, genuine Arabic weights, strict font readiness, long-text wrapping, RTL translation, missing-translation fallback and Lora plus white-glow exact-MP4 parity are covered. Continue to test new fonts and treatments against the same gate.
 - Add explicit media provenance and licensing notes where third-party sources are used.
 
 ### 2. Editor reliability

@@ -1,6 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
-type DrawCall = { text: string; direction: CanvasDirection; font: string };
+type DrawCall = {
+  text: string;
+  direction: CanvasDirection;
+  font: string;
+  shadowBlur: number;
+  shadowColor: string;
+};
 
 function toneWav(durationSeconds = 1.2, sampleRate = 16_000): Buffer {
   const sampleCount = Math.round(durationSeconds * sampleRate);
@@ -38,7 +44,13 @@ async function captureCanvasText(page: Page) {
     });
     const original = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (...args) {
-      calls.push({ text: String(args[0]), direction: this.direction, font: this.font });
+      calls.push({
+        text: String(args[0]),
+        direction: this.direction,
+        font: this.font,
+        shadowBlur: this.shadowBlur,
+        shadowColor: this.shadowColor,
+      });
       return original.apply(this, args);
     };
   });
@@ -144,4 +156,29 @@ test("a missing translation falls back to Quran text without painting placeholde
   const calls = await drawCalls(page);
   expect(calls.some((call) => call.text.includes("undefined") || call.text.includes("null"))).toBe(false);
   expect(calls.some((call) => /[\u0600-\u06ff]/.test(call.text))).toBe(true);
+});
+
+test("a selected literary translation face and white glow survive exact MP4 rendering", async ({ page }) => {
+  await captureCanvasText(page);
+  await importClip(page, "51", "1", "2");
+  const settings = page.getByRole("button", { name: "Toggle settings", exact: true });
+  if ((await settings.getAttribute("aria-expanded")) !== "true") await settings.click();
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+
+  const fontSelect = page.getByLabel("Translation Font");
+  await expect(fontSelect.locator('option[value="outfit"]')).toHaveText("Outfit");
+  await fontSelect.selectOption("lora");
+  await page.getByRole("button", { name: "White glow", exact: true }).click();
+  const result = await renderExactMp4(page);
+
+  expect(result.type).toBe("video/mp4");
+  expect(result.size).toBeGreaterThan(10_000);
+  const calls = await drawCalls(page);
+  const translationCalls = calls.filter((call) =>
+    /[A-Za-z]/.test(call.text) && call.font.includes("Lora")
+  );
+  expect(translationCalls.length).toBeGreaterThan(0);
+  expect(translationCalls.some((call) =>
+    call.shadowBlur > 0 && ["#ffffff", "rgb(255, 255, 255)"].includes(call.shadowColor)
+  )).toBe(true);
 });

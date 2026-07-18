@@ -92,4 +92,45 @@ describe("Arabic rendering modes", () => {
       { timeoutMs: 20, throwOnTimeout: true },
     )).rejects.toThrow("selected Quran font did not finish loading");
   });
+
+  it("rejects a missing selected web translation face instead of recording a fallback", async () => {
+    const arabicFace = {} as FontFace;
+    const load = vi.fn()
+      .mockResolvedValueOnce([arabicFace])
+      .mockResolvedValueOnce([]);
+    vi.stubGlobal("document", {
+      fonts: { load },
+      documentElement: {},
+    });
+    vi.stubGlobal("getComputedStyle", () => ({
+      getPropertyValue: (property: string) => property === "--font-lora" ? '"Lora"' : "",
+    }));
+    vi.stubGlobal("window", { setTimeout });
+
+    await expect(ensureFontsReady(
+      "uthmanic-hafs",
+      "lora",
+      400,
+      500,
+      { timeoutMs: 20, throwOnTimeout: true },
+    )).rejects.toThrow("selected translation font did not finish loading");
+
+    expect(load).toHaveBeenNthCalledWith(2, '500 24px "Lora", sans-serif', "Aa");
+  });
+
+  it("allows intentional system translation fallbacks while keeping Quran fonts strict", async () => {
+    const load = vi.fn()
+      .mockResolvedValueOnce([{} as FontFace])
+      .mockResolvedValueOnce([]);
+    vi.stubGlobal("document", { fonts: { load } });
+    vi.stubGlobal("window", { setTimeout });
+
+    await expect(ensureFontsReady(
+      "uthmanic-hafs",
+      "serif",
+      400,
+      400,
+      { timeoutMs: 20, throwOnTimeout: true },
+    )).resolves.toBeUndefined();
+  });
 });

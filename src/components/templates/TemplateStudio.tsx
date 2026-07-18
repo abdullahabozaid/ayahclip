@@ -9,7 +9,6 @@ import {
   DEFAULT_MEDIA_FRAME,
   DEFAULT_MEDIA_TRANSFORM,
   DEFAULT_SPLIT_MASK,
-  TRANSLATION_FONTS,
   ensureFontsReady,
   mediaTransformPositionLabel,
   nudgeMediaTransform,
@@ -53,6 +52,10 @@ import {
   type SampleVerse,
 } from "./TemplatePreview";
 import { trackProductEvent } from "@/lib/telemetry";
+import {
+  ARABIC_FONT_OPTIONS,
+  TRANSLATION_FONT_OPTIONS,
+} from "@/lib/typography-options";
 
 const FAMILY_ICONS: Record<TemplateFamily, TemplateIconName> = {
   ayahclip: "sparkles",
@@ -61,60 +64,6 @@ const FAMILY_ICONS: Record<TemplateFamily, TemplateIconName> = {
   minimal: "minimal",
   broll: "broll",
 };
-
-const FONT_LABELS: Record<string, string> = {
-  serif: "Georgia",
-  "sans-serif": "Arial",
-  outfit: "Outfit",
-  cinzel: "Cinzel",
-  "times-new-roman": "Times New Roman",
-  lora: "Lora",
-  "playfair-display": "Playfair Display",
-};
-
-const ARABIC_FONT_OPTIONS: {
-  value: string;
-  label: string;
-  note: string;
-  family: string;
-  defaultWeight: number;
-}[] = [
-  {
-    value: "qcf",
-    label: "Mushaf QCF",
-    note: "Page-faithful Quran.com glyphs, including the authentic ayah mark.",
-    family: '"UthmanicHafs", serif',
-    defaultWeight: 400,
-  },
-  {
-    value: "uthmanic-hafs",
-    label: "QPC Hafs Unicode",
-    note: "Quran Foundation's source-matched Hafs Unicode text with complete marks.",
-    family: '"UthmanicHafs", serif',
-    defaultWeight: 400,
-  },
-  {
-    value: "amiri-quran",
-    label: "Amiri Quran",
-    note: "A more open, literary Quran face for cinematic captions.",
-    family: 'var(--font-amiri-quran), "UthmanicHafs", serif',
-    defaultWeight: 400,
-  },
-  {
-    value: "scheherazade-new",
-    label: "Scheherazade New",
-    note: "Traditional Naskh with real Regular, Medium, SemiBold, and Bold faces.",
-    family: 'var(--font-scheherazade), "UthmanicHafs", serif',
-    defaultWeight: 600,
-  },
-  {
-    value: "noto-naskh-arabic",
-    label: "Noto Naskh Arabic",
-    note: "Compact multi-weight Naskh for bold social captions with dense harakat.",
-    family: 'var(--font-noto-naskh), "UthmanicHafs", serif',
-    defaultWeight: 600,
-  },
-];
 
 function cloneTemplate(template: TemplateDefinition): TemplateDefinition {
   return {
@@ -948,7 +897,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   <label className="block space-y-2">
                     <span className="text-xs text-[var(--muted)]">Font</span>
                     <select value={draft.settings.translationFont} onChange={(event) => setStyle("translationFont", event.target.value)} className="field min-h-11 w-full px-3 text-sm">
-                      {Object.keys(TRANSLATION_FONTS).map((font) => <option key={font} value={font}>{FONT_LABELS[font] ?? font}</option>)}
+                      {TRANSLATION_FONT_OPTIONS.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
                     </select>
                   </label>
                   <RangeField label="Size" value={draft.settings.translationFontSize} min={9} max={32} suffix="px" onChange={(value) => setStyle("translationFontSize", value)} />

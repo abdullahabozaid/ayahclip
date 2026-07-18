@@ -218,9 +218,21 @@ export async function ensureFontsReady(
     // opts into a longer, strict timeout so it never records the wrong face.
     const timeoutMs = Math.max(1, options.timeoutMs ?? 800);
     const completed = await Promise.race([
-      fontLoads.then(([arabicFaces]) => ({ finished: true as const, arabicFaces })),
-      new Promise<{ finished: false; arabicFaces: FontFace[] }>((resolve) =>
-        window.setTimeout(() => resolve({ finished: false, arabicFaces: [] }), timeoutMs),
+      fontLoads.then(([arabicFaces, translationFaces]) => ({
+        finished: true as const,
+        arabicFaces,
+        translationFaces,
+      })),
+      new Promise<{
+        finished: false;
+        arabicFaces: FontFace[];
+        translationFaces: FontFace[];
+      }>((resolve) =>
+        window.setTimeout(() => resolve({
+          finished: false,
+          arabicFaces: [],
+          translationFaces: [],
+        }), timeoutMs),
       ),
     ]);
     // FontFaceSet.load resolves with an empty list when no matching @font-face
@@ -229,6 +241,11 @@ export async function ensureFontsReady(
     const arabicFaceReady = completed.finished && completed.arabicFaces.length > 0;
     if (!arabicFaceReady && options.throwOnTimeout) {
       throw new Error("The selected Quran font did not finish loading. Please retry the export.");
+    }
+    const translationFaceRequired = Boolean(TRANSLATION_FONT_VARIABLES[translationFont]);
+    const translationFaceReady = completed.finished && completed.translationFaces.length > 0;
+    if (translationFaceRequired && !translationFaceReady && options.throwOnTimeout) {
+      throw new Error("The selected translation font did not finish loading. Please retry the export.");
     }
   } catch (error) {
     if (options.throwOnTimeout) throw error;

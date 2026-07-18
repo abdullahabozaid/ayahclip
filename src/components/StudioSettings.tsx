@@ -17,6 +17,11 @@ import { DEFAULT_MEDIA_FRAME, DEFAULT_SPLIT_MASK, normalizeMediaFrame, normalize
 import { formatClipDuration, importedClipDurationSeconds } from "@/lib/clip-duration";
 import { ArabicFontSpecimen } from "./ArabicFontSpecimen";
 import { SocialCaptionGenerator } from "./SocialCaptionGenerator";
+import {
+  ARABIC_FONT_OPTIONS,
+  FONT_WEIGHT_OPTIONS,
+  TRANSLATION_FONT_OPTIONS,
+} from "@/lib/typography-options";
 
 /** Capture the current preview frame as the clip's dashboard cover thumbnail. */
 function SetCoverButton() {
@@ -50,13 +55,6 @@ function SetCoverButton() {
   );
 }
 
-const WEIGHT_OPTIONS = [
-  { value: 400, label: "Regular" },
-  { value: 500, label: "Medium" },
-  { value: 600, label: "SemiBold" },
-  { value: 700, label: "Bold" },
-];
-
 function WeightControl({
   label,
   value,
@@ -70,7 +68,7 @@ function WeightControl({
     <div>
       <p className="mb-2 text-xs text-[var(--muted)]">{label}</p>
       <div className="flex gap-2">
-        {WEIGHT_OPTIONS.map((w) => (
+        {FONT_WEIGHT_OPTIONS.map((w) => (
           <button
             key={w.value}
             onClick={() => onChange(w.value)}
@@ -88,23 +86,6 @@ function WeightControl({
     </div>
   );
 }
-
-const TRANSLATION_FONT_OPTIONS = [
-  { value: "serif", label: "Georgia (Serif)" },
-  { value: "sans-serif", label: "Arial (Sans)" },
-  { value: "cinzel", label: "Cinzel" },
-  { value: "times-new-roman", label: "Times New Roman" },
-  { value: "lora", label: "Lora" },
-  { value: "playfair-display", label: "Playfair Display" },
-];
-
-const ARABIC_FONT_OPTIONS = [
-  { value: "qcf", label: "Mushaf page", defaultWeight: 400, note: "Exact page glyphs and authentic ayah mark." },
-  { value: "uthmanic-hafs", label: "QPC Hafs Unicode", defaultWeight: 400, note: "Source-matched Quran Foundation Hafs text with complete marks." },
-  { value: "amiri-quran", label: "Amiri Quran", defaultWeight: 400, note: "Open, literary Naskh for cinematic treatments." },
-  { value: "scheherazade-new", label: "Scheherazade", defaultWeight: 600, note: "Traditional Naskh with genuine heavier faces." },
-  { value: "noto-naskh-arabic", label: "Noto Naskh", defaultWeight: 700, note: "Compact, bold Arabic for social captions." },
-];
 
 function Section({
   title,
@@ -918,7 +899,7 @@ export function StudioSettings() {
                 label="Translation Font"
                 value={store.translationFont}
                 onChange={store.setTranslationFont}
-                options={TRANSLATION_FONT_OPTIONS}
+                options={[...TRANSLATION_FONT_OPTIONS]}
               />
               <WeightControl
                 label="Translation Weight"
