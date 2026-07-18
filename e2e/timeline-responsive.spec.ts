@@ -24,7 +24,7 @@ function toneWav(durationSeconds = 6, sampleRate = 16_000): Buffer {
   return wav;
 }
 
-async function openImportedTimeline(page: import("@playwright/test").Page) {
+async function openImportedStudio(page: import("@playwright/test").Page) {
   await page.goto("/import");
   await page.locator('input[type="file"]').setInputFiles({
     name: "phone-timeline.wav",
@@ -38,10 +38,31 @@ async function openImportedTimeline(page: import("@playwright/test").Page) {
   });
   await template.getByRole("button", { name: "Use template" }).click();
   await expect(page).toHaveURL(/\/studio/);
+}
+
+async function openImportedTimeline(page: import("@playwright/test").Page) {
+  await openImportedStudio(page);
   const timelineToggle = page.getByRole("button", { name: "Verse Editor" });
   if ((await timelineToggle.getAttribute("aria-expanded")) === "false") await timelineToggle.click();
   await page.getByRole("button", { name: "Timeline", exact: true }).click();
 }
+
+test("the phone settings drawer has a reliable visible close control", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openImportedStudio(page);
+
+  const settingsToggle = page.getByRole("button", { name: "Toggle settings", exact: true });
+  const settings = page.getByRole("complementary");
+  await expect(settingsToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(settings).toBeVisible();
+
+  const close = settings.getByRole("button", { name: "Close settings", exact: true });
+  await expect(close).toBeVisible();
+  await close.click();
+
+  await expect(settingsToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(settings).not.toBeVisible();
+});
 
 test("the imported timeline remains usable on a phone-sized viewport", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });

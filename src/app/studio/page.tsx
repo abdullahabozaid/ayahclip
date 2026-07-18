@@ -648,7 +648,7 @@ export default function StudioPage() {
         {/* Dim the preview behind the settings drawer on small screens */}
         {settingsOpen && (
           <button
-            aria-label="Close settings"
+            aria-label="Dismiss settings drawer"
             onClick={() => openSettings(false)}
             className="absolute inset-0 z-20 bg-black/50 lg:hidden"
           />
@@ -664,6 +664,20 @@ export default function StudioPage() {
               : "w-0 overflow-hidden border-l-0"
           }`}
         >
+          {settingsOpen && (
+            <div className="sticky top-0 z-10 flex justify-end border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-3 py-2 lg:hidden">
+              <button
+                type="button"
+                onClick={() => openSettings(false)}
+                className="flex h-11 min-w-11 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] transition-colors hover:bg-white/[0.04] hover:text-parchment"
+                aria-label="Close settings"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+          )}
           <StudioSettings />
         </aside>
       </div>

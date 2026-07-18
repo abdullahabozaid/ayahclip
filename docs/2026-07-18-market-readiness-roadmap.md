@@ -17,7 +17,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 
 | Area | Status | Evidence |
 | --- | --- | --- |
-| Desktop editor shell | Implemented, continuing polish | Compact preview/inspector/timeline architecture and browser QA |
+| Desktop editor shell | Implemented, continuing polish | Compact preview/inspector/timeline architecture and browser QA; the phone inspector now has a visible 44px close control inside the drawer, distinct from its backdrop dismissal target, so closing it cannot accidentally activate a preset underneath |
 | Quran navigation | Implemented, polished | Long Surahs use passage-first selection; individual ayahs stay bounded; mobile preview precedes the grid; Browse and Surah requests expose an inline retry instead of leaving permanent skeletons, and invalid Surah routes avoid unnecessary API calls. |
 | Reciter breadth | Implemented, search UX pending | 62 verified recordings: 46 EveryAyah verse files plus 16 complete MP3Quran timed reads; 248/248 source probes and exact-duration browser export matrix |
 | Word-level timing | Implemented for supported subset | 12 Quran.com timing-capable recitations, labelled honestly |
