@@ -11,6 +11,46 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(zip(segments, segments.dropFirst()).allSatisfy { $0.end <= $1.start })
     }
 
+    func testTimelineResolvesDifferentVerseCaptions() throws {
+        let project = ClipProject.starter
+        let first = try XCTUnwrap(project.captions(at: 1))
+        let second = try XCTUnwrap(project.captions(at: 6))
+        let third = try XCTUnwrap(project.captions(at: 12))
+
+        XCTAssertNotEqual(first.arabic, second.arabic)
+        XCTAssertNotEqual(second.arabic, third.arabic)
+        XCTAssertTrue(first.translation.hasPrefix("Blessed is He"))
+        XCTAssertTrue(second.translation.hasPrefix("He who created death"))
+        XCTAssertNil(project.captions(at: 16.01))
+    }
+
+    func testVerseSegmentsFitImportedMediaDuration() throws {
+        var project = ClipProject.starter
+        project.fitSegments(to: 32)
+
+        XCTAssertEqual(try XCTUnwrap(project.segments.first?.start), 0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(project.segments.first?.end), 10, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(project.segments.last?.end), 32, accuracy: 0.001)
+        XCTAssertEqual(project.captions(at: 31)?.translation, project.segments.last?.translation)
+    }
+
+    func testTimelineCanSplitAndRemoveVerseSegments() throws {
+        var project = ClipProject.starter
+        let firstID = try XCTUnwrap(project.segments.first?.id)
+        let newID = try XCTUnwrap(project.splitSegment(id: firstID, at: 2.5))
+
+        XCTAssertEqual(project.segments.count, 4)
+        XCTAssertEqual(project.segments[0].end, 2.5, accuracy: 0.001)
+        XCTAssertEqual(project.segments[1].start, 2.5, accuracy: 0.001)
+        XCTAssertEqual(project.segments[1].arabic, "")
+        XCTAssertEqual(project.segments.map(\.verse), [1, 2, 3, 4])
+
+        XCTAssertNotNil(project.removeSegment(id: newID))
+        XCTAssertEqual(project.segments.count, 3)
+        XCTAssertEqual(project.segments[0].end, 5, accuracy: 0.001)
+        XCTAssertEqual(project.segments.map(\.verse), [1, 2, 3])
+    }
+
     func testEditingActiveProjectIsImmediateAndReversible() {
         let model = AppModel()
         model.createProject()

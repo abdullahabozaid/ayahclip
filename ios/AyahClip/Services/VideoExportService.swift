@@ -35,8 +35,22 @@ enum VideoExportService {
 
         let renderSize = outputSize
         let renderRect = CGRect(origin: .zero, size: renderSize)
-        let captionPlate = makeCaptionPlate(project: project, renderSize: renderSize)
-        let captionImage = captionPlate.map(CIImage.init(cgImage:))
+        let timedCaptions = project.segments.compactMap { segment -> (Range<Double>, CIImage)? in
+            guard let content = project.captions(at: segment.start) else { return nil }
+            guard let plate = makeCaptionPlate(
+                project: project,
+                content: content,
+                renderSize: renderSize
+            ) else { return nil }
+            return (segment.start..<segment.end, CIImage(cgImage: plate))
+        }
+        let untimedCaption = project.segments.isEmpty
+            ? makeCaptionPlate(
+                project: project,
+                content: CaptionContent(arabic: project.arabic, translation: project.translation),
+                renderSize: renderSize
+            ).map(CIImage.init(cgImage:))
+            : nil
 
         // Core Image is used for the production compositor because it renders the
         // same pixels in previews, tests and exports. Core Animation text layers
@@ -54,6 +68,9 @@ enum VideoExportService {
                     y: renderRect.midY - scaledExtent.midY
                 ))
                 let video = centered.cropped(to: renderRect)
+                let seconds = request.compositionTime.seconds
+                let captionImage = timedCaptions.first(where: { $0.0.contains(seconds) })?.1
+                    ?? untimedCaption
                 let finished = captionImage?.composited(over: video).cropped(to: renderRect) ?? video
                 request.finish(with: finished, context: nil)
             }
@@ -85,7 +102,11 @@ enum VideoExportService {
         return destination
     }
 
-    private static func makeCaptionPlate(project: ClipProject, renderSize: CGSize) -> CGImage? {
+    private static func makeCaptionPlate(
+        project: ClipProject,
+        content: CaptionContent,
+        renderSize: CGSize
+    ) -> CGImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -140,7 +161,7 @@ enum VideoExportService {
             shadow.shadowBlurRadius = project.captionStyle == .softGlow ? 12 * canvasScale : 3 * canvasScale
             shadow.shadowOffset = CGSize(width: 0, height: canvasScale)
 
-            (project.arabic as NSString).draw(
+            (content.arabic as NSString).draw(
                 with: arabicRect,
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: [
@@ -158,7 +179,7 @@ enum VideoExportService {
             let translationRect = translationBaseRect.applying(
                 CGAffineTransform(scaleX: canvasScale, y: canvasScale)
             )
-            (project.translation as NSString).draw(
+            (content.translation as NSString).draw(
                 with: translationRect,
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
                 attributes: [

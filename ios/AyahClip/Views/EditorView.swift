@@ -30,6 +30,7 @@ struct EditorView: View {
             selectedSegmentID = selectedSegmentID ?? project.segments.first?.id
         }
         .onChange(of: model.importedMediaURL) { _, _ in preparePlayer() }
+        .task { await trackPlayback() }
         .sheet(item: $presentedTool) { tool in
             EditorToolPanel(
                 tool: tool,
@@ -139,7 +140,7 @@ struct EditorView: View {
                     Spacer()
                 }
             }
-            CaptionPreviewOverlay(project: project)
+            CaptionPreviewOverlay(project: project, time: duration * playhead)
         }
         .background(.black)
     }
@@ -169,7 +170,11 @@ struct EditorView: View {
                 player.seek(to: CMTime(seconds: duration * playhead, preferredTimescale: 600))
             }
 
-            TimelineStrip(playhead: playhead, selectedSegmentID: $selectedSegmentID)
+            TimelineStrip(
+                playhead: $playhead,
+                selectedSegmentID: $selectedSegmentID,
+                onSeek: seekPlayer
+            )
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -229,6 +234,27 @@ struct EditorView: View {
             player.play()
         }
         isPlaying.toggle()
+    }
+
+    private func seekPlayer() {
+        player?.seek(to: CMTime(seconds: duration * playhead, preferredTimescale: 600))
+    }
+
+    private func trackPlayback() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(50))
+            guard isPlaying, let player else { continue }
+            let current = player.currentTime().seconds
+            guard current.isFinite, duration > 0 else { continue }
+            playhead = min(1, max(0, current / duration))
+            selectedSegmentID = project.segments.first(where: {
+                current >= $0.start && current < $0.end
+            })?.id ?? selectedSegmentID
+            if current >= duration - 0.04 {
+                player.pause()
+                isPlaying = false
+            }
+        }
     }
 
     private func timecode(_ seconds: Double) -> String {
@@ -325,6 +351,7 @@ private final class PlayerSurfaceView: UIView {
 
 private struct CaptionPreviewOverlay: View {
     let project: ClipProject
+    let time: Double
 
     var body: some View {
         GeometryReader { proxy in
@@ -333,7 +360,7 @@ private struct CaptionPreviewOverlay: View {
             ZStack(alignment: .topLeading) {
                 backdrop
 
-                Text(project.arabic)
+                Text(project.captions(at: time)?.arabic ?? "")
                     .font(.custom(
                         "UthmanicHafs1Ver18",
                         size: project.arabicSize * 2.4 * scale * (project.layout == .sideFade ? 0.72 : 1)
@@ -346,7 +373,7 @@ private struct CaptionPreviewOverlay: View {
                     .frame(width: rects.arabic.width * scale, height: rects.arabic.height * scale, alignment: .top)
                     .position(x: rects.arabic.midX * scale, y: rects.arabic.midY * scale)
 
-                Text(project.translation)
+                Text(project.captions(at: time)?.translation ?? "")
                     .font(.system(
                         size: project.translationSize * 2.25 * scale * (project.layout == .sideFade ? 0.84 : 1),
                         weight: .medium
@@ -404,8 +431,9 @@ private struct CaptionPreviewOverlay: View {
 
 private struct TimelineStrip: View {
     @Environment(AppModel.self) private var model
-    let playhead: Double
+    @Binding var playhead: Double
     @Binding var selectedSegmentID: UUID?
+    let onSeek: () -> Void
 
     var body: some View {
         let project = model.activeProject ?? .starter
@@ -414,7 +442,12 @@ private struct TimelineStrip: View {
                 HStack(spacing: 3) {
                     ForEach(project.segments) { segment in
                         let isSelected = segment.id == selectedSegmentID
-                        Button { selectedSegmentID = segment.id } label: {
+                        Button {
+                            selectedSegmentID = segment.id
+                            let total = max(0.001, project.segments.map(\.end).max() ?? 1)
+                            playhead = min(1, max(0, segment.start / total))
+                            onSeek()
+                        } label: {
                             ZStack(alignment: .bottomLeading) {
                                 LinearGradient(
                                     colors: [AyahTheme.surfaceRaised, AyahTheme.ink],
@@ -430,6 +463,13 @@ private struct TimelineStrip: View {
                                 RoundedRectangle(cornerRadius: 4)
                                     .stroke(isSelected ? AyahTheme.gold : .white.opacity(0.08), lineWidth: isSelected ? 1.5 : 0.5)
                             }
+                            .frame(
+                                width: max(
+                                    34,
+                                    proxy.size.width * (segment.end - segment.start)
+                                        / max(0.001, project.segments.map(\.end).max() ?? 1)
+                                )
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -469,7 +509,7 @@ private struct EditorToolPanel: View {
             case .edit:
                 TimelineEditor(playhead: playhead, selectedSegmentID: $selectedSegmentID)
             case .captions:
-                CaptionControls { showCaptionEditor = true }
+                CaptionControls(selectedSegmentID: $selectedSegmentID) { showCaptionEditor = true }
             case .style:
                 StyleControls()
             case .media:
@@ -485,7 +525,7 @@ private struct EditorToolPanel: View {
         .presentationDragIndicator(.visible)
         .presentationBackground(AyahTheme.surface)
         .sheet(isPresented: $showCaptionEditor) {
-            CaptionEditorSheet()
+            CaptionEditorSheet(selectedSegmentID: $selectedSegmentID)
                 .environment(model)
         }
     }
@@ -502,7 +542,7 @@ private struct EditorToolPanel: View {
 
     private var panelHeight: CGFloat {
         switch tool {
-        case .edit: 230
+        case .edit: 245
         case .captions: 250
         case .style: 285
         case .media: 190
@@ -535,6 +575,14 @@ private struct TimelineEditor: View {
                                             .font(.caption2.weight(.bold))
                                             .foregroundStyle(isSelected ? AyahTheme.goldSoft : AyahTheme.muted)
                                     }
+                                    .frame(
+                                        width: max(
+                                            38,
+                                            (proxy.size.width - CGFloat(max(0, project.segments.count - 1)) * 4)
+                                                * (segment.end - segment.start)
+                                                / max(0.001, project.segments.map(\.end).max() ?? 1)
+                                        )
+                                    )
                             }
                             .buttonStyle(.plain)
                         }
@@ -548,22 +596,37 @@ private struct TimelineEditor: View {
             .frame(height: 50)
 
             if let selected {
-                HStack(spacing: 7) {
-                    Text("Verse \(selected.verse)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AyahTheme.parchment)
-                    Spacer()
-                    BoundaryButton(label: "Start −", accessibility: "Move start earlier") {
-                        adjust(segment: selected, edge: .start, delta: -0.1)
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Verse \(selected.verse)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AyahTheme.parchment)
+                        Text("\(timecode(selected.start))–\(timecode(selected.end))")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(AyahTheme.muted)
+                        Spacer()
+                        Button("Split at playhead") { split(selected, project: project) }
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(AyahTheme.goldSoft)
+                        Button(role: .destructive) { remove(selected) } label: {
+                            Image(systemName: "trash")
+                        }
+                        .disabled(project.segments.count <= 1)
                     }
-                    BoundaryButton(label: "Start +", accessibility: "Move start later") {
-                        adjust(segment: selected, edge: .start, delta: 0.1)
-                    }
-                    BoundaryButton(label: "End −", accessibility: "Move end earlier") {
-                        adjust(segment: selected, edge: .end, delta: -0.1)
-                    }
-                    BoundaryButton(label: "End +", accessibility: "Move end later") {
-                        adjust(segment: selected, edge: .end, delta: 0.1)
+                    HStack(spacing: 7) {
+                        BoundaryButton(label: "Start −", accessibility: "Move start earlier") {
+                            adjust(segment: selected, edge: .start, delta: -0.1)
+                        }
+                        BoundaryButton(label: "Start +", accessibility: "Move start later") {
+                            adjust(segment: selected, edge: .start, delta: 0.1)
+                        }
+                        Spacer()
+                        BoundaryButton(label: "End −", accessibility: "Move end earlier") {
+                            adjust(segment: selected, edge: .end, delta: -0.1)
+                        }
+                        BoundaryButton(label: "End +", accessibility: "Move end later") {
+                            adjust(segment: selected, edge: .end, delta: 0.1)
+                        }
                     }
                 }
             }
@@ -571,6 +634,24 @@ private struct TimelineEditor: View {
     }
 
     private enum SegmentEdge { case start, end }
+
+    private func timecode(_ seconds: Double) -> String {
+        String(format: "%02d:%02d.%01d", Int(seconds) / 60, Int(seconds) % 60, Int(seconds * 10) % 10)
+    }
+
+    private func split(_ segment: VerseSegment, project: ClipProject) {
+        let total = project.segments.map(\.end).max() ?? 0
+        let splitTime = total * playhead
+        var newID: UUID?
+        model.updateActive { newID = $0.splitSegment(id: segment.id, at: splitTime) }
+        if let newID { selectedSegmentID = newID }
+    }
+
+    private func remove(_ segment: VerseSegment) {
+        var nextID: UUID?
+        model.updateActive { nextID = $0.removeSegment(id: segment.id) }
+        selectedSegmentID = nextID
+    }
 
     private func adjust(segment: VerseSegment, edge: SegmentEdge, delta: Double) {
         model.updateActive { project in
@@ -614,6 +695,7 @@ private struct BoundaryButton: View {
 
 private struct CaptionControls: View {
     @Environment(AppModel.self) private var model
+    @Binding var selectedSegmentID: UUID?
     let onEdit: () -> Void
 
     var body: some View {
@@ -641,8 +723,8 @@ private struct CaptionControls: View {
             }
             Button(action: onEdit) {
                 HStack {
-                    Text("Edit text").font(.caption.weight(.medium)).foregroundStyle(AyahTheme.parchment)
-                    Text(project.translation).lineLimit(1).font(.caption).foregroundStyle(AyahTheme.parchment)
+                    Text("Edit verse").font(.caption.weight(.medium)).foregroundStyle(AyahTheme.parchment)
+                    Text(selectedCaption(in: project)).lineLimit(1).font(.caption).foregroundStyle(AyahTheme.parchment)
                     Spacer()
                     Image(systemName: "chevron.right").foregroundStyle(AyahTheme.muted)
                 }
@@ -651,11 +733,19 @@ private struct CaptionControls: View {
             .frame(minHeight: 38)
         }
     }
+
+    private func selectedCaption(in project: ClipProject) -> String {
+        let segment = project.segments.first(where: { $0.id == selectedSegmentID })
+            ?? project.segments.first
+        guard let text = segment?.translation else { return project.translation }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Add translation" : text
+    }
 }
 
 private struct CaptionEditorSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Binding var selectedSegmentID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -665,16 +755,16 @@ private struct CaptionEditorSheet: View {
                     TextField("Surah", text: field(\.surahName))
                     TextField("Verse range", text: field(\.verseRange))
                 }
-                Section("Arabic") {
-                    TextEditor(text: field(\.arabic))
+                Section(selectedSegmentTitle) {
+                    TextEditor(text: segmentField(\.arabic, fallback: \.arabic))
                         .font(.custom("UthmanicHafs1Ver18", size: 28))
                         .multilineTextAlignment(.trailing)
                         .environment(\.layoutDirection, .rightToLeft)
                         .frame(minHeight: 130)
                         .accessibilityLabel("Arabic caption")
                 }
-                Section("Translation") {
-                    TextEditor(text: field(\.translation))
+                Section("English translation") {
+                    TextEditor(text: segmentField(\.translation, fallback: \.translation))
                         .frame(minHeight: 110)
                         .accessibilityLabel("English translation")
                 }
@@ -700,6 +790,34 @@ private struct CaptionEditorSheet: View {
         Binding(
             get: { (model.activeProject ?? .starter)[keyPath: keyPath] },
             set: { value in model.updateActive { $0[keyPath: keyPath] = value } }
+        )
+    }
+
+    private var selectedSegmentTitle: String {
+        guard let project = model.activeProject,
+              let segment = project.segments.first(where: { $0.id == selectedSegmentID })
+                ?? project.segments.first else { return "Arabic" }
+        return "Verse \(segment.verse) Arabic"
+    }
+
+    private func segmentField(
+        _ keyPath: WritableKeyPath<VerseSegment, String?>,
+        fallback: KeyPath<ClipProject, String>
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                guard let project = model.activeProject,
+                      let segment = project.segments.first(where: { $0.id == selectedSegmentID })
+                        ?? project.segments.first else { return "" }
+                return segment[keyPath: keyPath] ?? project[keyPath: fallback]
+            },
+            set: { value in
+                model.updateActive { project in
+                    guard let index = project.segments.firstIndex(where: { $0.id == selectedSegmentID })
+                        ?? project.segments.indices.first else { return }
+                    project.segments[index][keyPath: keyPath] = value
+                }
+            }
         )
     }
 }

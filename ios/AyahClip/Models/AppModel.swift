@@ -98,7 +98,12 @@ final class AppModel {
             try FileManager.default.copyItem(at: sourceURL, to: destination)
             importedMediaURL = destination
             if activeProject == nil { activeProject = .starter }
-            updateActive { $0.mediaFilename = destination.lastPathComponent }
+            let asset = AVURLAsset(url: destination)
+            let duration = try await asset.load(.duration).seconds
+            updateActive {
+                $0.mediaFilename = destination.lastPathComponent
+                $0.fitSegments(to: duration)
+            }
             notice = "Media imported locally"
         } catch {
             notice = "Could not import that file: \(error.localizedDescription)"

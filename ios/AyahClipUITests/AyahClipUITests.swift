@@ -86,4 +86,27 @@ final class AyahClipUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+
+    @MainActor
+    func testTimelineControlsAreFunctionalAndFocused() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ayahclip.onboarding.complete", "true"]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["New Quran clip"].waitForExistence(timeout: 5))
+        app.buttons["New Quran clip"].tap()
+        XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 3))
+        app.buttons["Edit"].tap()
+
+        XCTAssertTrue(app.buttons["Split at playhead"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Move start earlier"].exists)
+        XCTAssertTrue(app.buttons["Move end later"].exists)
+        app.buttons["Split at playhead"].tap()
+        XCTAssertTrue(app.staticTexts["Verse 2"].waitForExistence(timeout: 2))
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Functional verse timeline"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
 }
