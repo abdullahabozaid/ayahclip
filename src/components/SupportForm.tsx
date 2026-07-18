@@ -9,7 +9,7 @@ import {
   type Frequency,
 } from "@/lib/support";
 
-export function SupportForm() {
+export function SupportForm({ checkoutAvailable }: { checkoutAvailable: boolean }) {
   const [frequency, setFrequency] = useState<Frequency>("one-time");
   const [amount, setAmount] = useState<string>("5");
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export function SupportForm() {
       : `Support with ${formatPence(parsed.pence)}`;
 
   async function donate() {
-    if (!parsed.ok) return;
+    if (!checkoutAvailable || !parsed.ok) return;
     setLoading(true);
     setError(null);
     try {
@@ -46,6 +46,25 @@ export function SupportForm() {
       setError("Network error. Please try again.");
     }
     setLoading(false);
+  }
+
+  if (!checkoutAvailable) {
+    return (
+      <section className="panel p-7 text-center sm:p-9" aria-labelledby="checkout-status">
+        <div
+          aria-hidden="true"
+          className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-gold-soft"
+        >
+          <LockGlyph />
+        </div>
+        <h2 id="checkout-status" className="font-display mt-5 text-2xl text-parchment">
+          Checkout is not open yet
+        </h2>
+        <p className="mx-auto mt-3 max-w-[34ch] text-sm leading-relaxed text-[var(--muted)]">
+          AyahClip remains free. Secure support checkout will appear here once it is enabled.
+        </p>
+      </section>
+    );
   }
 
   return (

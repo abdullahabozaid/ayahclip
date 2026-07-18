@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SupportForm } from "@/components/SupportForm";
+import { isStripeConfigured } from "@/lib/stripe";
 
 export const metadata: Metadata = {
   title: "Support AyahClip",
@@ -24,6 +25,8 @@ const SUPPORT_GOES: { title: string; body: string }[] = [
 ];
 
 export default function SupportPage() {
+  const checkoutAvailable = isStripeConfigured();
+
   return (
     <main className="bg-mihrab-still">
       <div className="mx-auto max-w-2xl px-5 pb-24 pt-16 sm:pt-24">
@@ -37,14 +40,15 @@ export default function SupportPage() {
           </h1>
           <p className="mx-auto mt-6 max-w-[52ch] text-pretty text-lg leading-relaxed text-[var(--muted)]">
             AyahClip is free to use. No ads, no paywalls, no account, no limit on
-            what you make. If it has helped you share the words of the Quran, you
-            can support the work behind it.
+            what you make. {checkoutAvailable
+              ? "If it has helped you share the words of the Quran, you can support the work behind it."
+              : "A secure way to support the work is being prepared."}
           </p>
         </header>
 
         {/* Donation form */}
         <div className="rise mx-auto mt-12 max-w-md" style={{ animationDelay: "80ms" }}>
-          <SupportForm />
+          <SupportForm checkoutAvailable={checkoutAvailable} />
         </div>
 
         {/* Where it goes */}

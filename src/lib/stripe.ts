@@ -7,8 +7,8 @@
 // back to a friendly "not configured" response, so the page still renders.
 //
 // Server-only by construction: STRIPE_SECRET_KEY has no NEXT_PUBLIC_ prefix, so
-// it is never bundled to the client, and this module is imported only by the
-// checkout route handler.
+// it is never bundled to the client. This module is imported by the checkout
+// route handler and the Support page's Server Component.
 
 const STRIPE_API = "https://api.stripe.com/v1/checkout/sessions";
 
