@@ -718,16 +718,7 @@ export default function ImportPage() {
             )}
             {socialError && <p role="alert" className="mt-2 text-xs leading-4 text-red-300">{socialError}</p>}
             <p className="mt-2 hidden text-xs leading-4 text-[var(--muted-deep)] sm:block">
-              Private and restricted videos are not supported. For your own restricted upload, download it in{" "}
-              <a
-                href="https://studio.youtube.com/"
-                target="_blank"
-                rel="noreferrer"
-                className="text-gold-soft underline decoration-gold/40 underline-offset-2 hover:text-parchment"
-              >
-                YouTube Studio
-              </a>{" "}
-              and add the file below.
+              Public links import directly. AyahClip trims only your selected range and keeps the video editable in Studio.
             </p>
           </div>
           {/* Defensive uploader: explicit ref + button.click() — iOS WebKit

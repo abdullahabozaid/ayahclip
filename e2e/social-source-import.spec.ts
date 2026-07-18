@@ -29,6 +29,30 @@ test("YouTube source imports require a bounded segment and ownership confirmatio
   });
 });
 
+test("validation mistakes do not consume the resolver quota", async ({ request }) => {
+  const headers = { "x-forwarded-for": "203.0.113.77" };
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const response = await request.post("/api/social-download", {
+      headers,
+      data: { url: `https://example.com/not-a-source/${attempt}` },
+    });
+    expect(response.status()).toBe(400);
+  }
+
+  const rightsPrompt = await request.post("/api/social-download", {
+    headers,
+    data: {
+      url: "https://youtu.be/owned-video",
+      startSeconds: 0,
+      endSeconds: 60,
+    },
+  });
+  expect(rightsPrompt.status()).toBe(400);
+  await expect(rightsPrompt.json()).resolves.toMatchObject({
+    error: expect.stringContaining("Confirm that you own"),
+  });
+});
+
 test("desktop link import reveals precise YouTube segment controls", async ({ page }) => {
   await page.goto("/import");
   const linkField = page.getByLabel("Import from a link");

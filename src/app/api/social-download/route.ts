@@ -10,6 +10,7 @@ import {
   youtubeRangeError,
   type SourcePlatform,
 } from "@/lib/source-link";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/server-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +18,11 @@ export const dynamic = "force-dynamic";
 const execFileAsync = promisify(execFile);
 const MAX_FILE_BYTES = 750 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 300_000;
-const RATE_WINDOW_MS = 10 * 60_000;
-const RATE_LIMIT = 6;
-const requestWindows = new Map<string, number[]>();
+const SOURCE_IMPORT_RATE_LIMIT = {
+  namespace: "source-import",
+  limit: 12,
+  windowMs: 10 * 60_000,
+};
 function downloadErrorMessage(stderr: string, platform: SourcePlatform): string {
   const lower = stderr.toLowerCase();
   if (lower.includes("login") || lower.includes("private") || lower.includes("not available")) {
@@ -77,32 +80,7 @@ export function buildSourceDownloadArgs({
   return args;
 }
 
-function isRateLimited(request: Request): boolean {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const key = forwarded || request.headers.get("x-real-ip") || "unknown";
-  const now = Date.now();
-  const recent = (requestWindows.get(key) ?? []).filter((time) => now - time < RATE_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT) {
-    requestWindows.set(key, recent);
-    return true;
-  }
-  recent.push(now);
-  requestWindows.set(key, recent);
-  if (requestWindows.size > 2_000) {
-    for (const [candidate, times] of requestWindows) {
-      if (times.every((time) => now - time >= RATE_WINDOW_MS)) requestWindows.delete(candidate);
-    }
-  }
-  return false;
-}
-
 export async function POST(request: Request) {
-  if (isRateLimited(request)) {
-    return Response.json(
-      { error: "Too many link imports. Wait a few minutes and try again." },
-      { status: 429, headers: { "Retry-After": "600" } },
-    );
-  }
   let body: unknown;
   try {
     body = await request.json();
@@ -134,6 +112,18 @@ export async function POST(request: Request) {
     endSeconds = typeof input.endSeconds === "number" ? input.endSeconds : NaN;
     const rangeError = youtubeRangeError(startSeconds, endSeconds);
     if (rangeError) return Response.json({ error: rangeError }, { status: 400 });
+  }
+
+  // Only a validated request that is about to start yt-dlp consumes quota.
+  // Typos, rights prompts, malformed timestamps, and API readiness probes must
+  // not lock a creator out of the real import they are trying to make.
+  const rateLimit = checkRateLimit(request, SOURCE_IMPORT_RATE_LIMIT);
+  if (!rateLimit.allowed) {
+    const minutes = Math.max(1, Math.ceil(rateLimit.retryAfterSeconds / 60));
+    return Response.json(
+      { error: `Too many completed import attempts from this connection. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` },
+      { status: 429, headers: rateLimitHeaders(rateLimit) },
+    );
   }
 
   const workDirectory = await mkdtemp(join(tmpdir(), "ayahclip-social-"));
