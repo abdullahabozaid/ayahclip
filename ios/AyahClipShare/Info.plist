@@ -20,6 +20,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
@@ -27,6 +29,8 @@
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>8</integer>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
 				<integer>8</integer>
 				<key>NSExtensionActivationSupportsText</key>
 				<true/>

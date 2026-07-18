@@ -5,6 +5,7 @@ struct ImportView: View {
     @Environment(AppModel.self) private var model
     @Binding var selections: [PhotosPickerItem]
     @Binding var showFileImporter: Bool
+    let cleanWatermark: () -> Void
 
     var body: some View {
         @Bindable var model = model
@@ -21,11 +22,26 @@ struct ImportView: View {
                 }
 
                 VStack(spacing: 12) {
-                    PhotosPicker(selection: $selections, maxSelectionCount: 8, matching: .videos) {
-                        ImportAction(title: "Choose videos", detail: "Select up to 8 original or B-roll clips", icon: "photo.on.rectangle")
+                    PhotosPicker(
+                        selection: $selections,
+                        maxSelectionCount: 8,
+                        matching: .any(of: [.images, .videos])
+                    ) {
+                        ImportAction(
+                            title: "Choose photos or videos",
+                            detail: "Select up to 8 original visuals or B-roll items",
+                            icon: "photo.on.rectangle"
+                        )
                     }
                     Button { showFileImporter = true } label: {
-                        ImportAction(title: "Browse Files", detail: "Recitation audio plus B-roll videos", icon: "folder")
+                        ImportAction(title: "Browse Files", detail: "Recitation audio, photos, and videos", icon: "folder")
+                    }
+                    Button(action: cleanWatermark) {
+                        ImportAction(
+                            title: "Clean a watermark",
+                            detail: "For videos you own · processed on device",
+                            icon: "eraser.line.dashed"
+                        )
                     }
                 }
                 .buttonStyle(.plain)
@@ -50,7 +66,7 @@ struct ImportView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(AyahTheme.gold)
                         .foregroundStyle(AyahTheme.inkDeep)
-                    Text("AyahClip does not download other creators’ posts or remove platform watermarks. Use the original file you own, then export a clean edit.")
+                    Text("Links are references only. AyahClip never downloads another creator’s post. For media you own, use Clean a watermark before editing.")
                         .font(.caption)
                         .foregroundStyle(AyahTheme.muted)
                         .fixedSize(horizontal: false, vertical: true)

@@ -18,11 +18,11 @@ Downloaded or shared files live outside AyahClip and must be deleted from their 
 The recoverable service assets are different:
 
 - source code and release history are preserved in GitHub;
-- Vercel retains immutable deployments that can be promoted for a rollback;
+- Git history and versioned container builds provide immutable rollback inputs;
 - reviewed stock-media and reciter manifests preserve provenance and admission decisions; and
 - scheduled reciter-source reports are retained as GitHub Actions artifacts for 30 days.
 
-Vercel Runtime Logs are operational telemetry, not a user-project backup. Their retention is controlled by the hosting plan. Do not export or retain journey-level logs longer than necessary for an active investigation.
+Docker runtime logs are operational telemetry, not a user-project backup. Rotation is capped by `docker-compose.production.yml`. Do not export or retain journey-level logs longer than necessary for an active investigation.
 
 ## Severity and response targets
 
@@ -39,8 +39,8 @@ The product owner or current release operator owns incident command. One person 
 1. Record the UTC start time, affected route or workflow, deployed commit, browser/device class, and fixed error category. Do not request private media, unpublished links, file names, Quran transcripts, or credentials.
 2. Reproduce with a non-private fixture. Check the production smoke, Google Chrome readiness, security-boundary, and reciter-source gates that match the symptom.
 3. Decide whether the fault is release-wide, browser-specific, or an upstream provider failure.
-4. For a release-wide fault, promote the last verified Vercel production deployment. For an isolated provider fault, disable or hide only that provider or recording; never silently substitute a different reciter.
-5. For suspected secret exposure, revoke and rotate the credential, review Vercel environment access, and redeploy before restoring the feature.
+4. For a release-wide fault, deploy the last verified git revision using the same recorded environment and container recipe. For an isolated provider fault, disable or hide only that provider or recording; never silently substitute a different reciter.
+5. For suspected secret exposure, revoke and rotate the credential, review VPS and environment-file access, and redeploy before restoring the feature.
 6. Verify the repaired path in production with the same regression test and a fresh browser session. Quran text/audio incidents also require a human verse-reference check before reopening.
 
 Do not debug by asking a creator to upload their project. The `/diagnostics` report is local and contains only coarse environment and capability information; the creator must review it before deliberately posting it through the public support form.
@@ -48,7 +48,7 @@ Do not debug by asking a creator to upload their project. The `/diagnostics` rep
 ## Rollback procedure
 
 1. Identify the most recent production deployment that passed the release gates in [`launch-operations.md`](./launch-operations.md).
-2. Promote that deployment in Vercel rather than rebuilding an older commit with newer dependencies or environment values.
+2. Check out that exact git revision on the VPS and rebuild with the same recorded environment values; do not mix an old source revision with newly changed dependencies or configuration.
 3. Confirm `/`, `/import`, `/studio`, `/privacy`, and `/support` load over HTTPS with the expected security headers.
 4. Run the deployed production smoke and one exact MP4 render in installed Google Chrome.
 5. Record the failed and restored deployment IDs and open a regression issue before resuming feature work.
@@ -67,7 +67,7 @@ Before closing an incident:
 - confirm any temporary provider disablement is still visible in the source manifest; and
 - rotate secrets again if their handling remains uncertain.
 
-Run a rollback and restore drill before broad launch and at least quarterly afterward. The drill must prove a previous Vercel deployment can be promoted and that the production smoke, security headers, reciter-source health, and exact MP4 export recover. It must not use or copy a real creator project.
+Run a rollback and restore drill before broad launch and at least quarterly afterward. The drill must prove a previous verified revision can be deployed through the VPS container workflow and that the production smoke, security headers, reciter-source health, and exact MP4 export recover. It must not use or copy a real creator project.
 
 ## Future accounts and administration
 

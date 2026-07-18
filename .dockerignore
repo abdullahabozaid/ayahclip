@@ -1,0 +1,13 @@
+.git
+.next
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage
+playwright-report
+test-results
+ui-audit
+ui-sweep

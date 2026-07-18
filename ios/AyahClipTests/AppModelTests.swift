@@ -1,10 +1,260 @@
 import AVFoundation
 import CoreImage
+import UIKit
 import XCTest
 @testable import AyahClip
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testNativeMediaImportCoordinatorCompletesOneValidatedPickerRequest() async throws {
+        let coordinator = NativeMediaImportCoordinator()
+        let payload = MobileMediaImportRequestPayload(
+            kinds: [.image, .video],
+            maxCount: 2,
+            purpose: .broll
+        )
+        let task = Task { try await coordinator.request(payload) }
+        await Task.yield()
+
+        XCTAssertEqual(coordinator.pendingRequest?.payload, payload)
+        XCTAssertEqual(
+            NativeMediaImportCoordinator.allowedContentTypes(for: payload),
+            [.image, .movie]
+        )
+        let urls = [
+            URL(fileURLWithPath: "/tmp/owned-photo.jpg"),
+            URL(fileURLWithPath: "/tmp/owned-video.mov")
+        ]
+        coordinator.complete(with: urls)
+
+        let selected = try await task.value
+        XCTAssertEqual(selected, urls)
+        XCTAssertNil(coordinator.pendingRequest)
+    }
+
+    func testNativeMediaImportCoordinatorRejectsWrongTypeAndResumesOnce() async {
+        let coordinator = NativeMediaImportCoordinator()
+        let payload = MobileMediaImportRequestPayload(
+            kinds: [.image],
+            maxCount: 1,
+            purpose: .replacement
+        )
+        let task = Task { try await coordinator.request(payload) }
+        await Task.yield()
+        coordinator.complete(with: [URL(fileURLWithPath: "/tmp/recitation.mp3")])
+        coordinator.cancel()
+
+        do {
+            _ = try await task.value
+            XCTFail("A mismatched picker result must be rejected")
+        } catch {
+            XCTAssertEqual(error as? NativeMediaImportCoordinator.ImportError, .invalidSelection)
+        }
+        XCTAssertNil(coordinator.pendingRequest)
+    }
+
+    func testBrollImportDoesNotBecomePrimaryMediaInAnEmptyReciterProject() async throws {
+        let model = AppModel()
+        model.createProject()
+        defer {
+            model.closeEditor()
+            model.projects.forEach(model.delete)
+        }
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("broll-\(UUID().uuidString).jpg")
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        try XCTUnwrap(image.jpegData(compressionQuality: 0.8)).write(to: source)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let imported = await model.importMedia(from: [source], placement: .additional)
+        XCTAssertTrue(imported)
+        XCTAssertNil(model.activeProject?.mediaFilename)
+        XCTAssertEqual(model.activeProject?.bRollFilenames?.count, 1)
+        XCTAssertEqual(model.importedMediaURLs.count, 1)
+    }
+
+    func testFreshDraftContainsNoPrototypeQuranPassage() {
+        let draft = ClipProject.freshDraft()
+
+        XCTAssertEqual(draft.title, "Untitled Quran clip")
+        XCTAssertNil(draft.surahID)
+        XCTAssertNil(draft.selectedVerseNumbers)
+        XCTAssertTrue(draft.segments.isEmpty)
+        XCTAssertTrue(draft.arabic.isEmpty)
+        XCTAssertTrue(draft.translation.isEmpty)
+        let snapshot = MobileProjectSnapshotV1(project: draft, media: [])
+        XCTAssertTrue(snapshot.isValid)
+        XCTAssertNil(snapshot.quran)
+        XCTAssertTrue(snapshot.segments.isEmpty)
+    }
+
+    func testMobileEditorHostSessionOwnsBridgeAndPickerLifetime() throws {
+        let model = AppModel()
+        model.createProject()
+        let host = try MobileEditorHostSession(model: model)
+
+        XCTAssertEqual(host.environment.editorURL.path, "/import")
+        XCTAssertNil(host.mediaImports.pendingRequest)
+        let webView = host.makeWebView()
+        XCTAssertTrue(webView === host.makeWebView())
+        XCTAssertNotNil(webView.navigationDelegate)
+        XCTAssertEqual(webView.customUserAgent, "AyahClip-iOS/0.1 SharedStudio")
+        XCTAssertNotNil(webView.configuration.urlSchemeHandler(
+            forURLScheme: NativeMediaSchemeHandler.scheme
+        ))
+        XCTAssertEqual(webView.url?.host, "ayahclip.com")
+        XCTAssertEqual(webView.url?.path, "/import")
+        host.close()
+        host.close()
+        XCTAssertNil(host.webView)
+        model.activeProject = nil
+    }
+
+    func testWatermarkCleanupZonesStayInsidePortraitVideo() {
+        let extent = CGRect(x: 0, y: 0, width: 1080, height: 1920)
+        let regions = WatermarkCleanupService.watermarkRegions(in: extent)
+
+        XCTAssertEqual(regions.count, 2)
+        XCTAssertTrue(regions.allSatisfy { extent.contains($0) })
+        XCTAssertTrue(regions[0].minY > extent.midY)
+        XCTAssertTrue(regions[1].maxY < extent.midY)
+        XCTAssertFalse(regions[0].intersects(regions[1]))
+    }
+
+    func testWatermarkCleanupRejectsEmptyExtent() {
+        XCTAssertTrue(WatermarkCleanupService.watermarkRegions(in: .zero).isEmpty)
+    }
+
+    func testWatermarkCleanupProducesPlayableLocalMP4() async throws {
+        let source = try await makeTestVideo(frameCount: 6)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let cleaned = try await WatermarkCleanupService.cleanCommonTikTokZones(sourceURL: source)
+        defer { try? FileManager.default.removeItem(at: cleaned) }
+
+        let asset = AVURLAsset(url: cleaned)
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        let duration = try await asset.load(.duration).seconds
+        XCTAssertFalse(videoTracks.isEmpty)
+        XCTAssertGreaterThan(duration, 0)
+        XCTAssertGreaterThan(
+            try cleaned.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0,
+            0
+        )
+    }
+
+    func testLegacyPlaceholderMigrationPreservesCreatorEditedProjects() {
+        let untouched = ClipProject.freshStarter()
+        XCTAssertTrue(untouched.removingLegacyPlaceholderIfNeeded().segments.isEmpty)
+
+        var edited = untouched
+        edited.segments[0].translation = "Creator correction"
+        let preserved = edited.removingLegacyPlaceholderIfNeeded()
+        XCTAssertEqual(preserved.segments.count, 3)
+        XCTAssertEqual(preserved.segments[0].translation, "Creator correction")
+    }
+
+    @MainActor
+    func testChunkedSharedStudioExportReassemblesExactVideoBytes() throws {
+        let bytes = Data((0..<(MobileExportTransferSession.chunkSize + 37)).map {
+            UInt8($0 % 251)
+        })
+        let session = MobileExportTransferSession()
+        let ready = try session.begin(MobileExportRequestPayload(
+            fileName: "ayahclip-test.mp4",
+            mimeType: "video/mp4",
+            fileSize: Int64(bytes.count),
+            totalChunks: 2
+        ))
+        let first = bytes.prefix(MobileExportTransferSession.chunkSize)
+        let second = bytes.dropFirst(MobileExportTransferSession.chunkSize)
+        try session.append(MobileExportChunkPayload(
+            exportId: ready.exportId,
+            index: 0,
+            totalChunks: 2,
+            base64Data: Data(first).base64EncodedString()
+        ))
+        try session.append(MobileExportChunkPayload(
+            exportId: ready.exportId,
+            index: 1,
+            totalChunks: 2,
+            base64Data: Data(second).base64EncodedString()
+        ))
+
+        let (url, completed) = try session.complete(MobileExportControlPayload(
+            exportId: ready.exportId,
+            totalChunks: 2
+        ))
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertEqual(completed.status, .complete)
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+    }
+
+    @MainActor
+    func testChunkedSharedStudioExportRejectsOutOfOrderDataAndCleansUp() throws {
+        let session = MobileExportTransferSession()
+        let ready = try session.begin(MobileExportRequestPayload(
+            fileName: "ayahclip-test.mp4",
+            mimeType: "video/mp4",
+            fileSize: 2,
+            totalChunks: 1
+        ))
+        XCTAssertThrowsError(try session.append(MobileExportChunkPayload(
+            exportId: ready.exportId,
+            index: 1,
+            totalChunks: 1,
+            base64Data: Data([1, 2]).base64EncodedString()
+        )))
+        session.close()
+    }
+
+    @MainActor
+    func testSharedStudioExportMovesToAppAndSavesToPhotos() async throws {
+        var savedBytes: Data?
+        let model = AppModel(
+            photoAuthorizationRequester: { .authorized },
+            photoSaver: { url in savedBytes = try Data(contentsOf: url) }
+        )
+        model.createProject()
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("web-export-\(UUID().uuidString).mp4")
+        let expected = Data("rendered-mp4".utf8)
+        try expected.write(to: source)
+
+        try await model.receiveMobileEditorExport(source)
+
+        XCTAssertEqual(savedBytes, expected)
+        XCTAssertEqual(model.notice, "Video saved to Photos.")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        if let output = model.exportURL { try? FileManager.default.removeItem(at: output) }
+        model.activeProject = nil
+    }
+
+    @MainActor
+    func testSharedImageProviderMaterializesAFileForTheExtensionInbox() async throws {
+        let source = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shared-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: source) }
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }
+        try XCTUnwrap(image.jpegData(compressionQuality: 0.9)).write(to: source)
+        let provider = try XCTUnwrap(NSItemProvider(contentsOf: source))
+
+        let materialized = try await SharedMediaProviderLoader.loadFile(
+            from: provider,
+            type: .image
+        )
+        defer { try? FileManager.default.removeItem(at: materialized) }
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: materialized.path))
+        XCTAssertNotNil(UIImage(contentsOfFile: materialized.path))
+    }
+
     func testSharedImportPolicyMatchesEditorLimits() throws {
         XCTAssertEqual(MediaImportPolicy.maxMediaCount, 8)
         XCTAssertNoThrow(try MediaImportPolicy.validateBatch(attachedCount: 6, incomingCount: 2))
@@ -27,6 +277,554 @@ final class AppModelTests: XCTestCase {
         let segments = ClipProject.starter.segments
         XCTAssertEqual(segments.map(\.verse), [1, 2, 3])
         XCTAssertTrue(zip(segments, segments.dropFirst()).allSatisfy { $0.end <= $1.start })
+    }
+
+    func testQuranRangeReplacesHardCodedStarterContentTransactionally() throws {
+        let chapter = QuranChapter(
+            id: 93,
+            nameSimple: "Ad-Duhaa",
+            nameArabic: "الضحى",
+            versesCount: 11,
+            revelationPlace: "makkah",
+            translatedName: .init(name: "The Morning Hours", languageName: "english")
+        )
+        let verses = [
+            QuranCatalogVerse(
+                id: 1,
+                verseNumber: 3,
+                verseKey: "93:3",
+                textUthmani: "مَا وَدَّعَكَ رَبُّكَ وَمَا قَلَىٰ",
+                translations: [.init(text: "Your Lord has not abandoned you, nor has He become hateful.")]
+            ),
+            QuranCatalogVerse(
+                id: 2,
+                verseNumber: 4,
+                verseKey: "93:4",
+                textUthmani: "وَلَلْـَٔاخِرَةُ خَيْرٌ لَّكَ مِنَ ٱلْأُولَىٰ",
+                translations: [.init(text: "And the next life is certainly far better for you than this one.")]
+            )
+        ]
+        var project = ClipProject.freshStarter()
+
+        project.applyQuranRange(chapter: chapter, verses: verses)
+
+        XCTAssertEqual(project.surahID, 93)
+        XCTAssertEqual(project.surahName, "Surah Ad-Duhaa")
+        XCTAssertEqual(project.verseRange, "Verses 3-4")
+        XCTAssertEqual(project.selectedVerseNumbers, [3, 4])
+        XCTAssertEqual(project.segments.map(\.verse), [3, 4])
+        XCTAssertEqual(project.segments.first?.arabic, verses[0].textUthmani)
+        XCTAssertEqual(project.segments.last?.translation, verses[1].cleanTranslation)
+        XCTAssertEqual(try XCTUnwrap(project.segments.last?.end), 16, accuracy: 0.001)
+    }
+
+    func testQuranCatalogDecodesVerifiedChapterVerseOrderAndCleansFootnotes() async throws {
+        let payload = #"{"verses":[{"id":10,"verse_number":1,"verse_key":"1:1","text_uthmani":"بِسْمِ ٱللَّهِ","translations":[{"text":"In the name of Allah<sup foot_note=\"1\">1</sup>"}]},{"id":11,"verse_number":2,"verse_key":"1:2","text_uthmani":"ٱلْحَمْدُ لِلَّهِ","translations":[{"text":"All praise is for Allah"}]}]}"#.data(using: .utf8)!
+        let service = QuranCatalogService { url in
+            XCTAssertEqual(url.scheme, "https")
+            XCTAssertEqual(url.host, "api.quran.com")
+            XCTAssertTrue(url.path.hasSuffix("/verses/by_chapter/1"))
+            return payload
+        }
+
+        let verses = try await service.fetchVerses(chapter: 1)
+
+        XCTAssertEqual(verses.map(\.verseNumber), [1, 2])
+        XCTAssertEqual(verses[0].cleanTranslation, "In the name of Allah")
+        XCTAssertEqual(verses[1].verseKey, "1:2")
+    }
+
+    func testQuranCatalogRejectsOutOfRangeChapterBeforeNetworking() async {
+        let service = QuranCatalogService { _ in
+            XCTFail("An invalid chapter must not reach the network")
+            return Data()
+        }
+
+        do {
+            _ = try await service.fetchVerses(chapter: 115)
+            XCTFail("Expected invalid chapter error")
+        } catch let error as QuranCatalogService.CatalogError {
+            XCTAssertEqual(error.localizedDescription, "Surah 115 is outside the Quran's 1 to 114 range.")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testAppModelLoadsAndAppliesCreatorChosenVerseRange() async throws {
+        let chapters = (1...114).map { id in
+            [
+                "id": id,
+                "name_simple": id == 93 ? "Ad-Duhaa" : "Surah \(id)",
+                "name_arabic": "سورة",
+                "verses_count": id == 93 ? 11 : 1,
+                "revelation_place": "makkah",
+                "translated_name": ["name": "Chapter", "language_name": "english"]
+            ] as [String: Any]
+        }
+        let chapterData = try JSONSerialization.data(withJSONObject: ["chapters": chapters])
+        let verseData = #"{"verses":[{"id":1,"verse_number":1,"verse_key":"93:1","text_uthmani":"وَٱلضُّحَىٰ","translations":[{"text":"By the morning sunlight"}]},{"id":2,"verse_number":2,"verse_key":"93:2","text_uthmani":"وَٱلَّيْلِ إِذَا سَجَىٰ","translations":[{"text":"and the night when it falls still"}]}]}"#.data(using: .utf8)!
+        let service = QuranCatalogService { url in
+            url.path.contains("verses/by_chapter") ? verseData : chapterData
+        }
+        let model = AppModel(quranCatalog: service)
+        model.projects = []
+        model.activeProject = nil
+
+        await model.loadQuranChapters()
+        await model.loadQuranVerses(chapter: 93)
+        let applied = model.applyQuranRange(chapterID: 93, from: 1, to: 2)
+
+        XCTAssertTrue(applied)
+        XCTAssertEqual(model.quranChapters.count, 114)
+        XCTAssertEqual(model.activeProject?.surahID, 93)
+        XCTAssertEqual(model.activeProject?.selectedVerseNumbers, [1, 2])
+        XCTAssertEqual(model.activeProject?.segments.map(\.verse), [1, 2])
+        model.activeProject = nil
+    }
+
+    func testMobileEditorBridgeIsVersionedAndOriginLocked() throws {
+        let projectID = UUID()
+        let url = MobileEditorBridgeContract.editorURL(projectID: projectID)
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+
+        XCTAssertEqual(url.host, "ayahclip.com")
+        XCTAssertEqual(url.path, "/studio")
+        XCTAssertEqual(
+            MobileEditorBridgeContract.editorURL(
+                projectID: projectID,
+                requiresPassageSelection: true
+            ).path,
+            "/import"
+        )
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "bridge" })?.value, "1")
+        XCTAssertEqual(
+            components.queryItems?.first(where: { $0.name == "project" })?.value,
+            projectID.uuidString
+        )
+        XCTAssertTrue(MobileEditorBridgeContract.allowsNavigation(to: url))
+        XCTAssertFalse(MobileEditorBridgeContract.allowsNavigation(
+            to: try XCTUnwrap(URL(string: "https://ayahclip.com.evil.example/studio"))
+        ))
+        XCTAssertFalse(MobileEditorBridgeContract.allowsNavigation(
+            to: try XCTUnwrap(URL(string: "http://ayahclip.com/studio"))
+        ))
+        XCTAssertFalse(MobileEditorBridgeContract.allowsNavigation(
+            to: try XCTUnwrap(URL(string: "https://ayahclip.com/privacy"))
+        ))
+    }
+
+    func testMobileDetectionEnvelopeRoundTripsWithoutLosingReviewState() throws {
+        let payload = MobileDetectionResultPayload(
+            surahId: 93,
+            ayahStart: 1,
+            ayahEnd: 4,
+            confidence: .medium,
+            reviewVerseNumbers: [3, 4],
+            alternatives: [
+                .init(surahId: 94, ayahStart: 1, ayahEnd: 3, confidence: 0.71)
+            ]
+        )
+        let envelope = MobileBridgeEnvelope(
+            id: "detection-1",
+            type: .detectionResult,
+            payload: payload
+        )
+
+        let encoded = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(
+            MobileBridgeEnvelope<MobileDetectionResultPayload>.self,
+            from: encoded
+        )
+
+        XCTAssertTrue(decoded.isSupported)
+        XCTAssertEqual(decoded, envelope)
+        XCTAssertEqual(decoded.payload.reviewVerseNumbers, [3, 4])
+        XCTAssertEqual(decoded.payload.alternatives.first?.surahId, 94)
+    }
+
+    func testNativeMediaRegistryHidesPathsAndServesExactByteRanges() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ayahclip-native-media-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("owned.mp4")
+        let bytes = Data((0..<100).map(UInt8.init))
+        try bytes.write(to: source)
+        let registry = NativeMediaRegistry(allowedRoots: [root])
+
+        let descriptor = try registry.register(source)
+        let handle = try XCTUnwrap(NativeMediaRegistry.handle(from: descriptor.url))
+
+        XCTAssertFalse(descriptor.url.absoluteString.contains(root.path))
+        XCTAssertEqual(descriptor.fileSize, 100)
+        XCTAssertEqual(descriptor.contentType, "video/mp4")
+
+        let bounded = try registry.responsePlan(handle: handle, rangeHeader: "bytes=10-19")
+        XCTAssertEqual(bounded.statusCode, 206)
+        XCTAssertEqual(bounded.offset, 10)
+        XCTAssertEqual(bounded.length, 10)
+        XCTAssertEqual(bounded.headers["Content-Range"], "bytes 10-19/100")
+        XCTAssertEqual(
+            try registry.read(handle: handle, plan: bounded),
+            Data((10..<20).map(UInt8.init))
+        )
+
+        let openEnded = try registry.responsePlan(handle: handle, rangeHeader: "bytes=95-")
+        XCTAssertEqual(
+            try registry.read(handle: handle, plan: openEnded),
+            Data((95..<100).map(UInt8.init))
+        )
+
+        let suffix = try registry.responsePlan(handle: handle, rangeHeader: "bytes=-4")
+        XCTAssertEqual(
+            try registry.read(handle: handle, plan: suffix),
+            Data((96..<100).map(UInt8.init))
+        )
+
+        var chunks: [Data] = []
+        let full = try registry.responsePlan(handle: handle, rangeHeader: nil)
+        try registry.stream(handle: handle, plan: full, chunkSize: 16) { chunks.append($0) }
+        XCTAssertEqual(chunks.count, 7)
+        XCTAssertEqual(chunks.reduce(into: Data(), { $0.append($1) }), bytes)
+    }
+
+    func testNativeMediaRegistryRejectsTraversalUnknownHandlesAndInvalidRanges() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ayahclip-native-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let inside = root.appendingPathComponent("inside.png")
+        try Data(repeating: 1, count: 20).write(to: inside)
+        let outside = FileManager.default.temporaryDirectory
+            .appendingPathComponent("outside-\(UUID().uuidString).png")
+        try Data(repeating: 2, count: 20).write(to: outside)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        let registry = NativeMediaRegistry(allowedRoots: [root])
+
+        XCTAssertThrowsError(try registry.register(outside))
+        let descriptor = try registry.register(inside)
+        let handle = try XCTUnwrap(NativeMediaRegistry.handle(from: descriptor.url))
+        XCTAssertThrowsError(try registry.responsePlan(handle: "unknown", rangeHeader: nil))
+        XCTAssertThrowsError(try registry.responsePlan(handle: handle, rangeHeader: "bytes=50-60"))
+        XCTAssertThrowsError(try registry.responsePlan(handle: handle, rangeHeader: "bytes=1-2,4-5"))
+
+        registry.revokeAll()
+        XCTAssertThrowsError(try registry.responsePlan(handle: handle, rangeHeader: nil))
+    }
+
+    func testSharedProjectSnapshotCarriesQuranStyleTimingAndOpaqueMedia() throws {
+        var project = ClipProject.freshStarter()
+        project.surahID = 67
+        project.selectedVerseNumbers = [1, 2, 3]
+        project.reciterID = "alafasy"
+        project.layout = .sideFade
+        project.captionStyle = .softGlow
+        let media = NativeMediaDescriptor(
+            id: "opaque-handle",
+            url: try XCTUnwrap(URL(string: "ayahclip-media://asset/opaque-handle")),
+            contentType: "video/mp4",
+            fileSize: 1_024
+        )
+
+        let snapshot = MobileProjectSnapshotV1(project: project, media: [media])
+        let encoded = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(MobileProjectSnapshotV1.self, from: encoded)
+
+        XCTAssertTrue(decoded.isValid)
+        XCTAssertEqual(decoded.id, project.id.uuidString)
+        XCTAssertEqual(decoded.quran?.surahId, 67)
+        XCTAssertEqual(decoded.quran?.verseNumbers, [1, 2, 3])
+        XCTAssertEqual(decoded.quran?.reciterId, "alafasy")
+        XCTAssertEqual(decoded.style.layout, "sideFade")
+        XCTAssertEqual(decoded.style.captionStyle, "softGlow")
+        XCTAssertEqual(decoded.segments.map(\.verseNumber), [1, 2, 3])
+        XCTAssertEqual(decoded.media, [media])
+        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("/private/"))
+    }
+
+    func testMobileEditorSessionHydratesThenRevokesPrivateMedia() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mediaURL = root.appendingPathComponent("recitation.mp4")
+        try Data("private-media".utf8).write(to: mediaURL)
+
+        var project = ClipProject.freshStarter()
+        project.mediaFilename = mediaURL.lastPathComponent
+        let registry = NativeMediaRegistry(allowedRoots: [root])
+        let session = MobileEditorSession(registry: registry)
+
+        let envelope = try session.prepare(project: project, mediaURLs: [mediaURL])
+
+        XCTAssertEqual(envelope.type, MobileBridgeMessageType.hydrateProject)
+        XCTAssertTrue(envelope.isSupported)
+        XCTAssertTrue(envelope.payload.isValid)
+        XCTAssertEqual(envelope.payload.media.count, 1)
+        XCTAssertEqual(envelope.payload.media[0].url.scheme, "ayahclip-media")
+        XCTAssertFalse(envelope.payload.media[0].url.absoluteString.contains(root.path))
+
+        let handle = try XCTUnwrap(NativeMediaRegistry.handle(from: envelope.payload.media[0].url))
+        XCTAssertEqual(try registry.responsePlan(handle: handle, rangeHeader: nil).statusCode, 200)
+
+        session.close()
+        XCTAssertThrowsError(try registry.responsePlan(handle: handle, rangeHeader: nil))
+    }
+
+    func testMobileEditorSessionRegistersDurableTemplateMediaWithoutReplacingExistingHandles() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let recitation = root.appendingPathComponent("recitation.mp4")
+        let broll = root.appendingPathComponent("broll.jpg")
+        try Data("private-media".utf8).write(to: recitation)
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }
+        try XCTUnwrap(image.jpegData(compressionQuality: 0.8)).write(to: broll)
+        var project = ClipProject.freshStarter()
+        project.mediaFilename = recitation.lastPathComponent
+        let registry = NativeMediaRegistry(allowedRoots: [root])
+        let session = MobileEditorSession(registry: registry)
+        let hydrated = try session.prepare(project: project, mediaURLs: [recitation])
+        let originalHandle = hydrated.payload.media[0].id
+
+        let added = try session.registerAdditionalMedia([broll])
+
+        XCTAssertEqual(added.count, 1)
+        XCTAssertEqual(try registry.responsePlan(handle: originalHandle, rangeHeader: nil).statusCode, 200)
+        XCTAssertEqual(try registry.responsePlan(handle: added[0].id, rangeHeader: nil).headers["Content-Type"], "image/jpeg")
+        session.close()
+        XCTAssertThrowsError(try registry.responsePlan(handle: added[0].id, rangeHeader: nil))
+    }
+
+    func testMobileEditorSessionRejectsMismatchedMediaWithoutLeavingHandles() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mediaURL = root.appendingPathComponent("recitation.mp4")
+        try Data("private-media".utf8).write(to: mediaURL)
+        let registry = NativeMediaRegistry(allowedRoots: [root])
+        let session = MobileEditorSession(registry: registry)
+
+        XCTAssertThrowsError(
+            try session.prepare(project: ClipProject.freshStarter(), mediaURLs: [mediaURL])
+        )
+    }
+
+    func testMobileEditorSessionAppliesValidatedWebEditsWithoutChangingNativeMedia() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mediaURL = root.appendingPathComponent("recitation.mp4")
+        try Data("private-media".utf8).write(to: mediaURL)
+
+        var project = ClipProject.freshStarter()
+        project.mediaFilename = mediaURL.lastPathComponent
+        project.surahID = 67
+        project.selectedVerseNumbers = [1, 2, 3]
+        let registry = NativeMediaRegistry(allowedRoots: [root])
+        let session = MobileEditorSession(registry: registry)
+        let hydrated = try session.prepare(project: project, mediaURLs: [mediaURL])
+
+        var webProject = project
+        webProject.title = "Al-Mulk review"
+        webProject.layout = .sideFade
+        webProject.captionStyle = .gold
+        webProject.arabicSize = 42
+        webProject.overlayOpacity = 0.48
+        webProject.webEditorDocumentJSON = """
+        {"schemaVersion":1,"projectId":"\(project.id.uuidString)","project":{"settings":{"clipFadeMs":400,"backgroundSequenceEnabled":true,"textLayout":"left-panel"}}}
+        """
+        let changed = MobileBridgeEnvelope(
+            type: MobileBridgeMessageType.projectChanged,
+            payload: MobileProjectSnapshotV1(project: webProject, media: hydrated.payload.media)
+        )
+
+        let applied = try session.applyProjectChange(changed, to: project)
+
+        XCTAssertEqual(applied.title, "Al-Mulk review")
+        XCTAssertEqual(applied.layout, .sideFade)
+        XCTAssertEqual(applied.captionStyle, .gold)
+        XCTAssertEqual(applied.arabicSize, 42)
+        XCTAssertEqual(applied.overlayOpacity, 0.48)
+        XCTAssertEqual(applied.mediaFilename, project.mediaFilename)
+        XCTAssertEqual(applied.sourceReferenceURL, project.sourceReferenceURL)
+        XCTAssertEqual(applied.webEditorDocumentJSON, webProject.webEditorDocumentJSON)
+    }
+
+    func testSharedProjectRejectsEphemeralOrMismatchedEditorDocuments() {
+        var project = ClipProject.freshStarter()
+        project.webEditorDocumentJSON = """
+        {"schemaVersion":1,"projectId":"\(project.id.uuidString)","project":{"settings":{"background":{"type":"video","value":"ayahclip-native-ref://media/0"}}}}
+        """
+        XCTAssertTrue(MobileProjectSnapshotV1(project: project, media: []).isValid)
+
+        project.webEditorDocumentJSON = """
+        {"schemaVersion":1,"projectId":"00000000-0000-4000-8000-000000000000","project":{}}
+        """
+        XCTAssertFalse(MobileProjectSnapshotV1(project: project, media: []).isValid)
+
+        project.webEditorDocumentJSON = """
+        {"schemaVersion":1,"projectId":"\(project.id.uuidString)","project":{"background":"blob:https://ayahclip.com/temporary"}}
+        """
+        XCTAssertFalse(MobileProjectSnapshotV1(project: project, media: []).isValid)
+    }
+
+    func testMobileEditorSessionRejectsWebMediaReplacement() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mediaURL = root.appendingPathComponent("recitation.mp4")
+        try Data("private-media".utf8).write(to: mediaURL)
+
+        var project = ClipProject.freshStarter()
+        project.mediaFilename = mediaURL.lastPathComponent
+        let registry = NativeMediaRegistry(allowedRoots: [root])
+        let session = MobileEditorSession(registry: registry)
+        _ = try session.prepare(project: project, mediaURLs: [mediaURL])
+        let replacement = NativeMediaDescriptor(
+            id: "replacement",
+            url: try XCTUnwrap(URL(string: "ayahclip-media://asset/replacement")),
+            contentType: "video/mp4",
+            fileSize: 10
+        )
+        let changed = MobileBridgeEnvelope(
+            type: MobileBridgeMessageType.projectChanged,
+            payload: MobileProjectSnapshotV1(project: project, media: [replacement])
+        )
+
+        XCTAssertThrowsError(try session.applyProjectChange(changed, to: project)) { error in
+            XCTAssertEqual(error as? MobileEditorSession.SessionError, .mediaMutation)
+        }
+    }
+
+    func testAppModelAcceptsSharedStudioCheckpointWithoutAddingNativeUndoStep() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mediaURL = root.appendingPathComponent("recitation.mp4")
+        try Data("private-media".utf8).write(to: mediaURL)
+
+        let model = AppModel()
+        var project = ClipProject.freshStarter()
+        project.mediaFilename = mediaURL.lastPathComponent
+        project.surahID = 67
+        project.selectedVerseNumbers = [1, 2, 3]
+        model.activeProject = project
+        let session = MobileEditorSession(
+            registry: NativeMediaRegistry(allowedRoots: [root])
+        )
+        let hydrated = try session.prepare(project: project, mediaURLs: [mediaURL])
+        var edited = project
+        edited.title = "Saved from shared Studio"
+        let envelope = MobileBridgeEnvelope(
+            type: MobileBridgeMessageType.projectChanged,
+            payload: MobileProjectSnapshotV1(project: edited, media: hydrated.payload.media)
+        )
+
+        try model.applyMobileEditorChange(envelope, session: session)
+
+        XCTAssertEqual(model.activeProject?.title, "Saved from shared Studio")
+        XCTAssertFalse(model.canUndo)
+    }
+
+    func testMobileEditorEnvironmentInstallsCompleteBridgeAndClosesHandles() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mediaURL = root.appendingPathComponent("recitation.mp4")
+        try Data("private-media".utf8).write(to: mediaURL)
+        var project = ClipProject.freshStarter()
+        project.mediaFilename = mediaURL.lastPathComponent
+
+        let environment = try MobileEditorEnvironment(
+            project: project,
+            mediaURLs: [mediaURL],
+            onProjectChange: { _, _ in }
+        )
+
+        XCTAssertTrue(MobileEditorBridgeContract.allowsNavigation(to: environment.editorURL))
+        XCTAssertEqual(environment.editorURL.path, "/import")
+        XCTAssertEqual(environment.hydrateEnvelope.type, .hydrateProject)
+        XCTAssertNotNil(environment.configuration.urlSchemeHandler(
+            forURLScheme: NativeMediaSchemeHandler.scheme
+        ))
+        let handle = try XCTUnwrap(NativeMediaRegistry.handle(
+            from: environment.hydrateEnvelope.payload.media[0].url
+        ))
+        XCTAssertTrue(environment.hasActiveMediaHandle(handle))
+        environment.close()
+        XCTAssertFalse(environment.hasActiveMediaHandle(handle))
+    }
+
+    func testAppModelBuildsSharedEditorEnvironmentForUnselectedImport() throws {
+        let model = AppModel()
+        model.createProject()
+        let environment = try model.makeMobileEditorEnvironment()
+        defer {
+            environment.close()
+            model.activeProject = nil
+        }
+
+        XCTAssertEqual(environment.editorURL.path, "/import")
+        XCTAssertEqual(environment.hydrateEnvelope.payload.id, model.activeProject?.id.uuidString)
+    }
+
+    func testMobileEditorNavigationPolicyConfinesTopLevelStudio() {
+        XCTAssertTrue(MobileEditorNavigationPolicy.allows(
+            url: URL(string: "https://ayahclip.com/studio?native=ios&bridge=1"),
+            isMainFrame: true
+        ))
+        XCTAssertTrue(MobileEditorNavigationPolicy.allows(
+            url: URL(string: "https://www.ayahclip.com/studio/project"),
+            isMainFrame: true
+        ))
+        XCTAssertTrue(MobileEditorNavigationPolicy.allows(
+            url: URL(string: "https://ayahclip.com/import"),
+            isMainFrame: true
+        ))
+        XCTAssertFalse(MobileEditorNavigationPolicy.allows(
+            url: URL(string: "https://ayahclip.com/styles"),
+            isMainFrame: true
+        ))
+        XCTAssertFalse(MobileEditorNavigationPolicy.allows(
+            url: URL(string: "https://evil.example/studio"),
+            isMainFrame: true
+        ))
+        XCTAssertFalse(MobileEditorNavigationPolicy.allows(
+            url: URL(string: "https://ayahclip.com/studio"),
+            isMainFrame: false
+        ))
+    }
+
+    func testMobileEditorMessageHandlerAcceptsOnlyBoundedJsonObjects() throws {
+        let valid: [String: Any] = [
+            "protocolVersion": 1,
+            "id": "ready-1",
+            "type": "ready",
+            "payload": ["rendererVersion": "web-1", "capabilities": ["timeline"]]
+        ]
+        let data = try MobileEditorMessageHandler.messageData(from: valid)
+        XCTAssertLessThan(data.count, MobileEditorMessageHandler.maxMessageBytes)
+        XCTAssertThrowsError(try MobileEditorMessageHandler.messageData(from: "not-an-object"))
+
+        let oversized: [String: Any] = [
+            "payload": String(repeating: "x", count: MobileEditorMessageHandler.maxMessageBytes)
+        ]
+        XCTAssertThrowsError(try MobileEditorMessageHandler.messageData(from: oversized)) { error in
+            XCTAssertEqual(
+                error as? MobileEditorMessageHandler.MessageError,
+                .oversizedMessage
+            )
+        }
     }
 
     func testTimelineResolvesDifferentVerseCaptions() throws {
@@ -218,7 +1016,8 @@ final class AppModelTests: XCTestCase {
 
         model.receiveSharedURL(try XCTUnwrap(URL(string: "ayahclip://new")))
 
-        XCTAssertEqual(model.activeProject?.title, ClipProject.starter.title)
+        XCTAssertEqual(model.activeProject?.title, "Untitled Quran clip")
+        XCTAssertTrue(model.activeProject?.segments.isEmpty == true)
     }
 
     func testEachNewClipSavesAsAnIndependentProject() throws {
@@ -263,6 +1062,64 @@ final class AppModelTests: XCTestCase {
         )
         XCTAssertEqual(size.width, VideoExportService.outputSize.width, accuracy: 1)
         XCTAssertEqual(size.height, VideoExportService.outputSize.height, accuracy: 1)
+    }
+
+    func testPhotoImportCreatesPlayableVerticalTimelineAndExports() async throws {
+        let source = try makeTestImage(color: UIColor(red: 0.04, green: 0.24, blue: 0.42, alpha: 1))
+        let model = AppModel()
+        model.projects = []
+        model.activeProject = nil
+
+        let imported = await model.importMedia(from: source)
+        XCTAssertTrue(imported)
+        var project = try XCTUnwrap(model.activeProject)
+        let storedURL = try XCTUnwrap(model.importedMediaURLs.first)
+        project.segments = [VerseSegment(verse: 1, start: 0, end: 1, arabic: "", translation: "")]
+        project.setMediaDuration(1, for: storedURL.lastPathComponent)
+
+        let timeline = try await VideoExportService.makeTimelineAsset(
+            sourceURLs: [storedURL],
+            project: project
+        )
+        let timelineVideoCount = try await timeline.loadTracks(withMediaType: .video).count
+        let timelineDuration = try await timeline.load(.duration).seconds
+        XCTAssertEqual(timelineVideoCount, 1)
+        XCTAssertEqual(timelineDuration, 1, accuracy: 0.08)
+
+        let output = try await VideoExportService.render(sourceURL: storedURL, project: project)
+        let outputAsset = AVURLAsset(url: output)
+        let outputTracks = try await outputAsset.loadTracks(withMediaType: .video)
+        let track = try XCTUnwrap(outputTracks.first)
+        let size = try await track.load(.naturalSize)
+        XCTAssertEqual(size.width, VideoExportService.outputSize.width, accuracy: 1)
+        XCTAssertEqual(size.height, VideoExportService.outputSize.height, accuracy: 1)
+        model.closeEditor()
+        model.projects.forEach(model.delete)
+    }
+
+    func testPhotoAndRecitationUseAudioDurationRegardlessOfImportOrder() async throws {
+        let image = try makeTestImage(color: .systemIndigo)
+        let recitation = try makeSilentAudio(duration: 2)
+        var project = ClipProject.starter
+        project.segments = [VerseSegment(verse: 1, start: 0, end: 2, arabic: "", translation: "")]
+        project.setMediaDuration(8, for: image.lastPathComponent)
+
+        let preferred = await VideoExportService.preferredTimelineDuration(
+            sourceURLs: [image, recitation],
+            project: project
+        )
+        XCTAssertEqual(try XCTUnwrap(preferred), 2, accuracy: 0.05)
+
+        let timeline = try await VideoExportService.makeTimelineAsset(
+            sourceURLs: [image, recitation],
+            project: project
+        )
+        let videoCount = try await timeline.loadTracks(withMediaType: .video).count
+        let audioCount = try await timeline.loadTracks(withMediaType: .audio).count
+        let duration = try await timeline.load(.duration).seconds
+        XCTAssertEqual(videoCount, 1)
+        XCTAssertEqual(audioCount, 1)
+        XCTAssertEqual(duration, 2, accuracy: 0.08)
     }
 
     func testActiveExportCanBeCancelledWithoutShowingAnError() async throws {
@@ -412,7 +1269,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.importedMediaURLs.count, 2)
         XCTAssertNotNil(model.activeProject?.mediaFilename)
         XCTAssertEqual(model.activeProject?.bRollFilenames?.count, 1)
-        XCTAssertEqual(try XCTUnwrap(model.activeProject?.segments.last?.end), 2, accuracy: 0.08)
+        XCTAssertTrue(model.activeProject?.segments.isEmpty == true)
+        let environment = try model.makeMobileEditorEnvironment()
+        XCTAssertEqual(environment.editorURL.path, "/import")
+        environment.close()
 
         model.saveActiveProject()
         if let saved = model.projects.first { model.delete(saved) }
@@ -852,6 +1712,22 @@ final class AppModelTests: XCTestCase {
         if writer.status != .completed {
             throw writer.error ?? CocoaError(.fileWriteUnknown)
         }
+        return url
+    }
+
+    private func makeTestImage(color: UIColor) throws -> URL {
+        let size = CGSize(width: 360, height: 640)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            color.setFill()
+            UIRectFill(CGRect(origin: .zero, size: size))
+        }
+        guard let data = image.pngData() else { throw CocoaError(.fileWriteUnknown) }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ayahclip-still-\(UUID().uuidString).png")
+        try data.write(to: url, options: .atomic)
         return url
     }
 

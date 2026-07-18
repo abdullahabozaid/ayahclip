@@ -56,13 +56,13 @@ describe("telemetry route", () => {
   it("handles a same-client concurrent burst deterministically", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const responses = await Promise.all(
-      Array.from({ length: 121 }, () => POST(request(validEvent)))
+      Array.from({ length: 601 }, () => POST(request(validEvent)))
     );
     const statuses = responses.map((response) => response.status);
 
-    expect(statuses.filter((status) => status === 204)).toHaveLength(120);
+    expect(statuses.filter((status) => status === 204)).toHaveLength(600);
     expect(statuses.filter((status) => status === 429)).toHaveLength(1);
-    expect(info).toHaveBeenCalledTimes(120);
+    expect(info).toHaveBeenCalledTimes(600);
   });
 
   it("rejects cross-site, malformed and semantically incomplete events", async () => {

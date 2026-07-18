@@ -42,18 +42,16 @@ function parseOptions(): Options {
 }
 
 function fetchProductionLogs(options: Options): string {
-  const result = spawnSync("vercel", [
+  const container = process.env.AYAHCLIP_CONTAINER ?? "ayahclip-frontend";
+  const result = spawnSync("docker", [
     "logs",
-    "--environment", "production",
     "--since", options.since,
-    "--limit", String(options.limit),
-    "--query", "ayahclip_product_event",
-    "--json",
-    "--no-branch",
+    "--tail", String(options.limit),
+    container,
   ], { encoding: "utf8", maxBuffer: 50 * 1_024 * 1_024 });
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(result.stderr.trim() || `vercel logs exited with ${result.status}`);
+    throw new Error(result.stderr.trim() || `docker logs exited with ${result.status}`);
   }
   return result.stdout;
 }

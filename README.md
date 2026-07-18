@@ -23,7 +23,7 @@ See [`.env.example`](.env.example). All are optional for basic use:
 | `OPENAI_API_KEY` | Optionally enables AI-shaped framing for social captions. The exact Quran excerpt and reference are assembled by AyahClip; media never leaves the browser. Without a key, reviewed editorial options remain available. |
 | `OPENAI_CAPTION_MODEL` | Optional Responses API model override. Defaults to the cost-sensitive `gpt-5.6-luna`. |
 | `NEXT_PUBLIC_ASR_MODEL_URL` | Optional absolute URL to the ASR model (see below). Leave blank to serve it same-origin from `public/asr/`. |
-| `NEXT_PUBLIC_SITE_URL` | Canonical production origin for Open Graph, Twitter, and canonical metadata. Defaults to `https://ayahclip.vercel.app`. |
+| `NEXT_PUBLIC_SITE_URL` | Canonical production origin for Open Graph, Twitter, and canonical metadata. Defaults to `https://ayahclip.com`. |
 
 The app runs without these keys: backgrounds fall back to curated presets,
 social captions use reviewed editorial patterns, and local verse recognition
@@ -84,6 +84,35 @@ Deploy notes:
   existing shared disk library for multi-browser editing on one machine.
 - B-roll sequences, per-scene crop/zoom, crossfades, and the left-fade reciter
   composition all render through the same canvas path used by final MP4 export.
+
+### AyahClip VPS deployment
+
+The production image uses Next.js standalone output and runs as an unprivileged
+user. Keep a TLS reverse proxy such as Caddy in front of the container; do not
+publish port 3000 directly to the internet.
+
+```bash
+cp .env.example .env
+# Fill in server-only keys. Set CADDY_NETWORK to the existing Docker network
+# shared with your Caddy container, then deploy an immutable git revision.
+export DEPLOYMENT_VERSION="$(git rev-parse HEAD)"
+export CADDY_NETWORK=caddy
+docker compose -f docker-compose.production.yml up -d --build
+```
+
+Add this route to the VPS Caddy configuration after the container health check
+passes:
+
+```caddy
+ayahclip.com, www.ayahclip.com {
+  encode zstd gzip
+  reverse_proxy ayahclip-frontend:3000
+}
+```
+
+Only then change GoDaddy DNS to the VPS IPv4 address. Keep the current Vercel
+deployment online until `https://ayahclip.com`, `/robots.txt`, `/sitemap.xml`,
+and the production Google/readiness suites all pass through the new proxy.
 
 ## Attributions
 

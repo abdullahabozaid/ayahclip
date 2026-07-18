@@ -3,6 +3,7 @@
 // to the OS (share sheet on touch, download elsewhere). Used by both the
 // Export button and the studio's "see the final MP4" preview.
 import { useAppStore } from "./store";
+import { sendNativeExport } from "./mobile-bridge";
 import { getReciter, getReciterOrDefault } from "./reciters";
 import { exportVideoWithInfo } from "./export";
 import { buildClipRows } from "./clip-rows";
@@ -246,6 +247,8 @@ export async function saveFile(file: File): Promise<string | null> {
  * otherwise disk/download. Falls back to download if the share fails.
  */
 export async function deliverFileInGesture(file: File): Promise<void> {
+  const nativeReceipt = await sendNativeExport(file);
+  if (nativeReceipt) return;
   const isTouch =
     typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
   if (isTouch && navigator.canShare?.({ files: [file] })) {

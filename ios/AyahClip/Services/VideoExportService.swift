@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreImage
 import UIKit
+import UniformTypeIdentifiers
 
 @MainActor
 enum VideoExportService {
@@ -123,12 +124,26 @@ enum VideoExportService {
 
     static func makeTimelineAsset(sourceURLs: [URL], project: ClipProject) async throws -> AVAsset {
         guard !sourceURLs.isEmpty else { throw ExportError.noMedia }
-        let assets = sourceURLs.map(AVURLAsset.init(url:))
-        let primary = assets[0]
-        let primaryDuration = try await primary.load(.duration)
-        let durationSeconds = primaryDuration.seconds
-        guard durationSeconds.isFinite, durationSeconds > 0 else {
-            throw ExportError.exportFailed("The primary media has no usable duration.")
+        var preparedURLs: [URL] = []
+        for sourceURL in sourceURLs {
+            if isStillImage(sourceURL) {
+                preparedURLs.append(try await makeStillVideo(
+                    sourceURL: sourceURL,
+                    duration: project.mediaDuration(for: sourceURL.lastPathComponent)
+                ))
+            } else {
+                preparedURLs.append(sourceURL)
+            }
+        }
+
+        let assets = preparedURLs.map(AVURLAsset.init(url:))
+        var audioSource: (track: AVAssetTrack, duration: CMTime)?
+        for asset in assets {
+            guard let track = try await asset.loadTracks(withMediaType: .audio).first else { continue }
+            let timeRange = try await track.load(.timeRange)
+            guard timeRange.duration.seconds.isFinite, timeRange.duration.seconds > 0 else { continue }
+            audioSource = (track, timeRange.duration)
+            break
         }
 
         var videoSources: [(track: AVAssetTrack, duration: CMTime)] = []
@@ -140,21 +155,25 @@ enum VideoExportService {
         }
         guard !videoSources.isEmpty else { throw ExportError.noVideoTrack }
 
-        if assets.count == 1, try await !primary.loadTracks(withMediaType: .video).isEmpty {
-            return primary
+        let timelineDuration = audioSource?.duration ?? videoSources[0].duration
+        let durationSeconds = timelineDuration.seconds
+        guard durationSeconds.isFinite, durationSeconds > 0 else {
+            throw ExportError.exportFailed("The selected media has no usable duration.")
+        }
+
+        if assets.count == 1, try await !assets[0].loadTracks(withMediaType: .video).isEmpty {
+            return assets[0]
         }
 
         let composition = AVMutableComposition()
-        if let sourceAudio = try await primary.loadTracks(withMediaType: .audio).first,
+        if let audioSource,
            let audioTrack = composition.addMutableTrack(
                withMediaType: .audio,
                preferredTrackID: kCMPersistentTrackID_Invalid
            ) {
-            let sourceRange = try await sourceAudio.load(.timeRange)
-            let audioDuration = CMTimeMinimum(sourceRange.duration, primaryDuration)
             try audioTrack.insertTimeRange(
-                CMTimeRange(start: sourceRange.start, duration: audioDuration),
-                of: sourceAudio,
+                CMTimeRange(start: .zero, duration: audioSource.duration),
+                of: audioSource.track,
                 at: .zero
             )
         }
@@ -187,6 +206,147 @@ enum VideoExportService {
             }
         }
         return composition
+    }
+
+    static func preferredTimelineDuration(
+        sourceURLs: [URL],
+        project: ClipProject
+    ) async -> Double? {
+        guard !sourceURLs.isEmpty else { return nil }
+        for sourceURL in sourceURLs where !isStillImage(sourceURL) {
+            let asset = AVURLAsset(url: sourceURL)
+            guard let audio = try? await asset.loadTracks(withMediaType: .audio).first,
+                  let timeRange = try? await audio.load(.timeRange),
+                  timeRange.duration.seconds.isFinite,
+                  timeRange.duration.seconds > 0 else { continue }
+            return timeRange.duration.seconds
+        }
+        for sourceURL in sourceURLs where !isStillImage(sourceURL) {
+            let asset = AVURLAsset(url: sourceURL)
+            guard let video = try? await asset.loadTracks(withMediaType: .video).first,
+                  let timeRange = try? await video.load(.timeRange),
+                  timeRange.duration.seconds.isFinite,
+                  timeRange.duration.seconds > 0 else { continue }
+            return timeRange.duration.seconds
+        }
+        if let imageURL = sourceURLs.first(where: isStillImage) {
+            return project.mediaDuration(for: imageURL.lastPathComponent)
+        }
+        return nil
+    }
+
+    private static func isStillImage(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
+    }
+
+    private static func makeStillVideo(sourceURL: URL, duration: Double) async throws -> URL {
+        guard let image = UIImage(contentsOfFile: sourceURL.path) else {
+            throw ExportError.exportFailed("That photo could not be decoded on this device.")
+        }
+        let safeDuration = max(0.25, duration)
+        let cacheDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AyahClipStillCache", isDirectory: true)
+        try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        let identity = UInt(bitPattern: sourceURL.path.hashValue)
+        let destination = cacheDirectory.appendingPathComponent(
+            "still-\(identity)-\(Int((safeDuration * 1_000).rounded())).mp4"
+        )
+        if FileManager.default.fileExists(atPath: destination.path),
+           let cachedDuration = try? await AVURLAsset(url: destination).load(.duration).seconds,
+           cachedDuration >= safeDuration - 0.05 {
+            return destination
+        }
+        try? FileManager.default.removeItem(at: destination)
+
+        let renderSize = outputSize
+        let width = Int(renderSize.width.rounded())
+        let height = Int(renderSize.height.rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let rendered = UIGraphicsImageRenderer(size: renderSize, format: format).image { _ in
+            UIColor.black.setFill()
+            UIRectFill(CGRect(origin: .zero, size: renderSize))
+            let scale = max(renderSize.width / image.size.width, renderSize.height / image.size.height)
+            let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+            image.draw(in: CGRect(
+                x: (renderSize.width - size.width) / 2,
+                y: (renderSize.height - size.height) / 2,
+                width: size.width,
+                height: size.height
+            ))
+        }
+        guard let renderedImage = rendered.cgImage else {
+            throw ExportError.exportFailed("That photo could not be prepared for video export.")
+        }
+
+        let writer = try AVAssetWriter(outputURL: destination, fileType: .mp4)
+        let input = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: width,
+                AVVideoHeightKey: height
+            ]
+        )
+        input.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height
+            ]
+        )
+        guard writer.canAdd(input) else {
+            throw ExportError.exportFailed("This device could not create a video track for that photo.")
+        }
+        writer.add(input)
+        guard writer.startWriting() else {
+            throw writer.error ?? ExportError.exportFailed("Photo video preparation could not start.")
+        }
+        writer.startSession(atSourceTime: .zero)
+
+        while !input.isReadyForMoreMediaData { await Task.yield() }
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_32BGRA,
+            nil,
+            &pixelBuffer
+        )
+        guard let pixelBuffer else {
+            throw ExportError.exportFailed("This device could not allocate a photo video frame.")
+        }
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        guard let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(pixelBuffer),
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue
+                | CGImageAlphaInfo.premultipliedFirst.rawValue
+        ) else {
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+            throw ExportError.exportFailed("This device could not draw a photo video frame.")
+        }
+        context.draw(renderedImage, in: CGRect(origin: .zero, size: renderSize))
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        guard adaptor.append(pixelBuffer, withPresentationTime: .zero) else {
+            throw writer.error ?? ExportError.exportFailed("The photo frame could not be added to the video.")
+        }
+        writer.endSession(atSourceTime: CMTime(seconds: safeDuration, preferredTimescale: 600))
+        input.markAsFinished()
+        await writer.finishWriting()
+        guard writer.status == .completed else {
+            try? FileManager.default.removeItem(at: destination)
+            throw writer.error ?? ExportError.exportFailed("Photo video preparation did not finish.")
+        }
+        return destination
     }
 
     private static func timelineBoundaries(project: ClipProject, duration: Double) -> [Double] {

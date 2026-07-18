@@ -1,15 +1,25 @@
 import AVFoundation
 import Foundation
+import ImageIO
 import Observation
 import Photos
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
 final class AppModel {
+    enum MediaPlacement: Equatable {
+        case primaryIfEmpty
+        case additional
+    }
+
     typealias ExportRenderer = @MainActor ([URL], ClipProject) async throws -> URL
     typealias AvailableCapacityProvider = @MainActor (URL) throws -> Int64?
     typealias PhotoAuthorizationRequester = @MainActor () async -> PHAuthorizationStatus
     typealias PhotoSaver = @MainActor (URL) async throws -> Void
+    typealias NativeMediaImporter = @MainActor (
+        MobileMediaImportRequestPayload
+    ) async throws -> [URL]
 
     private let appGroup = "group.app.ayahclip.mobile"
     enum AppTab: Hashable {
@@ -25,6 +35,9 @@ final class AppModel {
     var importedMediaURL: URL? { importedMediaURLs.first }
     var pendingLink = ""
     var notice: String?
+    var quranChapters: [QuranChapter] = []
+    var quranVerses: [QuranCatalogVerse] = []
+    var isLoadingQuran = false
     var isImporting = false
     var isExporting = false
     var isSavingToPhotos = false
@@ -43,7 +56,9 @@ final class AppModel {
     @ObservationIgnored private let availableCapacityProvider: AvailableCapacityProvider
     @ObservationIgnored private let photoAuthorizationRequester: PhotoAuthorizationRequester
     @ObservationIgnored private let photoSaver: PhotoSaver
+    @ObservationIgnored private let quranCatalog: QuranCatalogService
     private var exportRequestID: UUID?
+    private var quranRequestID: UUID?
 
     init(
         exportRenderer: @escaping ExportRenderer = { sourceURLs, project in
@@ -61,20 +76,82 @@ final class AppModel {
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: exportURL)
             }
-        }
+        },
+        quranCatalog: QuranCatalogService = QuranCatalogService()
     ) {
         self.exportRenderer = exportRenderer
         self.availableCapacityProvider = availableCapacityProvider
         self.photoAuthorizationRequester = photoAuthorizationRequester
         self.photoSaver = photoSaver
+        self.quranCatalog = quranCatalog
         loadProjects()
         pendingLink = UserDefaults.standard.string(forKey: referenceKey) ?? ""
+    }
+
+    func loadQuranChapters() async {
+        if quranChapters.count == 114 { return }
+        let requestID = UUID()
+        quranRequestID = requestID
+        isLoadingQuran = true
+        defer {
+            if quranRequestID == requestID { isLoadingQuran = false }
+        }
+        do {
+            let chapters = try await quranCatalog.fetchChapters()
+            guard quranRequestID == requestID else { return }
+            quranChapters = chapters
+        } catch {
+            guard quranRequestID == requestID else { return }
+            notice = error.localizedDescription
+        }
+    }
+
+    func loadQuranVerses(chapter: Int) async {
+        let requestID = UUID()
+        quranRequestID = requestID
+        isLoadingQuran = true
+        defer {
+            if quranRequestID == requestID { isLoadingQuran = false }
+        }
+        do {
+            let verses = try await quranCatalog.fetchVerses(chapter: chapter)
+            guard quranRequestID == requestID else { return }
+            quranVerses = verses
+        } catch {
+            guard quranRequestID == requestID else { return }
+            notice = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func applyQuranRange(chapterID: Int, from: Int, to: Int) -> Bool {
+        guard let chapter = quranChapters.first(where: { $0.id == chapterID }) else {
+            notice = "Choose a surah before continuing."
+            return false
+        }
+        let lower = min(from, to)
+        let upper = max(from, to)
+        let verses = quranVerses.filter {
+            $0.verseNumber >= lower && $0.verseNumber <= upper
+        }
+        guard verses.count == upper - lower + 1,
+              verses.first?.verseNumber == lower,
+              verses.last?.verseNumber == upper else {
+            notice = "AyahClip has not loaded that complete verse range yet. Try again."
+            return false
+        }
+        if activeProject == nil { createProject() }
+        updateActive { project in
+            project.applyQuranRange(chapter: chapter, verses: verses)
+        }
+        notice = nil
+        return true
     }
 
     func createProject() {
         cancelExport()
         resetHistory()
-        activeProject = .freshStarter()
+        activeProject = .freshDraft()
         importedMediaURLs = []
         exportURL = nil
     }
@@ -140,6 +217,59 @@ final class AppModel {
         replaceActiveProject(project, previous: original, recordHistory: recordHistory)
     }
 
+    func applyMobileEditorChange(
+        _ envelope: MobileBridgeEnvelope<MobileProjectSnapshotV1>,
+        session: MobileEditorSession
+    ) throws {
+        guard let current = activeProject else {
+            throw MobileEditorSession.SessionError.projectMismatch
+        }
+        let updated = try session.applyProjectChange(envelope, to: current)
+        // Studio owns its own fine-grained undo history. Native receives a
+        // synchronized checkpoint, so each autosave must not flood Swift undo.
+        replaceActiveProject(updated, previous: current, recordHistory: false)
+    }
+
+    func makeMobileEditorEnvironment(
+        mediaImporter: @escaping NativeMediaImporter = { _ in
+            throw MobileEditorSession.SessionError.unsupportedMessage
+        }
+    ) throws -> MobileEditorEnvironment {
+        guard let project = activeProject else {
+            throw MobileEditorSession.SessionError.projectMismatch
+        }
+        return try MobileEditorEnvironment(
+            project: project,
+            mediaURLs: importedMediaURLs,
+            allowedMediaRoots: [try mediaDirectory()],
+            onProjectChange: { [weak self] envelope, session in
+                guard let self else { throw CancellationError() }
+                try self.applyMobileEditorChange(envelope, session: session)
+            },
+            onExportComplete: { [weak self] url in
+                guard let self else { throw CancellationError() }
+                try await self.receiveMobileEditorExport(url)
+            },
+            onMediaImportRequest: { [weak self] payload, session in
+                guard let self else { throw CancellationError() }
+                let sourceURLs = try await mediaImporter(payload)
+                guard !sourceURLs.isEmpty, sourceURLs.count <= payload.maxCount else {
+                    throw MobileEditorSession.SessionError.mediaCountMismatch
+                }
+                let existing = Set(self.importedMediaURLs)
+                let placement: MediaPlacement = payload.purpose == .primary
+                    ? .primaryIfEmpty
+                    : .additional
+                guard await self.importMedia(from: sourceURLs, placement: placement) else {
+                    throw MobileEditorSession.SessionError.mediaMutation
+                }
+                let addedURLs = self.importedMediaURLs.filter { !existing.contains($0) }
+                let descriptors = try session.registerAdditionalMedia(addedURLs)
+                return MobileMediaImportResultPayload(media: descriptors)
+            }
+        )
+    }
+
     func undo() {
         guard let current = activeProject, let previous = undoStack.popLast() else { return }
         appendHistory(current, to: &redoStack)
@@ -161,8 +291,10 @@ final class AppModel {
         filenames.insert(filename, at: destinationIndex)
         project.setMediaFilenames(filenames)
         let mediaURLs = filenames.compactMap(mediaURL(for:))
-        if let primaryURL = mediaURLs.first,
-           let duration = try? await AVURLAsset(url: primaryURL).load(.duration).seconds {
+        if let duration = await VideoExportService.preferredTimelineDuration(
+            sourceURLs: mediaURLs,
+            project: project
+        ) {
             project.fitSegments(to: duration)
         }
         project.updatedAt = Date()
@@ -177,8 +309,10 @@ final class AppModel {
         filenames.remove(at: index)
         project.setMediaFilenames(filenames)
         let mediaURLs = filenames.compactMap(mediaURL(for:))
-        if let primaryURL = mediaURLs.first,
-           let duration = try? await AVURLAsset(url: primaryURL).load(.duration).seconds {
+        if let duration = await VideoExportService.preferredTimelineDuration(
+            sourceURLs: mediaURLs,
+            project: project
+        ) {
             project.fitSegments(to: duration)
         }
         project.updatedAt = Date()
@@ -188,11 +322,19 @@ final class AppModel {
 
     @discardableResult
     func importMedia(from sourceURL: URL) async -> Bool {
-        await importMedia(from: [sourceURL])
+        await importMedia(from: [sourceURL], placement: .primaryIfEmpty)
     }
 
     @discardableResult
     func importMedia(from sourceURLs: [URL]) async -> Bool {
+        await importMedia(from: sourceURLs, placement: .primaryIfEmpty)
+    }
+
+    @discardableResult
+    func importMedia(
+        from sourceURLs: [URL],
+        placement: MediaPlacement
+    ) async -> Bool {
         guard !sourceURLs.isEmpty else { return false }
         let attachedCount = activeProject?.allMediaFilenames.count ?? 0
         do {
@@ -208,6 +350,7 @@ final class AppModel {
         defer { isImporting = false }
 
         var destinations: [URL] = []
+        var imageFilenames = Set<String>()
         var accessedURLs: [URL] = []
         defer { accessedURLs.forEach { $0.stopAccessingSecurityScopedResource() } }
         do {
@@ -226,6 +369,15 @@ final class AppModel {
                 let destination = directory.appendingPathComponent("\(UUID().uuidString).\(extensionName)")
                 try FileManager.default.copyItem(at: sourceURL, to: destination)
                 destinations.append(destination)
+                let declaredType = UTType(filenameExtension: destination.pathExtension)
+                let hasImage = declaredType?.conforms(to: .image) == true
+                if hasImage {
+                    guard CGImageSourceCreateWithURL(destination as CFURL, nil) != nil else {
+                        throw CocoaError(.fileReadCorruptFile)
+                    }
+                    imageFilenames.insert(destination.lastPathComponent)
+                    continue
+                }
                 let asset = AVURLAsset(url: destination)
                 let hasVideo = try await !asset.loadTracks(withMediaType: .video).isEmpty
                 let hasAudio = try await !asset.loadTracks(withMediaType: .audio).isEmpty
@@ -236,14 +388,15 @@ final class AppModel {
 
             if activeProject == nil {
                 resetHistory()
-                activeProject = .freshStarter()
+                activeProject = .freshDraft()
             }
             guard let original = activeProject else { return false }
             var project = original
-            let isAddingPrimary = activeProject?.mediaFilename == nil
+            let isAddingPrimary = placement == .primaryIfEmpty
+                && activeProject?.mediaFilename == nil
             let sourceReference = normalizedReferenceURL(from: pendingLink)?.absoluteString
             var filenames = destinations.map(\.lastPathComponent)
-            if project.mediaFilename == nil, let primary = filenames.first {
+            if isAddingPrimary, let primary = filenames.first {
                 project.mediaFilename = primary
                 if let sourceReference { project.sourceReferenceURL = sourceReference }
                 filenames.removeFirst()
@@ -251,10 +404,16 @@ final class AppModel {
             var bRoll = project.bRollFilenames ?? []
             bRoll.append(contentsOf: filenames)
             project.bRollFilenames = bRoll
+            for filename in imageFilenames {
+                project.setMediaDuration(project.fallbackVisualDuration, for: filename)
+            }
 
             let mediaURLs = project.allMediaFilenames.compactMap(mediaURL(for:))
-            if isAddingPrimary, let primaryURL = mediaURLs.first {
-                let duration = try await AVURLAsset(url: primaryURL).load(.duration).seconds
+            if isAddingPrimary,
+               let duration = await VideoExportService.preferredTimelineDuration(
+                    sourceURLs: mediaURLs,
+                    project: project
+               ) {
                 project.fitSegments(to: duration)
             }
             project.updatedAt = Date()
@@ -414,6 +573,44 @@ final class AppModel {
         }
     }
 
+    /// Accepts a completed MP4/WebM from the embedded Studio, moves it out of
+    /// the bridge transfer directory, and completes the same explicit Photos
+    /// permission/save path as a native render.
+    func receiveMobileEditorExport(_ temporaryURL: URL) async throws {
+        guard activeProject != nil,
+              temporaryURL.isFileURL,
+              FileManager.default.fileExists(atPath: temporaryURL.path) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let values = try temporaryURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        let size = Int64(values.fileSize ?? 0)
+        let ext = temporaryURL.pathExtension.lowercased()
+        guard values.isRegularFile == true,
+              size > 0,
+              size <= MobileExportTransferSession.maxFileSize,
+              ext == "mp4" else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AyahClipCompletedExports", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let destination = directory.appendingPathComponent("\(UUID().uuidString).\(ext)")
+        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        exportURL = destination
+
+        let status = await photoAuthorizationRequester()
+        guard status == .authorized || status == .limited else {
+            notice = "Video is ready in AyahClip. Photos access is off; enable Add Photos in Settings to save it."
+            return
+        }
+        do {
+            try await photoSaver(destination)
+            notice = "Video saved to Photos."
+        } catch {
+            notice = "The video is ready in AyahClip, but Photos could not save it: \(error.localizedDescription)"
+        }
+    }
+
     func mediaURL(for filename: String) -> URL? {
         try? mediaDirectory().appendingPathComponent(filename)
     }
@@ -433,7 +630,7 @@ final class AppModel {
     private func loadProjects() {
         guard let data = UserDefaults.standard.data(forKey: projectsKey),
               let decoded = try? JSONDecoder().decode([ClipProject].self, from: data) else { return }
-        projects = decoded
+        projects = decoded.map { $0.removingLegacyPlaceholderIfNeeded() }
     }
 
     private func persistProjects() {

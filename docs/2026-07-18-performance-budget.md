@@ -4,7 +4,7 @@ Date: 2026-07-18
 
 ## Scope
 
-This gate measures the creator interactions that must feel immediate in the deployed web app. It uses installed Google Chrome against `https://ayahclip.vercel.app`, a 1.2-second generated WAV, Surah 51:1–2, and the Reciter Split Fade template. Telemetry is intercepted so analytics delivery cannot distort editor timings.
+This gate measures the creator interactions that must feel immediate in the deployed web app. It uses installed Google Chrome against `https://ayahclip.com`, a 1.2-second generated WAV, Surah 51:1–2, and the Reciter Split Fade template. Telemetry is intercepted so analytics delivery cannot distort editor timings.
 
 The test runs three fresh browser journeys sequentially. Every run must remain inside every budget; averages cannot hide a slow interaction.
 

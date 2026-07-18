@@ -97,3 +97,36 @@ Editor mode contains:
 - Continue using the real export renderer for every preview.
 - Retain `/styles` URL compatibility while changing the visible label to Templates.
 - Do not add a third-party YouTube downloader. Support local files the user owns or has permission to use.
+
+## Native iPhone product parity
+
+The iPhone app is a native shell around the same creator workflow and rendering
+engine as the web product. It must not become a second, reduced editor with its
+own hard-coded Quran text or styling model.
+
+The primary create sheet offers two equal starting paths:
+
+1. **Choose Quran verses**: browse all 114 surahs, select a contiguous or custom
+   ayah range, choose a reciter, choose a template, then open Studio.
+2. **Import my media**: choose owned video, audio, or still images from Photos or
+   Files; keep original visuals or replace them; recognise the passage locally;
+   review or correct the range; choose a template; then open Studio.
+
+Projects, Templates, and Settings remain top-level destinations. Import is part
+of the New Clip flow, not an unrelated tab the creator must discover after
+opening an empty editor.
+
+The mobile editor follows a compact creative-tool hierarchy: 9:16 preview,
+transport, a readable multi-track timeline, and one bottom tool rail. Tools open
+focused sheets for Text, Media, Templates, Adjust, and Export. The preview never
+shrinks below a useful inspection size, and text controls must not overwhelm the
+canvas.
+
+Native bridges cover Photos/Files import, Share Extension intake, Save to Photos,
+and the system Share Sheet. Project state, templates, Quran range, recognition
+timings, preview, and export semantics come from the shared web product contract.
+
+TikTok, Instagram, and YouTube links may be retained as references or handled
+through platform-supported access to media the creator owns. Never strip a
+watermark, bypass a platform safeguard, or present another creator's post as a
+clean original.

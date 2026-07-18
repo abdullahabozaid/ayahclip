@@ -1,0 +1,48 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  frontend:
+    container_name: ayahclip-frontend
+    logging: *default-logging
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://ayahclip.com}
+        NEXT_PUBLIC_ASR_MODEL_URL: ${NEXT_PUBLIC_ASR_MODEL_URL:-}
+        DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
+    env_file:
+      - .env
+    environment:
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://ayahclip.com}
+      AYAHCLIP_SELF_HOSTED: "1"
+      DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
+      PORT: "3000"
+    expose:
+      - "3000"
+    restart: unless-stopped
+    mem_limit: 2g
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    networks:
+      - default
+      - public_caddy
+
+networks:
+  public_caddy:
+    external: true
+    name: ${CADDY_NETWORK:-caddy}

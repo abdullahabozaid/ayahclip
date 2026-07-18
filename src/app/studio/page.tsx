@@ -7,6 +7,17 @@ import { saveProject, generateProjectId, saveBlob, getProject } from "@/lib/proj
 import { captureSceneThumbnail } from "@/lib/scene-thumbnail";
 import { fetchVerses } from "@/lib/api";
 import { getTranslationLanguage } from "@/lib/translations";
+import {
+  isNativeMobileEditor,
+  requestNativeProjectHydration,
+  sendNativeProjectChange,
+  subscribeNativeMediaImports,
+  type MobileProjectSnapshotV1,
+} from "@/lib/mobile-bridge";
+import {
+  hydrateStoreFromMobileProject,
+  snapshotFromWebProject,
+} from "@/lib/mobile-project-adapter";
 import { StudioPreview } from "@/components/StudioPreview";
 import { StudioSettings } from "@/components/StudioSettings";
 import { VerseCardEditor } from "@/components/VerseCardEditor";
@@ -86,6 +97,48 @@ export default function StudioPage() {
   const savedAudioUrlRef = useRef<string | null>(null);
   const savedVideoUrlRef = useRef<string | null>(null);
   const savedBackgroundUrlsRef = useRef<Set<string>>(new Set());
+  const nativeSnapshotRef = useRef<MobileProjectSnapshotV1 | null>(null);
+
+  useEffect(() => {
+    if (!isNativeMobileEditor(window.location.search)) return;
+    let cancelled = false;
+    const unsubscribeMediaImports = subscribeNativeMediaImports((media) => {
+      const snapshot = nativeSnapshotRef.current;
+      if (!snapshot) return;
+      const existingIDs = new Set(snapshot.media.map((item) => item.id));
+      const additions = media.filter((item) => !existingIDs.has(item.id));
+      if (additions.length > 0) {
+        nativeSnapshotRef.current = {
+          ...snapshot,
+          media: [...snapshot.media, ...additions],
+          updatedAtMilliseconds: Date.now(),
+        };
+      }
+    });
+    requestNativeProjectHydration("ayahclip-web-0.1.0", [
+      "quran-range",
+      "recognition-review",
+      "templates",
+      "timeline",
+      "broll",
+      "native-media",
+      "export",
+    ])
+      .then(async (snapshot) => {
+        if (!snapshot || cancelled) return;
+        nativeSnapshotRef.current = snapshot;
+        await hydrateStoreFromMobileProject(snapshot);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setSaveError(error instanceof Error ? error.message : "The native project could not be opened.");
+        }
+      });
+    return () => {
+      cancelled = true;
+      unsubscribeMediaImports();
+    };
+  }, []);
 
   useEffect(() => {
     trackOncePerJourney("studio_opened");
@@ -216,9 +269,9 @@ export default function StudioPage() {
     let imported: import("@/types").Project["imported"];
     let mediaSaved = true;
     if (src.mode === "imported") {
-      const videoBg = state.background.type === "video" && state.background.value.startsWith("blob:");
+      const videoBg = state.background.type === "video";
       imported = { name: src.name, timings: src.timings, videoBg };
-      if (savedAudioUrlRef.current !== src.url) {
+      if (!nativeSnapshotRef.current && savedAudioUrlRef.current !== src.url) {
         try {
           const saved = await saveBlob(`audio:${id}`, await (await fetch(src.url)).blob());
           if (saved) savedAudioUrlRef.current = src.url;
@@ -227,7 +280,10 @@ export default function StudioPage() {
           mediaSaved = false;
         }
       }
-      if (videoBg && savedVideoUrlRef.current !== state.background.value) {
+      if (!nativeSnapshotRef.current
+        && videoBg
+        && state.background.value.startsWith("blob:")
+        && savedVideoUrlRef.current !== state.background.value) {
         try {
           const saved = await saveBlob(`video:${id}`, await (await fetch(state.background.value)).blob());
           if (saved) savedVideoUrlRef.current = state.background.value;
@@ -261,7 +317,7 @@ export default function StudioPage() {
     // drafts instead of appearing on the dashboard as broken saved clips.
     if (!mediaSaved) return { ok: false, reason: "media" };
 
-    const projectSaved = await saveProject({
+    const projectRecord: import("@/types").Project = {
       id,
       name: `${state.surah.name_simple} ${sel[0]}-${sel[sel.length - 1]}`,
       surahId: state.surah.id,
@@ -328,8 +384,20 @@ export default function StudioPage() {
       thumbnail: existingThumb,
       createdAt: existing?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
-    });
+    };
+    const projectSaved = await saveProject(projectRecord);
     if (!projectSaved) return { ok: false, reason: "project" };
+    if (nativeSnapshotRef.current) {
+      const updatedSnapshot = snapshotFromWebProject(
+        nativeSnapshotRef.current,
+        projectRecord,
+        state,
+      );
+      if (!await sendNativeProjectChange(updatedSnapshot)) {
+        return { ok: false, reason: "project" };
+      }
+      nativeSnapshotRef.current = updatedSnapshot;
+    }
     if (!state.projectId) state.setProjectId(id);
     return { ok: true };
   }, []);

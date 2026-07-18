@@ -1,41 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchSurahs, fetchVerses } from "@/lib/api";
 import { useAppStore } from "@/lib/store";
 import { getTranslationLanguage } from "@/lib/translations";
 import {
   decodeAudioFile,
-  resampleTo16kMono,
   autoSegment,
-  findSilenceCenters,
-  findSpeechSpan,
-  type VerseTiming,
 } from "@/lib/audio-import";
 import {
-  assessVerseMatch,
   getVerseWeights,
-  hasCompetingRecognitionWindow,
   loadCorpus,
-  recoverRecognitionWindowCandidates,
-  selectRecognitionCandidates,
-  recoverLeadingVerse,
-  type VerseMatch,
 } from "@/lib/verse-match";
-import { forceAlignVersesDetailed } from "@/lib/forced-align";
-import { attachAlignmentDiagnostics } from "@/lib/deep-align";
 import {
   alignmentFailureMessage,
-  buildAlignmentReview,
-  type AlignmentReview,
 } from "@/lib/alignment-feedback";
 import { Surah, Verse } from "@/types";
-import {
-  leadingRecognitionRetryOffset,
-  offsetEmissions,
-  recognitionTranscriptWindows,
-} from "@/lib/recognition-retry";
 import {
   browserDeviceMemoryGb,
   importSizeError,
@@ -54,22 +35,18 @@ import {
   trackProductEvent,
 } from "@/lib/telemetry";
 import { isSupportedVideoFile } from "@/lib/media-file";
-
-interface RecognitionResult {
-  transcript: string;
-  ref: string;
-  surah: number;
-  ayahStart: number;
-  ayahEnd: number;
-  timings: VerseTiming[];
-  method: "transcript" | "ctc" | "hybrid" | "pause";
-  confidence: "high" | "medium" | "selected";
-  review: AlignmentReview;
-}
-
-interface RecognitionCandidate extends Omit<RecognitionResult, "confidence"> {
-  key: string;
-}
+import {
+  recognizeQuranPassage,
+  type QuranRecognitionCandidate as RecognitionCandidate,
+  type QuranRecognitionResult as RecognitionResult,
+} from "@/lib/quran-recognition";
+import {
+  isNativeMobileEditor,
+  requestNativeProjectHydration,
+  sendNativeProjectChange,
+  type MobileProjectSnapshotV1,
+} from "@/lib/mobile-bridge";
+import { snapshotFromRecognition } from "@/lib/mobile-project-adapter";
 
 export default function ImportPage() {
   const router = useRouter();
@@ -115,174 +92,42 @@ export default function ImportPage() {
   const [rangeConfirmed, setRangeConfirmed] = useState(false);
   const [detected, setDetected] = useState<RecognitionResult | null>(null);
   const [recognitionCandidates, setRecognitionCandidates] = useState<RecognitionCandidate[]>([]);
+  const [nativeSnapshot, setNativeSnapshot] = useState<MobileProjectSnapshotV1 | null>(null);
+  const [nativeSourceURL, setNativeSourceURL] = useState<string | null>(null);
+  const nativeHydrationStartedRef = useRef(false);
 
   const autoDetect = async () => {
     if (!buffer) return;
-    const durationError = recognitionDurationError(buffer.duration, browserDeviceMemoryGb());
-    if (durationError) {
-      setDetectError(durationError);
-      return;
-    }
     detectAbortRef.current?.abort();
     const controller = new AbortController();
     detectAbortRef.current = controller;
     setDetecting(true);
     setDetectError(null);
     try {
-      setDetectProgress({ stage: "prepare", detail: "Loading the Quran verse index" });
-      await loadCorpus();
-      setDetectProgress({ stage: "prepare", detail: "Preparing audio for local recognition" });
-      const audio = await resampleTo16kMono(buffer);
-      setDetectProgress({ stage: "listen", detail: "Loading the local recognition model" });
-      const { computeEmissions } = await import("@/lib/asr");
-      let emissions = await computeEmissions(audio, (loaded, total) => {
-        if (total) {
-          setDetectProgress({
-            stage: "listen",
-            detail: "Downloading the local recognition model",
-            percent: Math.round((loaded / total) * 100),
-            loadedBytes: loaded,
-            totalBytes: total,
-          });
-        } else {
-          setDetectProgress({ stage: "listen", detail: "Listening to the recitation locally" });
-        }
-      }, controller.signal);
-      if (controller.signal.aborted) {
-        const abortError = new Error("Recognition cancelled");
-        abortError.name = "AbortError";
-        throw abortError;
-      }
-      let transcript = emissions.transcription.text;
-      setDetectProgress({ stage: "match", detail: "Matching the transcript to the Quran" });
-      let assessment = assessVerseMatch(transcript);
-      const retryOffset = assessment.confidence === "low"
-        ? leadingRecognitionRetryOffset(emissions.transcription, audio.length / 16_000)
-        : null;
-      if (retryOffset !== null) {
-        setDetectProgress({
-          stage: "listen",
-          detail: "Retrying after a non-recitation introduction",
-        });
-        const retrySamples = Math.round(retryOffset * 16_000);
-        const retryEmissions = offsetEmissions(
-          await computeEmissions(audio.subarray(retrySamples), undefined, controller.signal),
-          retryOffset,
-        );
-        setDetectProgress({
-          stage: "match",
-          detail: "Matching the retried transcript to the Quran",
-        });
-        const retryAssessment = assessVerseMatch(retryEmissions.transcription.text);
-        const currentScore = assessment.match?.score ?? 0;
-        const retryScore = retryAssessment.match?.score ?? 0;
-        const confidenceRank = { low: 0, medium: 1, high: 2 } as const;
-        if (
-          confidenceRank[retryAssessment.confidence] > confidenceRank[assessment.confidence] ||
-          (retryAssessment.confidence === assessment.confidence && retryScore > currentScore)
-        ) {
-          emissions = retryEmissions;
-          transcript = retryEmissions.transcription.text;
-          assessment = retryAssessment;
-        }
-      }
-      const initialMatch = assessment.match;
-      const speechSpan = findSpeechSpan(buffer);
-      const recovery = initialMatch
-        ? recoverLeadingVerse(
-          initialMatch,
-          emissions.transcription.charTimes[0],
-          speechSpan.start
-        )
-        : null;
-      const m = recovery?.match ?? null;
-      // Recovery is an inference, so a high match is downgraded to medium. It
-      // must never promote an already ambiguous low-confidence transcript.
-      const effectiveConfidence = recovery?.recovered && assessment.confidence === "high"
-        ? "medium"
-        : assessment.confidence;
-      const windowCandidates = effectiveConfidence !== "high"
-        ? recoverRecognitionWindowCandidates(recognitionTranscriptWindows(
-          emissions.transcription,
-          findSilenceCenters(buffer),
-          buffer.duration,
-        ))
-        : [];
-      const competingWindow = Boolean(m && hasCompetingRecognitionWindow(m, windowCandidates));
-      const buildRecognitionResult = (
-        match: VerseMatch,
-      ): Omit<RecognitionResult, "confidence"> => {
-        const matchedSurah = surahs.find((item) => item.id === match.surah);
-        const verseNumbers = Array.from(
-          { length: match.ayahEnd - match.ayahStart + 1 },
-          (_, index) => match.ayahStart + index,
-        );
-        const alignment = forceAlignVersesDetailed({
-          emissions,
-          surah: match.surah,
-          verseNumbers,
-          audioDuration: buffer.duration,
-          audioStart: speechSpan.start,
-          silences: findSilenceCenters(buffer),
-        });
-        const rawTimings = alignment?.timings ?? autoSegment(
-          buffer,
-          verseNumbers,
-          getVerseWeights(match.surah, match.ayahStart, match.ayahEnd),
-        );
-        const method = alignment?.method ?? "pause";
-        const boundaryDiagnostics = alignment?.boundaryDiagnostics ?? verseNumbers.map(
-          (verseNumber) => ({
-            verseNumber,
-            agreementSeconds: null,
-            confidence: "low" as const,
-          }),
-        );
-        return {
-          transcript,
-          ref: `${matchedSurah?.name_simple ?? `Surah ${match.surah}`} · ${match.ayahStart}${match.ayahEnd !== match.ayahStart ? `–${match.ayahEnd}` : ""}`,
-          surah: match.surah,
-          ayahStart: match.ayahStart,
-          ayahEnd: match.ayahEnd,
-          timings: attachAlignmentDiagnostics(rawTimings, method, boundaryDiagnostics),
-          method,
-          review: buildAlignmentReview(method, boundaryDiagnostics),
-        };
-      };
-      if (m && effectiveConfidence !== "low" && !competingWindow) {
-        setDetectProgress({ stage: "align", detail: "Aligning each ayah boundary" });
-        const result = buildRecognitionResult(m);
-        setSurahId(m.surah);
-        setFrom(String(m.ayahStart));
-        setTo(String(m.ayahEnd));
+      const outcome = await recognizeQuranPassage({
+        buffer,
+        surahs,
+        deviceMemoryGb: browserDeviceMemoryGb(),
+        signal: controller.signal,
+        onProgress: setDetectProgress,
+      });
+      if (outcome.kind === "matched") {
+        const result = outcome.result;
+        setSurahId(result.surah);
+        setFrom(String(result.ayahStart));
+        setTo(String(result.ayahEnd));
         setRecognitionCandidates([]);
         setRangeConfirmed(false);
-        setDetected({
-          ...result,
-          confidence: effectiveConfidence,
-        });
-      } else if (windowCandidates[0] ?? m) {
-        const reviewPrimary = windowCandidates[0] ?? m!;
-        const uniqueMatches = selectRecognitionCandidates(reviewPrimary, [
-          ...windowCandidates.slice(1),
-          ...(m ? [m] : []),
-          ...assessment.alternatives,
-        ]);
-        setDetectProgress({ stage: "align", detail: "Preparing likely Quran ranges" });
-        setRecognitionCandidates(uniqueMatches.map((match) => ({
-          ...buildRecognitionResult(match),
-          key: `${match.surah}:${match.ayahStart}-${match.ayahEnd}`,
-        })));
+        setDetected(result);
+      } else if (outcome.kind === "ambiguous") {
+        setRecognitionCandidates(outcome.candidates);
         setDetected(null);
         setRangeConfirmed(false);
-        setDetectError(windowCandidates.length > 0
-          ? "A Quran passage was found after separating speech around a pause. Check the suggested range by ear, or enter it manually."
-          : "This recitation matches several similar Quran passages. Choose the range that sounds right, or enter it manually."
-        );
+        setDetectError(outcome.message);
       } else {
         setDetectError(detected
           ? "Couldn't confidently match this run. Your previous Quran range is still available below."
-          : "Couldn't confidently match this clip. Pick the verses manually below.");
+          : outcome.message);
       }
     } catch (error) {
       setDetectError(`${alignmentFailureMessage(error)} ${detected
@@ -366,7 +211,7 @@ export default function ImportPage() {
 
   const surah = surahs.find((s) => s.id === surahId);
 
-  const handleFile = async (f: File | undefined) => {
+  const handleFile = useCallback(async (f: File | undefined) => {
     if (!f) return;
     detectAbortRef.current?.abort();
     const sizeError = importSizeError(f.size);
@@ -418,7 +263,45 @@ export default function ImportPage() {
         setDecodeMsg(null);
       }
     }
-  };
+  }, [videoUrl]);
+
+  useEffect(() => {
+    if (!isNativeMobileEditor(window.location.search) || nativeHydrationStartedRef.current) return;
+    nativeHydrationStartedRef.current = true;
+    let cancelled = false;
+    void requestNativeProjectHydration("ayahclip-web-0.1.0", [
+      "unknown-passage-recognition",
+      "manual-quran-range",
+      "recognition-review",
+      "native-media",
+    ]).then(async (snapshot) => {
+      if (!snapshot || cancelled) return;
+      const source = snapshot.media.find((item) =>
+        item.contentType.startsWith("audio/") || item.contentType.startsWith("video/"));
+      if (!source) throw new Error("The native project has no recitation media to recognise.");
+      const response = await fetch(source.url, { cache: "no-store" });
+      if (!response.ok) throw new Error("The imported iPhone media could not be opened.");
+      const blob = await response.blob();
+      if (cancelled) return;
+      const extension = source.contentType.startsWith("video/")
+        ? source.contentType.includes("quicktime") ? "mov" : "mp4"
+        : source.contentType.includes("wav") ? "wav"
+          : source.contentType.includes("mpeg") ? "mp3" : "m4a";
+      const nativeFile = new File([blob], `iPhone import.${extension}`, {
+        type: source.contentType,
+      });
+      setNativeSnapshot(snapshot);
+      setNativeSourceURL(source.url);
+      await handleFile(nativeFile);
+    }).catch((reason: unknown) => {
+      if (!cancelled) {
+        setError(reason instanceof Error
+          ? reason.message
+          : "The imported iPhone media could not be opened.");
+      }
+    });
+    return () => { cancelled = true; };
+  }, [handleFile]);
 
   const cancelDecode = async () => {
     decodeOperationRef.current += 1;
@@ -462,7 +345,7 @@ export default function ImportPage() {
       if (prevSource.mode === "imported" && prevSource.url.startsWith("blob:")) {
         URL.revokeObjectURL(prevSource.url);
       }
-      const url = URL.createObjectURL(sourceAudio);
+      const url = nativeSourceURL ?? URL.createObjectURL(sourceAudio);
 
       store.beginNewProject();
       store.setSurah(surah);
@@ -470,15 +353,35 @@ export default function ImportPage() {
       store.setSelectedVerseNumbers(verseNumbers);
       store.setCurrentVerseIndex(0);
       store.setImportedAudio(url, file?.name ?? "Imported audio", timings);
+      if (nativeSnapshot) store.setProjectId(nativeSnapshot.id);
       // Use the uploaded video itself as the clip background, if requested — shown
       // whole (contain) so it isn't cropped/zoomed to fill the 9:16 frame.
       if (videoUrl && videoMode === "keep-video") {
-        store.setBackground({ type: "video", value: videoUrl, label: file?.name ?? "Uploaded video" });
+        store.setBackground({
+          type: "video",
+          value: nativeSourceURL ?? videoUrl,
+          label: file?.name ?? "Uploaded video",
+        });
         store.setBackgroundFit("contain");
         store.setBackgroundVideoSync(true); // lip-sync the video to the recitation
       }
       if (videoUrl && videoMode === "replace-visuals") {
         URL.revokeObjectURL(videoUrl);
+      }
+      if (nativeSnapshot) {
+        const updatedSnapshot = snapshotFromRecognition(
+          nativeSnapshot,
+          surah,
+          verses,
+          verseNumbers,
+          timings,
+        );
+        if (!await sendNativeProjectChange(updatedSnapshot)) {
+          throw new Error("The confirmed Quran range could not be saved to the iPhone project.");
+        }
+        setNativeSnapshot(updatedSnapshot);
+        router.push("/studio?native=ios&bridge=1&project=" + encodeURIComponent(updatedSnapshot.id));
+        return;
       }
       router.push(videoUrl && videoMode === "keep-video" ? "/studio" : "/styles?from=import");
     } catch {

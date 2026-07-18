@@ -6,6 +6,7 @@ import { applyTemplate } from "@/lib/apply-template";
 import { useAppStore } from "@/lib/store";
 import { extractStyle } from "@/lib/style";
 import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "@/lib/templates";
+import { isNativeMobileEditor } from "@/lib/mobile-bridge";
 import {
   deleteSavedTemplate,
   getSavedTemplates,
@@ -28,9 +29,13 @@ export function StylePanel() {
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
   const [appliedId, setAppliedId] = useState<string | null>(null);
+  const [nativeEditor, setNativeEditor] = useState(false);
 
   useEffect(() => {
-    Promise.resolve().then(() => setSaved(getSavedTemplates(DEFAULT_TEMPLATE_STYLE)));
+    Promise.resolve().then(() => {
+      setSaved(getSavedTemplates(DEFAULT_TEMPLATE_STYLE));
+      setNativeEditor(isNativeMobileEditor(window.location.search));
+    });
   }, []);
 
   const handleSave = () => {
@@ -115,9 +120,11 @@ export function StylePanel() {
             );
           })}
         </div>
-        <Link href="/styles" className="mt-3 flex min-h-10 items-center justify-center rounded-lg border border-[var(--hairline-soft)] text-[11px] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment">
-          Open Template Studio to edit presets
-        </Link>
+        {!nativeEditor && (
+          <Link href="/styles" className="mt-3 flex min-h-10 items-center justify-center rounded-lg border border-[var(--hairline-soft)] text-[11px] text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment">
+            Open Template Studio to edit presets
+          </Link>
+        )}
       </div>
 
       {/* Saved full templates — composition, typography, treatment and media structure. */}

@@ -79,7 +79,7 @@ async function publicPageBurst(): Promise<TimingSummary> {
 
 async function sameClientRateLimit(): Promise<Record<number, number>> {
   const responses = await Promise.all(
-    Array.from({ length: 180 }, (_, index) => fetch(`${ORIGIN}/api/telemetry`, {
+    Array.from({ length: 720 }, (_, index) => fetch(`${ORIGIN}/api/telemetry`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -94,8 +94,8 @@ async function sameClientRateLimit(): Promise<Record<number, number>> {
     result[response.status] = (result[response.status] ?? 0) + 1;
     return result;
   }, {});
-  assert(counts[204] === 120, `Expected 120 accepted same-client events, received ${JSON.stringify(counts)}`);
-  assert(counts[429] === 60, `Expected 60 throttled same-client events, received ${JSON.stringify(counts)}`);
+  assert(counts[204] === 600, `Expected 600 accepted same-client events, received ${JSON.stringify(counts)}`);
+  assert(counts[429] === 120, `Expected 120 throttled same-client events, received ${JSON.stringify(counts)}`);
   assert(responses.every((response) => response.status < 500), "Same-client burst produced a server error");
   const limited = responses.find((response) => response.status === 429);
   assert(limited?.headers.get("retry-after"), "Throttled responses must include Retry-After");

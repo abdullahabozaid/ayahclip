@@ -7,9 +7,9 @@
 - **Category:** Photo & Video
 - **Secondary category:** Lifestyle
 - **Age rating:** 4+
-- **Privacy policy:** https://ayahclip.vercel.app/privacy
-- **Support:** https://ayahclip.vercel.app/support
-- **Marketing:** https://ayahclip.vercel.app
+- **Privacy policy:** https://ayahclip.com/privacy
+- **Support:** https://ayahclip.com/support
+- **Marketing:** https://ayahclip.com
 
 ## Promotional text
 
@@ -33,7 +33,7 @@ Built for calm, deliberate editing:
 - On-device project storage, video export, and explicit Save to Photos
 - No account required
 
-AyahClip does not download other creators’ posts or remove platform watermarks. Import original media you own or have permission to use. TikTok, Instagram, and YouTube links are saved only as references while you locate the source file.
+AyahClip does not download other creators’ posts. TikTok, Instagram, and YouTube links are saved only as references while you locate the source file. For a video you own or have permission to reuse, the on-device Clean a watermark tool can blur the two common moving TikTok watermark zones before editing.
 
 ## Keywords
 
@@ -41,19 +41,17 @@ quran,recitation,video editor,ayah,arabic,captions,islamic,shorts,reels,vertical
 
 ## TestFlight — What to Test
 
-This is the first native iPhone beta. Please test:
+Please test the build 3 mobile-parity checkpoint:
 
 1. Complete the three-screen onboarding flow.
-2. Import a video from Photos or Files.
-3. Edit Arabic and English captions.
-4. Switch between centered, side-fade, and lower-third layouts.
-5. Adjust verse start and end points on the timeline.
-6. Undo and redo caption, timing, style, layout, reorder, and media-removal edits.
-7. Open the full-screen preview and verify the 9:16 canvas and captions.
-8. Export the MP4, save it to Photos, and open the saved video from the camera roll.
-9. Cancel a render in progress and confirm it does not appear in another project.
-10. Send up to eight original movies to AyahClip from the iOS Share Sheet and verify they arrive in order. Also share a TikTok, Instagram, or YouTube post link and verify it is saved only as a reference.
-11. Duplicate and delete a project from the Projects screen.
+2. Tap **New Quran clip** and confirm the shared AyahClip Studio opens and closes without losing the project.
+3. Import owned photos, video, and audio from the native Photos and Files pickers inside Studio.
+4. Choose and correct a Quran passage, then edit Arabic and English captions and timing.
+5. Switch templates, caption treatments, and B-roll while checking the 9:16 preview stays fitted.
+6. Export the MP4 and verify the native Photos/share delivery flow.
+7. In **Import**, choose **Clean a watermark**, confirm ownership or permission, select an owned video, and verify the processed copy opens as a new project with audio retained.
+8. Send up to eight original photos or movies to AyahClip from the iOS Share Sheet and verify they arrive in order. Also share a TikTok, Instagram, or YouTube post link and verify it is saved only as a reference.
+9. Duplicate, reopen, and delete a project from the Projects screen.
 
 Please report any mismatch between the editor preview and the exported MP4, clipped text, mistimed ayat, failed imports, or failed exports.
 
@@ -61,11 +59,11 @@ Please report any mismatch between the editor preview and the exported MP4, clip
 
 AyahClip requires no account or login.
 
-To review the core flow, launch the app, complete onboarding, tap **New Quran clip**, and choose a movie from Photos or Files. The editor opens after import. Caption text, layouts, styles, and timing controls are available beneath the preview. Use the expand button on the preview for distraction-free playback. Tap **Export** to render a local MP4, then choose **Save video** to add it to Photos or **Share** to open the system Share Sheet.
+To review the core flow, launch the app, complete onboarding, and tap **New Quran clip**. AyahClip opens the same responsive Studio used by ayahclip.com inside a native, origin-locked editor host. Photos and Files selections are copied into private app storage and exposed to the Studio through temporary opaque handles. Use the Studio controls to confirm the Quran range, adjust captions, layouts, timing, and B-roll, then export and deliver the completed MP4 through the native Photos/share flow.
 
 The Share extension is named **Import to AyahClip**. It accepts up to eight original movies, or one web URL or text item containing a supported TikTok, Instagram, or YouTube link. Caption text wrapped around a supported link is accepted because platform share sheets commonly deliver that shape. Original movies are copied in order into the private App Group inbox after the same 4 GB per-clip, eight-clip, and free-storage checks used by the editor. Supported URLs are normalized, stripped of fragments, checked against exact platform-domain boundaries, and stored only as references. The main app consumes the inbox when it becomes active.
 
-The beta intentionally does not download content from TikTok, Instagram, or YouTube and does not remove third-party watermarks. This protects creator rights and complies with platform policies.
+The beta intentionally does not download content from TikTok, Instagram, or YouTube. Watermark cleanup only accepts an existing file selected by the user, runs on device, and requires the user to confirm ownership or permission. This protects creator rights and avoids third-party media downloading.
 
 ## App privacy answers
 
@@ -77,4 +75,17 @@ The beta intentionally does not download content from TikTok, Instagram, or YouT
 
 ## Current beta scope
 
-Version 0.1.0 is an iPhone portrait beta. Automatic Quran recognition and AI-detected clip suggestions are not included in this build; the editor is manual and deterministic so testers can validate import, layout, timing, preview/export parity, and sharing first.
+Version 0.1.0 is an iPhone portrait beta. Build 3 mounts the shared AyahClip web Studio in the native app, including its import, passage-review, timeline, template, B-roll, caption, and export controls. Recognition results still require creator confirmation and physical-device quality testing; they must not be treated as authoritative Quran text without review.
+
+## Latest internal TestFlight build
+
+- **Version/build:** 0.1.0 (3)
+- **Uploaded:** 18 July 2026
+- **App Store Connect state:** Upload succeeded; Apple processing
+- **Internal group:** AyahClip Internal (1 tester, iPhone 14 Pro)
+- **Main bundle ID:** `app.ayahclip.mobile`
+- **Share extension bundle ID:** `app.ayahclip.mobile.share`
+- **Signing:** Apple Distribution with dedicated App Store profiles for both executables
+- **Validation:** 73 unit tests and 4 end-to-end UI journeys pass; web tests, lint, TypeScript, production build, archive identity, embedded profiles, application groups, and strict code signatures are release gates
+
+Build 3 replaces the disconnected prototype editor with the shared AyahClip Studio, adds native Photos/Files transfer inside Studio, and adds rights-safe on-device watermark cleanup for an existing file the tester owns or has permission to reuse. It intentionally does not download TikTok, Instagram, or YouTube posts. Physical iPhone validation of recognition, long imports, memory pressure, backgrounding, every template, and export/save recovery remains required before any public-release claim.
