@@ -347,6 +347,7 @@ export default function LibraryPage() {
             type="file"
             accept="video/*"
             multiple
+            aria-label="Upload video clips"
             className="sr-only"
             onChange={(e) => handleUpload(e.target.files)}
           />
@@ -358,6 +359,7 @@ export default function LibraryPage() {
             {uploading ? "Storing…" : "+ Upload clips"}
           </button>
           <select
+            aria-label="Filter by reciter"
             value={reciterFilter}
             onChange={(e) => setReciterFilter(e.target.value)}
             className="field px-3 py-2 text-sm"
@@ -370,6 +372,7 @@ export default function LibraryPage() {
             ))}
           </select>
           <select
+            aria-label="Filter by status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
             className="field px-3 py-2 text-sm"

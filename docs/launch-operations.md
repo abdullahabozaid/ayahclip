@@ -66,6 +66,7 @@ Run the ordinary gate before every production publish:
 npm run lint
 npx tsc --noEmit
 npm test
+npm run test:accessibility
 npm run test:detection
 npm run test:recognition
 npm run test:alignment
@@ -74,6 +75,8 @@ npm run test:e2e
 ```
 
 `npm run test:e2e` includes Android Chromium and iPhone WebKit device profiles. On a capable local host they require real encoded video bytes and duration. GitHub's isolated Linux runner has no usable mobile H.264/AAC encoder, so CI verifies the complete touch workflow and enabled export controls while leaving byte-level encoding to the matrix below.
+
+The accessibility gate scans WCAG A and AA rules at desktop and phone widths across the public pages, Surah picker, Template Studio, Library, and a real imported-audio Studio state. It runs with reduced motion so contrast is measured in the stable interface rather than halfway through a page entrance animation. Automated scans do not replace keyboard-only and VoiceOver testing on physical devices.
 
 Run the several-minute constrained-memory gate before an export-related release:
 

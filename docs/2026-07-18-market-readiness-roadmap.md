@@ -38,6 +38,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Typography and glow fidelity | Implemented | Five Arabic modes share one weight contract; fixed-weight Quran faces never synthesize bold; strict export verifies both Quran and selected self-hosted translation faces; Outfit is selectable in both editors; Lora plus white glow is proven in an exact MP4. See `docs/2026-07-18-typography-rendering-audit.md`. |
 | Social format parity | Implemented | The live preview canvas and exact MP4 are verified at the same canonical dimensions for 9:16 (1080×1920), 16:9 (1920×1080), 1:1 (1080×1080), and 4:5 (1080×1350). |
 | Timeline edit safety | Implemented for core desktop commands | Production Chrome proves keyboard play/pause, one-second seeking, caption splitting, undo, redo, selected-ayah deletion, restoration, and the invariant that the final ayah cannot be deleted. |
+| Automated accessibility baseline | Implemented | 24 WCAG A/AA scans cover 12 public and editing surfaces at desktop and phone widths, including an active imported-audio Studio. Library upload and filter controls have explicit accessible names. Physical keyboard and screen-reader sessions remain part of the owner gate. |
 | Constrained-network first load | Implemented | At 150 ms latency and roughly 1.6 Mbps download, production exposes a usable Import workflow and populated 114-Surah selector in 3.23 seconds against a 12-second gate |
 
 ## Delivery sequence
