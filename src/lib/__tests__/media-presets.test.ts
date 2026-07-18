@@ -15,4 +15,17 @@ describe("curated media presets", () => {
     expect(VIDEO_PRESETS.some((item) => item.id === "mosque")).toBe(false);
     expect(VIDEO_PRESETS.some((item) => item.id === "desert-dunes")).toBe(false);
   });
+
+  it("ships only provenance-recorded Pexels stock, never copied social posts", () => {
+    expect(STOCK_IMAGES.every((item) =>
+      item.url.startsWith("https://images.pexels.com/photos/") &&
+      item.thumbUrl.startsWith("https://images.pexels.com/photos/")
+    )).toBe(true);
+    expect(VIDEO_PRESETS.every((item) =>
+      item.videoUrl.startsWith("https://videos.pexels.com/video-files/") &&
+      (!item.thumbnailUrl || item.thumbnailUrl.startsWith("https://images.pexels.com/videos/"))
+    )).toBe(true);
+    expect(JSON.stringify([...STOCK_IMAGES, ...VIDEO_PRESETS]).toLowerCase())
+      .not.toContain("snaptik");
+  });
 });

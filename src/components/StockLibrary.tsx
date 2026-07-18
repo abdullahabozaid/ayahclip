@@ -51,9 +51,14 @@ export function StockLibrary({ onSelect }: StockLibraryProps) {
           </div>
         );
       })}
-      <p className="text-center text-[10px] text-gray-600">
-        Curated photos from Pexels
-      </p>
+      <a
+        href="https://www.pexels.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mx-auto block w-fit text-[10px] text-[var(--muted)] underline-offset-4 transition-colors hover:text-parchment hover:underline"
+      >
+        Photos provided by Pexels
+      </a>
     </div>
   );
 }

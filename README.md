@@ -87,6 +87,7 @@ Deploy notes:
 
 ## Attributions
 
-Quran text & translations: [Quran.com](https://quran.com) · Reciter audio:
-[EveryAyah](https://everyayah.com) · Stock media: [Pexels](https://www.pexels.com) ·
+Quran text & translations: [Quran.com](https://quran.com) · Verse audio:
+[EveryAyah](https://everyayah.com) · Timed chapter audio:
+[MP3Quran](https://mp3quran.net) · Stock media: [Pexels](https://www.pexels.com) ·
 ASR model: FastConformer (CC-BY-4.0).

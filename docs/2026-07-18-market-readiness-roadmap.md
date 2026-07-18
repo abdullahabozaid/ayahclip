@@ -23,7 +23,7 @@ This is the working contract for the full product overhaul. “Implemented” me
 | Word-level timing | Implemented for supported subset | 12 Quran.com timing-capable recitations, labelled honestly |
 | Whole-verse captions | Implemented | Unsupported word-timing voices no longer inherit another reciter's timings |
 | Reusable personal B-roll | Implemented | Persistent IndexedDB image/video shelf with apply and inline deletion |
-| Curated stock B-roll | Implemented, expansion pending | 20 photos and 11 videos visually reviewed as people-free |
+| Curated stock B-roll | Implemented, expansion pending | 20 Pexels photos and 11 Pexels videos visually reviewed as people-free; two provenance-free copied social videos were removed from the public bundle |
 | Multi-clip B-roll timeline | Implemented | Audio-led sequence, split/reorder/trim workflow |
 | Native iOS beta | Implemented, distribution signing pending | 31 unit and 8 UI tests pass, including maximum Dynamic Type, debounced draft autosave/background flush, bounded Undo/Redo, enforced import limits, ordered multi-movie Share Sheet delivery, supported-link validation, and project-owned cancellable exports; arm64 Release archive contains the Share extension, privacy manifests, app icon, Quran font, and dSYMs |
 | TestFlight distribution | Blocked by account configuration | The Mac has a valid Apple Distribution certificate but no AyahClip provisioning profiles or registered iPhone; a signed archive and App Store Connect record for `app.ayahclip.mobile` are still required |

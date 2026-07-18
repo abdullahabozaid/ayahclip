@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { Background } from "@/types";
 import { backgroundPresets } from "@/lib/backgrounds";
 import { VIDEO_PRESETS, VIDEO_CATEGORIES } from "@/lib/video-presets";
-import { AESTHETIC_VIDEOS } from "@/lib/aesthetic-videos";
 import { StockLibrary } from "./StockLibrary";
 import { BackgroundEditor } from "./BackgroundEditor";
 import { BrollLibrary } from "./BrollLibrary";
@@ -251,25 +250,6 @@ function VideoSection({
           Curated
         </span>
       </div>
-      {/* Your videos (local, synced from the aesthetic folder) */}
-      {AESTHETIC_VIDEOS.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs text-gold-soft/80">Your videos</p>
-          <div className="grid grid-cols-3 gap-2">
-            {AESTHETIC_VIDEOS.map((v) => (
-              <VideoThumb
-                key={v.id}
-                videoUrl={v.file}
-                name={v.name}
-                fallbackDuration={v.duration}
-                selected={value.value === v.file}
-                onSelect={() => onChange({ type: "video", value: v.file, label: v.name })}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
       {VIDEO_CATEGORIES.map((category) => {
         const presets = VIDEO_PRESETS.filter((p) => p.category === category);
         if (presets.length === 0) return null;
@@ -293,6 +273,15 @@ function VideoSection({
           </div>
         );
       })}
+
+      <a
+        href="https://www.pexels.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mx-auto block w-fit text-[10px] text-[var(--muted)] underline-offset-4 transition-colors hover:text-parchment hover:underline"
+      >
+        Videos provided by Pexels
+      </a>
 
       <input
         ref={videoInputRef}
