@@ -173,7 +173,8 @@ tests pass; web lint, TypeScript and the optimized production build also pass.
 App Store Connect keeps the products isolated:
 
 - AyahClip: app record `6792317617`, bundle ID `app.ayahclip.mobile`, version
-  `0.1.0` build `1`.
+  `0.1.0` build `3`, uploaded successfully for internal TestFlight processing
+  on 2026-07-18.
 - ScanAuctions: app record `6780227595`, bundle ID `com.scanauctions.app`, version
   `1.0` build `3`, uploaded 2026-06-15.
 
@@ -193,11 +194,12 @@ rejects any artifact whose display name or bundle identifier does not match
 AyahClip. Its fixture test also proves that ScanAuctions metadata and a wrong
 build number fail closed.
 
-The Mac currently has valid Apple Development and Apple Distribution identities
-for team `PUV357QJL4`, but its five installed provisioning profiles cover other
-products and not `app.ayahclip.mobile`. Signing into Xcode has therefore not yet
-produced local evidence that a replacement AyahClip archive can be signed. The
-separate ScanAuctions source tree still builds as `ScanAuctions`, bundle
+The Mac has valid Apple Development and Apple Distribution identities for team
+`PUV357QJL4` plus dedicated App Store provisioning profiles for
+`app.ayahclip.mobile` and `app.ayahclip.mobile.share`. Build 3 archived and
+uploaded successfully only after its embedded identity and strict code
+signature passed. The separate ScanAuctions source tree still builds as
+`ScanAuctions`, bundle
 `com.scanauctions.app`, version `1.0` build `4`; no AyahClip identifier appears
 in that native target.
 

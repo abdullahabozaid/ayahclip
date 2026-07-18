@@ -80,8 +80,8 @@ Version 0.1.0 is an iPhone portrait beta. Build 3 mounts the shared AyahClip web
 ## Latest internal TestFlight build
 
 - **Version/build:** 0.1.0 (3)
-- **Prepared:** 18 July 2026
-- **App Store Connect state:** Pending upload verification
+- **Uploaded:** 18 July 2026
+- **App Store Connect state:** Upload succeeded; Apple processing
 - **Internal group:** AyahClip Internal (1 tester, iPhone 14 Pro)
 - **Main bundle ID:** `app.ayahclip.mobile`
 - **Share extension bundle ID:** `app.ayahclip.mobile.share`
