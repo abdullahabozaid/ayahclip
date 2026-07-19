@@ -937,7 +937,7 @@ export default function ImportPage() {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={autoDetect}
-                  disabled={detecting || !buffer || !!recognitionBlock}
+                  disabled={detecting || !buffer || surahs.length === 0 || !!recognitionBlock}
                   className="btn-gold min-h-11 rounded-full px-4 text-xs disabled:opacity-50"
                 >
                   {recognitionActionLabel(
