@@ -24,6 +24,7 @@ const MAX_FILE_BYTES = 750 * 1024 * 1024;
 const FAST_PATH_MAX_SOURCE_BYTES = 150 * 1024 * 1024;
 const FAST_PATH_MAX_SOURCE_SECONDS = 15 * 60;
 const DOWNLOAD_TIMEOUT_MS = 300_000;
+const BULK_DOWNLOAD_TIMEOUT_MS = 9 * 60_000;
 const YOUTUBE_FORMAT = "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/b[height<=1080][vcodec^=avc1]";
 const SOURCE_IMPORT_RATE_LIMIT = {
   namespace: "source-import",
@@ -218,7 +219,7 @@ export async function POST(request: Request) {
   try {
     const ytDlpPath = process.env.AYAHCLIP_YTDLP_PATH || "yt-dlp";
     const commandOptions = {
-      timeout: DOWNLOAD_TIMEOUT_MS,
+      timeout: input.bulk === true ? BULK_DOWNLOAD_TIMEOUT_MS : DOWNLOAD_TIMEOUT_MS,
       maxBuffer: 2 * 1024 * 1024,
       env: { ...process.env, PYTHONUNBUFFERED: "1" },
     };
