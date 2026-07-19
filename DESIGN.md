@@ -71,6 +71,13 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Recent additions: emerald split markers + emerald segment-preview labels under each region of the active verse card.
 - Split compositions make Solid versus Fade explicit. Media can be dragged directly, centered, and zoomed beside the preview; the inspector mirrors the same zoom plus horizontal/vertical offsets, and Center image preserves the chosen zoom.
 
+## Template Studio
+
+- The preview is the task focus; on phones it stays compact enough that the inspector begins within the first viewport rather than forcing a full-screen scroll past controls.
+- Text/media mode and Short/Medium/Long specimens share one compact toolbar. Canvas color mode lives in Background instead of appearing twice.
+- Inspector sections progressively disclose a complete renderer-backed control set. Golden Line geometry uses plain creator language: thickness, horizontal reach, and corner roundness.
+- Saving must have a durable visible state: Save copy becomes Saved, the URL points to the saved record, later edits become Save changes, and Back returns to My templates. Never show success when browser storage failed.
+
 ## Recognition and alignment
 
 - Recognition progress uses named stages: **Prepare**, **Listen**, **Match**, and **Align** on import; Studio alignment uses **Prepare**, **Listen**, and **Place cuts**.

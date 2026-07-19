@@ -10,8 +10,8 @@ export const metadata: Metadata = {
 export default async function TemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string | string[] }>;
+  searchParams: Promise<{ from?: string | string[]; filter?: string | string[] }>;
 }) {
   const params = await searchParams;
-  return <TemplateGallery fromImport={params.from === "import"} />;
+  return <TemplateGallery fromImport={params.from === "import"} initialFilter={params.filter === "mine" ? "mine" : "featured"} />;
 }

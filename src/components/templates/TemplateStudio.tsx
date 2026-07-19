@@ -43,7 +43,6 @@ import { BackgroundEditor } from "@/components/BackgroundEditor";
 import { ArabicFontSpecimen } from "@/components/ArabicFontSpecimen";
 import { InlineActionPrompt } from "@/components/InlineActionPrompt";
 import { ensureQcfFontsReady } from "@/lib/qcf-font-loader";
-import { canvasBackgroundForMode } from "@/lib/canvas-background";
 import { MediaZoomControl } from "@/components/MediaZoomControl";
 import {
   FALLBACK_SAMPLE,
@@ -137,6 +136,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const [replayToken, setReplayToken] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState("");
+  const [statusKind, setStatusKind] = useState<"info" | "success" | "error">("info");
   const [fullscreen, setFullscreen] = useState(false);
   const [canvasTool, setCanvasTool] = useState<"text" | "media">("text");
   const [showAdvancedFonts, setShowAdvancedFonts] = useState(false);
@@ -144,6 +144,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const [movingText, setMovingText] = useState(false);
   const [movingMedia, setMovingMedia] = useState(false);
   const [pendingBase, setPendingBase] = useState<TemplateDefinition | null>(null);
+  const [pendingExit, setPendingExit] = useState(false);
   const movingTextRef = useRef(false);
   const mediaDragRef = useRef<{
     pointerId: number;
@@ -210,6 +211,16 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
       cancelled = true;
     };
   }, [draft, sample]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const protectUnsavedDraft = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", protectUnsavedDraft);
+    return () => window.removeEventListener("beforeunload", protectUnsavedDraft);
+  }, [dirty]);
   const selectedTreatment = useMemo(() => {
     if (!draft) return "clean";
     if (draft.settings.highlightEnabled) return "gold";
@@ -240,6 +251,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
   const applyBase = (template: TemplateDefinition) => {
     setDraft(cloneTemplate(template));
     setDirty(false);
+    setStatusKind("info");
     setStatus(`Loaded ${template.name}`);
     setPendingBase(null);
   };
@@ -433,17 +445,20 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
       extras: draft.extras,
       mediaSlots: draft.mediaSlots,
     };
-    if (draft.source === "user" && draft.id !== "new" && initialTemplateId === draft.id) {
-      const updated = updateSavedTemplate(draft.id, input);
-      const saved = updated.find((item) => item.id === draft.id);
-      if (saved) setDraft(cloneTemplate(saved));
-      setStatus("Template updated");
-    } else {
-      const saved = saveTemplate(input)[0];
+    try {
+      const saved = draft.source === "user" && draft.id !== "new"
+        ? updateSavedTemplate(draft.id, input).find((item) => item.id === draft.id)
+        : saveTemplate(input)[0];
+      if (!saved) throw new Error("The saved template could not be found after writing it.");
       setDraft(cloneTemplate(saved));
-      setStatus("Saved to My templates");
+      setStatusKind("success");
+      setStatus("Saved on this device · available in My templates");
+      setDirty(false);
+      router.replace(`/styles/editor?template=${encodeURIComponent(saved.id)}`, { scroll: false });
+    } catch {
+      setStatusKind("error");
+      setStatus("Template could not be saved. Check that browser storage is enabled, then try again.");
     }
-    setDirty(false);
   };
 
   const use = () => {
@@ -461,15 +476,25 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
     );
   }
 
+  const isSavedTemplate = draft.source === "user" && draft.id !== "new";
+  const canSave = draft.source === "built-in" || draft.id === "new" || dirty;
+  const saveLabel = draft.source === "built-in"
+    ? "Save copy"
+    : dirty || draft.id === "new"
+      ? isSavedTemplate ? "Save changes" : "Save"
+      : "Saved";
+
   return (
     <main className="flex min-h-dvh flex-col bg-[var(--ink)] text-parchment lg:fixed lg:inset-0 lg:h-dvh lg:overflow-hidden">
       <header className="sticky top-0 z-40 flex min-h-16 items-center justify-between gap-3 border-b border-[var(--hairline-soft)] bg-[var(--ink)]/95 px-4 py-3 backdrop-blur-xl sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href="/styles" aria-label="Back to templates" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment">
+          <Link href={isSavedTemplate ? "/styles?filter=mine" : "/styles"} onClick={(event) => { if (dirty) { event.preventDefault(); setPendingExit(true); } }} aria-label="Back to templates" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment">
             <TemplateIcon name="arrow-left" className="h-5 w-5" />
           </Link>
           <div className="min-w-0">
-            <p className="hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/70 sm:block">Template Studio</p>
+            <p className="hidden text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/70 sm:block">
+              Template Studio{dirty ? " · Unsaved changes" : isSavedTemplate ? " · Saved on this device" : ""}
+            </p>
             <input
               value={draft.name}
               onChange={(event) => change((current) => ({ ...current, name: event.target.value }))}
@@ -479,11 +504,11 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button type="button" onClick={save} className="hidden min-h-10 items-center gap-2 rounded-full border border-[var(--hairline)] px-4 text-sm text-parchment hover:border-gold sm:flex">
+          <button type="button" onClick={save} disabled={!canSave} className="hidden min-h-10 items-center gap-2 rounded-full border border-[var(--hairline)] px-4 text-sm text-parchment hover:border-gold disabled:cursor-default disabled:border-[var(--hairline-soft)] disabled:text-[var(--muted-deep)] sm:flex">
             <TemplateIcon name="save" className="h-4 w-4" />
-            {draft.source === "built-in" ? "Save copy" : "Save"}
+            {saveLabel}
           </button>
-          <button type="button" onClick={use} className="btn-gold min-h-10 rounded-full px-4 text-sm sm:px-5">
+          <button type="button" onClick={use} className="btn-gold min-h-11 rounded-full px-4 text-sm sm:min-h-10 sm:px-5">
             Use template
           </button>
         </div>
@@ -497,6 +522,18 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             confirmLabel="Replace changes"
             onConfirm={() => applyBase(pendingBase)}
             onCancel={() => setPendingBase(null)}
+          />
+        </div>
+      )}
+
+      {pendingExit && (
+        <div className="border-b border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-4 py-3 sm:px-6">
+          <InlineActionPrompt
+            title="Leave the template editor?"
+            description="Your unsaved changes will be discarded."
+            confirmLabel="Discard changes"
+            onConfirm={() => router.push(isSavedTemplate ? "/styles?filter=mine" : "/styles")}
+            onCancel={() => setPendingExit(false)}
           />
         </div>
       )}
@@ -529,69 +566,47 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
         <section className="relative flex min-h-[620px] flex-1 flex-col items-center justify-center bg-black px-4 py-6 sm:px-8 lg:min-h-0">
           <div className="mb-4 flex max-w-full gap-2 overflow-x-auto pb-1 lg:hidden">
             {TEMPLATES.map((template) => (
-              <button key={template.id} type="button" onClick={() => chooseBase(template)} className="min-h-10 shrink-0 rounded-full border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)]">
+              <button key={template.id} type="button" onClick={() => chooseBase(template)} className="min-h-11 shrink-0 rounded-full border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)]">
                 {template.name}
               </button>
             ))}
           </div>
 
-          <div className="mb-3 grid grid-cols-2 gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/90 p-1 backdrop-blur">
-            {(["text", "media"] as const).map((tool) => (
-              <button
-                key={tool}
-                type="button"
-                onClick={() => setCanvasTool(tool)}
-                aria-pressed={canvasTool === tool}
-                className={`flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-[11px] font-semibold capitalize transition-colors sm:min-h-9 ${
-                  canvasTool === tool
-                    ? "bg-[var(--gold)] text-[var(--ink-deep)]"
-                    : "text-[var(--muted)] hover:text-parchment"
-                }`}
-              >
-                <TemplateIcon name={tool === "text" ? "type" : "image"} className="h-3.5 w-3.5" />
-                {tool}
-              </button>
-            ))}
-          </div>
-
-          <div className="mb-4 flex items-center gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/85 p-1 backdrop-blur">
-            {samples.map((item, index) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => setSampleIndex(index)}
-                aria-pressed={sampleIndex === index}
-                className={`min-h-11 rounded-full px-4 text-xs transition-colors sm:min-h-9 ${sampleIndex === index ? "bg-[var(--hairline)] text-parchment" : "text-[var(--muted)] hover:text-parchment"}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {(draft.settings.background.type === "solid" || draft.settings.background.type === "gradient") && (
-            <div
-              aria-label="Preview canvas treatment"
-              className="mb-4 grid grid-cols-2 gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/85 p-1 backdrop-blur"
-            >
-              {(["solid", "gradient"] as const).map((mode) => (
+          <div className="mb-4 flex max-w-full items-center justify-center gap-2">
+            <div className="grid grid-cols-2 gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/90 p-1 backdrop-blur">
+              {(["text", "media"] as const).map((tool) => (
                 <button
-                  key={mode}
+                  key={tool}
                   type="button"
-                  onClick={() => setCustomBackground(canvasBackgroundForMode(draft.settings.background, mode))}
-                  aria-pressed={draft.settings.background.type === mode}
-                  className={`min-h-11 rounded-full px-4 text-[11px] font-medium capitalize transition-colors sm:min-h-9 ${
-                    draft.settings.background.type === mode
-                      ? "bg-white/[0.09] text-parchment"
+                  onClick={() => setCanvasTool(tool)}
+                  aria-pressed={canvasTool === tool}
+                  className={`flex min-h-11 items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-semibold capitalize transition-colors sm:min-h-9 ${
+                    canvasTool === tool
+                      ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                       : "text-[var(--muted)] hover:text-parchment"
                   }`}
                 >
-                  {mode} canvas
+                  <TemplateIcon name={tool === "text" ? "type" : "image"} className="h-3.5 w-3.5" />
+                  {tool}
                 </button>
               ))}
             </div>
-          )}
+            <div className="flex items-center gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--surface)]/85 p-1 backdrop-blur">
+              {samples.map((item, index) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => setSampleIndex(index)}
+                  aria-pressed={sampleIndex === index}
+                  className={`min-h-11 rounded-full px-3 text-xs transition-colors sm:min-h-9 ${sampleIndex === index ? "bg-[var(--hairline)] text-parchment" : "text-[var(--muted)] hover:text-parchment"}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <div ref={phoneCanvasRef} className="relative h-[min(64dvh,720px)] min-h-[460px] overflow-hidden rounded-[2.2rem] border-[7px] border-[var(--surface-2)] bg-[var(--ink-deep)] shadow-[0_32px_90px_-30px_rgba(0,0,0,0.95)]" style={{ aspectRatio: "9 / 16" }}>
+          <div ref={phoneCanvasRef} className="relative h-[min(52dvh,480px)] min-h-[400px] overflow-hidden rounded-[2.2rem] border-[7px] border-[var(--surface-2)] bg-[var(--ink-deep)] shadow-[0_32px_90px_-30px_rgba(0,0,0,0.95)] sm:h-[min(64dvh,720px)] sm:min-h-[460px]" style={{ aspectRatio: "9 / 16" }}>
             <TemplatePreview
               style={draft.settings}
               extras={draft.extras}
@@ -677,7 +692,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
           </div>
 
           <div className="mt-4 flex max-w-full flex-wrap items-center justify-center gap-2">
-            <button type="button" onClick={() => setReplayToken((value) => value + 1)} className="flex min-h-10 items-center gap-2 rounded-full border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)] hover:text-parchment">
+            <button type="button" onClick={() => setReplayToken((value) => value + 1)} className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)] hover:text-parchment sm:min-h-10">
               <TemplateIcon name="refresh" className="h-4 w-4" /> Replay
             </button>
             {canvasTool === "media" && (() => {
@@ -705,7 +720,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             <span className="hidden text-[10px] uppercase tracking-[0.14em] text-[var(--muted-deep)] sm:block">
               {canvasTool === "text" ? "Drag vertically or use ↑↓" : "Drag media or use arrow keys"}
             </span>
-            <button type="button" onClick={() => setFullscreen(true)} className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] hover:text-parchment" aria-label="Full-screen preview" title="Full-screen preview">
+            <button type="button" onClick={() => setFullscreen(true)} className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--hairline-soft)] text-[var(--muted)] hover:text-parchment sm:h-10 sm:w-10" aria-label="Full-screen preview" title="Full-screen preview">
               <TemplateIcon name="expand" className="h-4 w-4" />
             </button>
           </div>
@@ -720,6 +735,30 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             <TemplateIcon name="settings" className="h-4 w-4 text-[var(--muted)]" />
           </div>
           <div className="divide-y divide-[var(--hairline-soft)]">
+            <InspectorSection title="Template" icon="settings">
+              <label className="block space-y-2">
+                <span className="text-xs text-[var(--muted)]">Description</span>
+                <textarea
+                  value={draft.description}
+                  onChange={(event) => change((current) => ({ ...current, description: event.target.value }))}
+                  rows={3}
+                  className="field w-full resize-none px-3 py-2.5 text-sm leading-5"
+                  placeholder="Describe when this composition works best"
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-xs text-[var(--muted)]">Collection</span>
+                <select value={draft.family} onChange={(event) => change((current) => ({ ...current, family: event.target.value as TemplateFamily }))} className="field min-h-11 w-full px-3 text-sm">
+                  <option value="ayahclip">AyahClip</option>
+                  <option value="reciter">Reciter</option>
+                  <option value="nature">Nature</option>
+                  <option value="minimal">Minimal</option>
+                  <option value="broll">B-roll</option>
+                </select>
+              </label>
+              <p className="text-[11px] leading-4 text-[var(--muted)]">Custom templates are saved on this device and appear under My templates.</p>
+            </InspectorSection>
+
             <InspectorSection title="Layout" icon="layout" defaultOpen>
               <Segmented
                 value={draft.extras.safeAreaTarget ?? "none"}
@@ -776,6 +815,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
             </InspectorSection>
 
             <InspectorSection title="Arabic" icon="type">
+              <SwitchField label="Show Arabic" checked={draft.settings.arabicEnabled !== false} onChange={(checked) => setStyle("arabicEnabled", checked)} />
               <div className="space-y-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-deep)]">Quick choice</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -903,6 +943,9 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   <RangeField label="Size" value={draft.settings.translationFontSize} min={9} max={32} suffix="px" onChange={(value) => setStyle("translationFontSize", value)} />
                   <Segmented value={String(draft.settings.translationFontWeight)} options={[400, 500, 600, 700].map((weight) => ({ value: String(weight), label: String(weight) }))} onChange={(value) => setStyle("translationFontWeight", Number(value))} />
                   <ColorField label="Translation color" value={draft.settings.translationColor ?? "#d8d3c7"} onChange={(value) => setStyle("translationColor", value)} />
+                  <RangeField label="Translation line height" value={draft.settings.translationLineHeight ?? draft.settings.lineHeight} min={0.75} max={1.8} step={0.05} suffix="×" onChange={(value) => setStyle("translationLineHeight", value)} />
+                  <RangeField label="Arabic to translation gap" value={draft.settings.arabicTranslationGap ?? 0.6} min={0} max={1.5} step={0.05} suffix="×" onChange={(value) => setStyle("arabicTranslationGap", value)} />
+                  <SwitchField label="Translation verse number" checked={Boolean(draft.settings.translationVerseNumber)} onChange={(checked) => setStyle("translationVerseNumber", checked)} />
                 </>
               )}
             </InspectorSection>
@@ -945,15 +988,24 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                 <>
                   <ColorField label="Edge / glow color" value={draft.settings.textShadow.color} onChange={(color) => setStyle("textShadow", { ...draft.settings.textShadow, color })} />
                   <RangeField label="Edge / glow reach" value={draft.settings.textShadow.blur} min={0} max={18} suffix="px" onChange={(blur) => setStyle("textShadow", { ...draft.settings.textShadow, blur })} />
+                  <RangeField label="Horizontal offset" value={draft.settings.textShadow.offsetX} min={-8} max={8} suffix="px" onChange={(offsetX) => setStyle("textShadow", { ...draft.settings.textShadow, offsetX })} />
                   <RangeField label="Vertical offset" value={draft.settings.textShadow.offsetY} min={-8} max={8} suffix="px" onChange={(offsetY) => setStyle("textShadow", { ...draft.settings.textShadow, offsetY })} />
                 </>
               )}
               <RangeField label="Overlay darkness" value={draft.settings.overlayOpacity} min={0} max={90} suffix="%" onChange={(value) => setStyle("overlayOpacity", value)} />
+              <SwitchField label="Gold line behind Arabic" checked={Boolean(draft.settings.highlightEnabled)} onChange={(checked) => setStyle("highlightEnabled", checked)} />
               {draft.settings.highlightEnabled && (
-                <>
+                <div className="space-y-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/55 p-4">
+                  <div>
+                    <p className="text-xs font-medium text-parchment">Gold line geometry</p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-[var(--muted)]">Shape the marker behind each Arabic line. These values are used by preview and export.</p>
+                  </div>
                   <ColorField label="Line color" value={draft.settings.highlightColor ?? "#74652d"} onChange={(value) => setStyle("highlightColor", value)} />
                   <RangeField label="Line opacity" value={Math.round((draft.settings.highlightOpacity ?? 0.72) * 100)} min={10} max={100} suffix="%" onChange={(value) => setStyle("highlightOpacity", value / 100)} />
-                </>
+                  <RangeField label="Line thickness" value={Math.round((draft.settings.highlightHeight ?? 0.52) * 100)} min={10} max={100} suffix="%" onChange={(value) => setStyle("highlightHeight", value / 100)} />
+                  <RangeField label="Horizontal reach" value={Math.round((draft.settings.highlightPadding ?? 0.5) * 100)} min={0} max={80} suffix="%" onChange={(value) => setStyle("highlightPadding", value / 100)} />
+                  <RangeField label="Corner roundness" value={Math.round((draft.settings.highlightRadius ?? 0.12) * 100)} min={0} max={100} suffix="%" onChange={(value) => setStyle("highlightRadius", value / 100)} />
+                </div>
               )}
             </InspectorSection>
 
@@ -1029,6 +1081,9 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                         {(frame.shape === "portrait" || frame.shape === "rounded") && (
                           <RangeField label="Container height" value={frame.height} min={10} max={100} suffix="%" onChange={(height) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, height }))} />
                         )}
+                        {frame.shape === "rounded" && (
+                          <RangeField label="Container corner radius" value={frame.radius} min={0} max={50} suffix="%" onChange={(radius) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, radius }))} />
+                        )}
                         <RangeField label="Container horizontal" value={frame.x} min={-50} max={150} suffix="%" onChange={(x) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, x }))} />
                         <RangeField label="Container vertical" value={frame.y} min={-50} max={150} suffix="%" onChange={(y) => setStyle("mediaFrame", normalizeMediaFrame({ ...frame, y }))} />
                       </div>
@@ -1048,6 +1103,27 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   onChange={(fitBackdrop) => setStyle("fitBackdrop", fitBackdrop as StyleSettings["fitBackdrop"])}
                 />
               )}
+              <div className="space-y-2">
+                <p className="text-xs text-[var(--muted)]">Video ending</p>
+                <Segmented
+                  value={draft.settings.videoLoopMode ?? "loop"}
+                  options={[{ value: "loop", label: "Loop video" }, { value: "freeze", label: "Freeze last frame" }]}
+                  onChange={(value) => setStyle("videoLoopMode", value as StyleSettings["videoLoopMode"])}
+                />
+              </div>
+              <div className="space-y-3 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]/55 p-4">
+                <SwitchField label="Cinematic letterbox" checked={draft.settings.letterbox.enabled} onChange={(enabled) => setStyle("letterbox", { ...draft.settings.letterbox, enabled })} />
+                {draft.settings.letterbox.enabled && (
+                  <>
+                    <Segmented
+                      value={draft.settings.letterbox.barStyle}
+                      options={[{ value: "solid", label: "Solid" }, { value: "blur", label: "Blur" }, { value: "gradient", label: "Gradient" }]}
+                      onChange={(barStyle) => setStyle("letterbox", { ...draft.settings.letterbox, barStyle: barStyle as typeof draft.settings.letterbox.barStyle })}
+                    />
+                    {draft.settings.letterbox.barStyle === "solid" && <ColorField label="Bar color" value={draft.settings.letterbox.barColor} onChange={(barColor) => setStyle("letterbox", { ...draft.settings.letterbox, barColor })} />}
+                  </>
+                )}
+              </div>
               {(() => {
                 const transform = draft.settings.mediaTransform ?? DEFAULT_MEDIA_TRANSFORM;
                 return (
@@ -1071,6 +1147,7 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
                   <RangeField label="Media slots" value={sequence.sceneCount} min={2} max={6} suffix="" onChange={(value) => updateSequence({ sceneCount: value })} />
                   <RangeField label="Seconds per visual" value={sequence.duration} min={2} max={12} step={0.5} suffix="s" onChange={(value) => updateSequence({ duration: value })} />
                   <Segmented value={sequence.transition} options={[{ value: "crossfade", label: "Crossfade" }, { value: "cut", label: "Cut" }]} onChange={(value) => updateSequence({ transition: value as "crossfade" | "cut" })} />
+                  {sequence.transition === "crossfade" && <RangeField label="Crossfade duration" value={sequence.transitionDuration} min={0.1} max={2} step={0.1} suffix="s" onChange={(value) => updateSequence({ transitionDuration: value })} />}
                 </>
               )}
               {draft.mediaSlots.length > 0 && (
@@ -1096,18 +1173,20 @@ export function TemplateStudio({ initialTemplateId }: { initialTemplateId: strin
               </label>
               {(draft.settings.verseIntro ?? "none") !== "none" && <RangeField label="Entrance speed" value={draft.settings.verseIntroMs ?? 450} min={150} max={1000} step={50} suffix="ms" onChange={(value) => setStyle("verseIntroMs", value)} />}
               <RangeField label="Clip fade-in" value={draft.extras.clipFadeMs ?? 0} min={0} max={1200} step={50} suffix="ms" onChange={(value) => setExtra("clipFadeMs", value)} />
+              {(draft.extras.clipFadeMs ?? 0) > 0 && <SwitchField label="Fade in audio too" checked={Boolean(draft.extras.audioFadeIn)} onChange={(checked) => setExtra("audioFadeIn", checked)} />}
+              <SwitchField label="Word-by-word emphasis" checked={Boolean(draft.extras.wordHighlight)} onChange={(checked) => setExtra("wordHighlight", checked)} />
             </InspectorSection>
           </div>
 
           <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-2 border-t border-[var(--hairline-soft)] bg-[var(--ink)]/95 p-4 backdrop-blur sm:hidden">
-            <button type="button" onClick={save} className="min-h-11 rounded-full border border-[var(--hairline)] text-sm text-parchment">Save</button>
+            <button type="button" onClick={save} disabled={!canSave} className="min-h-11 rounded-full border border-[var(--hairline)] text-sm text-parchment disabled:cursor-default disabled:border-[var(--hairline-soft)] disabled:text-[var(--muted-deep)]">{saveLabel}</button>
             <button type="button" onClick={use} className="btn-gold min-h-11 rounded-full text-sm">Use template</button>
           </div>
         </aside>
       </div>
 
-      <p className="sr-only" aria-live="polite">{status}</p>
-      {status && <div className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full border border-[var(--hairline)] bg-[var(--surface)] px-4 py-2 text-xs text-parchment shadow-xl">{status}</div>}
+      <p className="sr-only" aria-live="polite" role={statusKind === "error" ? "alert" : "status"}>{status}</p>
+      {status && <div className={`fixed bottom-5 left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-full border px-4 py-2 text-center text-xs shadow-xl ${statusKind === "error" ? "border-red-400/35 bg-[#241316] text-red-100" : "border-[var(--hairline)] bg-[var(--surface)] text-parchment"}`}>{status}</div>}
 
       {fullscreen && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/95 p-4" role="dialog" aria-modal="true" aria-label="Full-screen template preview">
@@ -1191,7 +1270,7 @@ function Segmented({ value, options, onChange }: { value: string; options: { val
   return (
     <div className="grid gap-1 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
       {options.map((option) => (
-        <button key={option.value} type="button" onClick={() => onChange(option.value)} aria-pressed={value === option.value} className={`min-h-9 rounded-lg px-2 text-[11px] font-medium transition-colors ${value === option.value ? "bg-white/[0.09] text-parchment" : "text-[var(--muted)] hover:text-parchment"}`}>{option.label}</button>
+        <button key={option.value} type="button" onClick={() => onChange(option.value)} aria-pressed={value === option.value} className={`min-h-11 rounded-lg px-2 text-[11px] font-medium transition-colors sm:min-h-9 ${value === option.value ? "bg-white/[0.09] text-parchment" : "text-[var(--muted)] hover:text-parchment"}`}>{option.label}</button>
       ))}
     </div>
   );

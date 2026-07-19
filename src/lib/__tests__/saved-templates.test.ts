@@ -5,6 +5,7 @@ import {
   getSavedTemplates,
   sanitizeTemplateForStorage,
   saveTemplate,
+  updateSavedTemplate,
 } from "../saved-templates";
 
 class MemoryStorage implements Storage {
@@ -59,6 +60,42 @@ describe("saved templates", () => {
     expect(saved[0].schemaVersion).toBe(1);
     expect(saved[0].settings.highlightColor).toBe("#81713a");
     expect(saved[0].extras.clipFadeMs).toBe(350);
+  });
+
+  it("updates one saved template without duplicating its Golden Line geometry", () => {
+    const created = saveTemplate({
+      name: "Golden geometry",
+      mediaPolicy: "preserve-current-media",
+      settings: {
+        ...base,
+        highlightEnabled: true,
+        highlightColor: "#81713a",
+        highlightOpacity: 0.7,
+        highlightHeight: 0.45,
+        highlightPadding: 0.4,
+        highlightRadius: 0.15,
+      },
+    })[0];
+
+    updateSavedTemplate(created.id, {
+      name: "Golden geometry",
+      mediaPolicy: "preserve-current-media",
+      settings: {
+        ...created.settings,
+        highlightHeight: 0.65,
+        highlightPadding: 0.3,
+        highlightRadius: 0.7,
+      },
+    });
+
+    const saved = getSavedTemplates(base);
+    expect(saved).toHaveLength(1);
+    expect(saved[0].id).toBe(created.id);
+    expect(saved[0].settings).toMatchObject({
+      highlightHeight: 0.65,
+      highlightPadding: 0.3,
+      highlightRadius: 0.7,
+    });
   });
 
   it("round-trips reversible solid and gradient canvas treatments", () => {

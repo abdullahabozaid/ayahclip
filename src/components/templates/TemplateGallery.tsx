@@ -27,11 +27,11 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "mine", label: "My templates" },
 ];
 
-export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }) {
+export function TemplateGallery({ fromImport = false, initialFilter = "featured" }: { fromImport?: boolean; initialFilter?: "featured" | "mine" }) {
   const router = useRouter();
   const [saved, setSaved] = useState<SavedTemplate[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [filter, setFilter] = useState<Filter>("featured");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [deleteTarget, setDeleteTarget] = useState<TemplateDefinition | null>(null);
 
   useEffect(() => {
