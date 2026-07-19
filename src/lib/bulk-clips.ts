@@ -6,6 +6,9 @@ export const BULK_IDEAL_CLIP_SECONDS = [30, 45, 60, 90] as const;
 export type BulkIdealClipSeconds = (typeof BULK_IDEAL_CLIP_SECONDS)[number];
 export const BULK_ARABIC_LINE_LIMITS = [2, 3, 4] as const;
 export type BulkArabicLineLimit = (typeof BULK_ARABIC_LINE_LIMITS)[number];
+export const BULK_AYAHS_PER_CLIP = [1, 2, 3, 4] as const;
+export type BulkAyahsPerClip = (typeof BULK_AYAHS_PER_CLIP)[number];
+export type BulkGroupingMode = "duration" | "exact" | "whole-passage";
 
 export interface BulkDetectedAyah extends VerseTiming {
   surah: number;
@@ -32,6 +35,12 @@ export interface BulkClipCandidate {
 
 const confidenceRank = { selected: 0, medium: 1, high: 2 } as const;
 
+export function isCompleteDetectedAyah(ayah: BulkDetectedAyah): boolean {
+  if (!ayah.wordRange) return true;
+  const total = ayah.alignedWordStarts?.length ?? 0;
+  return total > 0 && ayah.wordRange.from === 0 && ayah.wordRange.to >= total - 1;
+}
+
 /**
  * Merge duplicate ayahs produced by overlapping recognition windows. A duplicate
  * must agree on the Quran reference and overlap in source time. Higher-confidence
@@ -52,6 +61,12 @@ export function mergeBulkAyahs(input: readonly BulkDetectedAyah[]): BulkDetected
       continue;
     }
     const existing = merged[duplicateIndex];
+    const existingComplete = isCompleteDetectedAyah(existing);
+    const nextComplete = isCompleteDetectedAyah(ayah);
+    if (nextComplete !== existingComplete) {
+      if (nextComplete) merged[duplicateIndex] = { ...ayah };
+      continue;
+    }
     const existingRank = confidenceRank[existing.confidence];
     const nextRank = confidenceRank[ayah.confidence];
     if (nextRank > existingRank || (
@@ -80,6 +95,8 @@ export function buildVerseCompleteCandidates({
   templateId,
   idealClipSeconds = 45,
   maxAyahsPerClip = 4,
+  groupingMode = "duration",
+  ayahsPerClip = 2,
   maxGapSeconds = 3,
 }: {
   ayahs: readonly BulkDetectedAyah[];
@@ -87,9 +104,15 @@ export function buildVerseCompleteCandidates({
   templateId: string;
   idealClipSeconds?: number;
   maxAyahsPerClip?: number;
+  groupingMode?: BulkGroupingMode;
+  ayahsPerClip?: BulkAyahsPerClip;
   maxGapSeconds?: number;
 }): BulkClipCandidate[] {
-  const merged = mergeBulkAyahs(ayahs);
+  // A recognition window can start or end halfway through an ayah. Keep those
+  // rows available for Studio review, but never advertise them as a complete,
+  // upload-ready Bulk clip boundary. Overlapping windows normally supply the
+  // complete copy, which mergeBulkAyahs deliberately prefers.
+  const merged = mergeBulkAyahs(ayahs).filter(isCompleteDetectedAyah);
   if (merged.length === 0 || requestedCount <= 0) return [];
 
   const runs: BulkDetectedAyah[][] = [];
@@ -105,28 +128,39 @@ export function buildVerseCompleteCandidates({
   }
 
   const grouped: BulkDetectedAyah[][] = [];
-  const target = Math.max(5, idealClipSeconds);
-  const maxAyahs = Math.max(1, Math.min(4, Math.floor(maxAyahsPerClip)));
-  for (const run of runs) {
-    const best = new Array<{ cost: number; groups: BulkDetectedAyah[][] } | undefined>(run.length + 1);
-    best[run.length] = { cost: 0, groups: [] };
-    for (let cursor = run.length - 1; cursor >= 0; cursor--) {
-      const firstDuration = run[cursor].end - run[cursor].start;
-      const finalEnd = firstDuration >= target * 1.15
-        ? cursor
-        : Math.min(run.length - 1, cursor + maxAyahs - 1);
-      for (let endIndex = cursor; endIndex <= finalEnd; endIndex++) {
-        const tail = best[endIndex + 1];
-        if (!tail) continue;
-        const duration = run[endIndex].end - run[cursor].start;
-        const cost = Math.abs(duration - target) + tail.cost;
-        const current = best[cursor];
-        if (!current || cost < current.cost || (cost === current.cost && tail.groups.length + 1 < current.groups.length)) {
-          best[cursor] = { cost, groups: [run.slice(cursor, endIndex + 1), ...tail.groups] };
-        }
+  if (groupingMode === "whole-passage") {
+    grouped.push(...runs);
+  } else if (groupingMode === "exact") {
+    const exactCount = Math.max(1, Math.min(4, Math.floor(ayahsPerClip)));
+    for (const run of runs) {
+      for (let cursor = 0; cursor + exactCount <= run.length; cursor += exactCount) {
+        grouped.push(run.slice(cursor, cursor + exactCount));
       }
     }
-    grouped.push(...(best[0]?.groups ?? [run]));
+  } else {
+    const target = Math.max(5, idealClipSeconds);
+    const maxAyahs = Math.max(1, Math.min(4, Math.floor(maxAyahsPerClip)));
+    for (const run of runs) {
+      const best = new Array<{ cost: number; groups: BulkDetectedAyah[][] } | undefined>(run.length + 1);
+      best[run.length] = { cost: 0, groups: [] };
+      for (let cursor = run.length - 1; cursor >= 0; cursor--) {
+        const firstDuration = run[cursor].end - run[cursor].start;
+        const finalEnd = firstDuration >= target * 1.15
+          ? cursor
+          : Math.min(run.length - 1, cursor + maxAyahs - 1);
+        for (let endIndex = cursor; endIndex <= finalEnd; endIndex++) {
+          const tail = best[endIndex + 1];
+          if (!tail) continue;
+          const duration = run[endIndex].end - run[cursor].start;
+          const cost = Math.abs(duration - target) + tail.cost;
+          const current = best[cursor];
+          if (!current || cost < current.cost || (cost === current.cost && tail.groups.length + 1 < current.groups.length)) {
+            best[cursor] = { cost, groups: [run.slice(cursor, endIndex + 1), ...tail.groups] };
+          }
+        }
+      }
+      grouped.push(...(best[0]?.groups ?? [run]));
+    }
   }
 
   const chosen = grouped.length <= requestedCount

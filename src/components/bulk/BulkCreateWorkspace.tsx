@@ -6,12 +6,15 @@ import { fetchSurahs, fetchVerses } from "@/lib/api";
 import { applyTemplate } from "@/lib/apply-template";
 import {
   BULK_ARABIC_LINE_LIMITS,
+  BULK_AYAHS_PER_CLIP,
   BULK_CLIP_COUNTS,
   BULK_IDEAL_CLIP_SECONDS,
   buildVerseCompleteCandidates,
   type BulkArabicLineLimit,
+  type BulkAyahsPerClip,
   type BulkClipCandidate,
   type BulkClipCount,
+  type BulkGroupingMode,
   type BulkIdealClipSeconds,
 } from "@/lib/bulk-clips";
 import { buildLineLimitedCaptionSplits } from "@/lib/bulk-caption-splits";
@@ -59,6 +62,13 @@ import { openBulkCandidateInStudio } from "@/lib/bulk-studio";
 
 type WorkspaceStage = "library" | "source" | "analysing" | "results";
 type VerseLookup = Record<string, Verse>;
+type PreparedBulkSource = {
+  sourceFile: File;
+  audioBlob: Blob;
+  buffer: AudioBuffer;
+  sourceUrl: string;
+  job: BulkJob;
+};
 
 const FEATURED_TEMPLATES = TEMPLATES.filter((template) => template.featured).slice(0, 5);
 const STAGE_ORDER = { prepare: 0.1, listen: 0.35, match: 0.72, align: 0.9 } as const;
@@ -148,8 +158,12 @@ export function BulkCreateWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [requestedCount, setRequestedCount] = useState<BulkClipCount>(20);
   const [idealClipSeconds, setIdealClipSeconds] = useState<BulkIdealClipSeconds>(45);
+  const [groupingMode, setGroupingMode] = useState<BulkGroupingMode>("duration");
+  const [ayahsPerClip, setAyahsPerClip] = useState<BulkAyahsPerClip>(2);
   const [smartCaptionSplits, setSmartCaptionSplits] = useState(true);
   const [maxArabicLines, setMaxArabicLines] = useState<BulkArabicLineLimit>(2);
+  const [sourceQuality, setSourceQuality] = useState<"fast" | "hd">("fast");
+  const [visualMode, setVisualMode] = useState<"source" | "template">("source");
   const [templateId, setTemplateId] = useState(FEATURED_TEMPLATES[0]?.id ?? "clean-ink");
   const [progress, setProgress] = useState<BulkRecognitionProgress | null>(null);
   const [candidates, setCandidates] = useState<BulkClipCandidate[]>([]);
@@ -193,7 +207,12 @@ export function BulkCreateWorkspace() {
     let cancelled = false;
     void (async () => {
       try {
-        const restoredJobs = await loadBulkJobs();
+        const restoredJobs = await Promise.race([
+          loadBulkJobs(),
+          new Promise<BulkJob[]>((resolve) => {
+            window.setTimeout(() => resolve([]), 1_500);
+          }),
+        ]);
         if (cancelled) return;
         setBatches(restoredJobs);
         setStage(restoredJobs.length ? "library" : "source");
@@ -261,8 +280,12 @@ export function BulkCreateWorkspace() {
       setSourceUrl(URL.createObjectURL(source));
       setRequestedCount(normalized.requestedCount);
       setIdealClipSeconds(normalized.idealClipSeconds);
+      setGroupingMode(normalized.groupingMode);
+      setAyahsPerClip(normalized.ayahsPerClip);
       setSmartCaptionSplits(normalized.smartCaptionSplits);
       setMaxArabicLines(normalized.maxArabicLines);
+      setSourceQuality(normalized.sourceQuality);
+      setVisualMode(normalized.visualMode);
       setTemplateId(normalized.templateId);
       setCandidates(normalized.candidates);
       setActiveCandidateId(normalized.candidates[0]?.id ?? null);
@@ -302,9 +325,12 @@ export function BulkCreateWorkspace() {
     return () => window.clearInterval(timer);
   }, [inspiration.length, stage]);
 
-  const handleFile = async (file: File) => {
+  const handleFile = async (file: File): Promise<PreparedBulkSource | null> => {
     const sizeProblem = importSizeError(file.size);
-    if (sizeProblem) return setError(sizeProblem);
+    if (sizeProblem) {
+      setError(sizeProblem);
+      return null;
+    }
     setDecoding(true);
     setError(null);
     try {
@@ -326,7 +352,8 @@ export function BulkCreateWorkspace() {
       setSourceFile(file);
       setAudioBlob(resolvedAudio);
       setBuffer(decoded);
-      setSourceUrl(URL.createObjectURL(file));
+      const nextSourceUrl = URL.createObjectURL(file);
+      setSourceUrl(nextSourceUrl);
       setCandidates([]);
       setVerseLookup({});
       setUnresolvedCount(0);
@@ -336,8 +363,12 @@ export function BulkCreateWorkspace() {
         requestedCount,
         templateId,
         idealClipSeconds,
+        groupingMode,
+        ayahsPerClip,
         smartCaptionSplits,
         maxArabicLines,
+        sourceQuality,
+        visualMode,
       });
       jobRef.current = nextJob;
       setJob(nextJob);
@@ -347,69 +378,51 @@ export function BulkCreateWorkspace() {
       } catch {
         setError("The source is ready, but this browser could not preserve the batch for refresh recovery. Keep this tab open.");
       }
+      return {
+        sourceFile: file,
+        audioBlob: resolvedAudio,
+        buffer: decoded,
+        sourceUrl: nextSourceUrl,
+        job: nextJob,
+      };
     } catch (reason) {
       setSourceFile(null);
       setAudioBlob(null);
       setBuffer(null);
       setError(reason instanceof Error ? reason.message : "This media could not be read.");
+      return null;
     } finally {
       setDecoding(false);
     }
   };
 
-  const importLink = async () => {
-    const platform = sourcePlatform(link);
-    if (platform !== "youtube") {
-      setError("Bulk link import currently supports permitted YouTube videos. TikTok and Instagram posts can be added as files.");
+  const analyse = async (prepared?: PreparedBulkSource) => {
+    const analysisBuffer = prepared?.buffer ?? buffer;
+    const analysisAudio = prepared?.audioBlob ?? audioBlob;
+    const analysisFile = prepared?.sourceFile ?? sourceFile;
+    const analysisUrl = prepared?.sourceUrl ?? sourceUrl;
+    if (!analysisBuffer || !analysisAudio || !analysisFile) return;
+    if (surahs.length === 0) {
+      setError("The Quran index is still loading. Try again in a moment.");
       return;
     }
-    const startSeconds = parseTimecode(linkStart);
-    const endSeconds = parseTimecode(linkEnd);
-    const rangeProblem = bulkYoutubeRangeError(startSeconds, endSeconds);
-    if (rangeProblem) return setError(rangeProblem);
-    if (!rightsConfirmed) return setError("Confirm that you own this video or have permission to edit it.");
-    setLinkLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/social-download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: link,
-          startSeconds,
-          endSeconds,
-          attestedRights: true,
-          bulk: true,
-        }),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(payload?.error ?? "The source could not be imported.");
-      }
-      const blob = await response.blob();
-      await handleFile(new File([blob], "youtube-bulk-source.mp4", { type: "video/mp4" }));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The source could not be imported.");
-    } finally {
-      setLinkLoading(false);
-    }
-  };
-
-  const analyse = async () => {
-    if (!buffer || !audioBlob || !sourceFile || surahs.length === 0) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setStage("analysing");
     setError(null);
     setProgress(null);
-    const existing = jobRef.current ?? createBulkJob({
-      source: sourceFile,
-      duration: buffer.duration,
+    const existing = prepared?.job ?? jobRef.current ?? createBulkJob({
+      source: analysisFile,
+      duration: analysisBuffer.duration,
       requestedCount,
       templateId,
       idealClipSeconds,
+      groupingMode,
+      ayahsPerClip,
       smartCaptionSplits,
       maxArabicLines,
+      sourceQuality,
+      visualMode,
     });
     let workingJob: BulkJob = {
       ...existing,
@@ -417,8 +430,12 @@ export function BulkCreateWorkspace() {
       requestedCount,
       templateId,
       idealClipSeconds,
+      groupingMode,
+      ayahsPerClip,
       smartCaptionSplits,
       maxArabicLines,
+      sourceQuality,
+      visualMode,
       candidates: [],
       verses: [],
       renderTasks: [],
@@ -426,7 +443,7 @@ export function BulkCreateWorkspace() {
     try {
       workingJob = await replaceJob(workingJob);
       const result = await recognizeQuranInWindows({
-        buffer,
+        buffer: analysisBuffer,
         surahs,
         signal: controller.signal,
         onProgress: setProgress,
@@ -447,6 +464,8 @@ export function BulkCreateWorkspace() {
         requestedCount,
         templateId,
         idealClipSeconds,
+        groupingMode,
+        ayahsPerClip,
       });
       const surahIds = [...new Set(generated.map((candidate) => candidate.surah))];
       const groups = await Promise.all(surahIds.map((surah) => fetchVerses(surah)));
@@ -460,10 +479,10 @@ export function BulkCreateWorkspace() {
         maxLines: maxArabicLines,
       });
       setVerseLookup(Object.fromEntries(verses.map((verse) => [verse.verse_key, verse])));
-      if (sourceUrl && isSupportedVideoFile(sourceFile) && generated.length > 0) {
+      if (analysisUrl && isSupportedVideoFile(analysisFile) && generated.length > 0) {
         setThumbnailProgress(0);
         try {
-          const thumbs = await captureBulkThumbnails(sourceUrl, generated, (complete, total) => {
+          const thumbs = await captureBulkThumbnails(analysisUrl, generated, (complete, total) => {
             setThumbnailProgress(Math.round((complete / total) * 100));
           });
           generated = generated.map((candidate) => ({ ...candidate, thumbnail: thumbs[candidate.id] }));
@@ -495,6 +514,46 @@ export function BulkCreateWorkspace() {
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
+    }
+  };
+
+  const importLink = async () => {
+    const platform = sourcePlatform(link);
+    if (platform !== "youtube") {
+      setError("Bulk link import currently supports permitted YouTube videos. TikTok and Instagram posts can be added as files.");
+      return;
+    }
+    const startSeconds = parseTimecode(linkStart);
+    const endSeconds = parseTimecode(linkEnd);
+    const rangeProblem = bulkYoutubeRangeError(startSeconds, endSeconds);
+    if (rangeProblem) return setError(rangeProblem);
+    if (!rightsConfirmed) return setError("Confirm that you own this video or have permission to edit it.");
+    setLinkLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/social-download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: link,
+          startSeconds,
+          endSeconds,
+          attestedRights: true,
+          bulk: true,
+          quality: sourceQuality,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error ?? "The source could not be imported.");
+      }
+      const blob = await response.blob();
+      const prepared = await handleFile(new File([blob], "youtube-bulk-source.mp4", { type: "video/mp4" }));
+      if (prepared) await analyse(prepared);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The source could not be imported.");
+    } finally {
+      setLinkLoading(false);
     }
   };
 
@@ -545,7 +604,7 @@ export function BulkCreateWorkspace() {
     store.setBackground({ ...DEFAULT_TEMPLATE_STYLE.background });
     store.setBackgroundFit(DEFAULT_TEMPLATE_STYLE.backgroundFit ?? "cover");
     store.setFitBackdrop(DEFAULT_TEMPLATE_STYLE.fitBackdrop ?? "black");
-    if (isSupportedVideoFile(sourceFile) && sourceUrl) {
+    if (visualMode === "source" && isSupportedVideoFile(sourceFile) && sourceUrl) {
       store.setBackground({ type: "video", value: sourceUrl, label: sourceFile.name });
       store.setBackgroundFit("cover");
       store.setBackgroundVideoSync(true);
@@ -725,6 +784,7 @@ export function BulkCreateWorkspace() {
   const renderTaskById = Object.fromEntries((job?.renderTasks ?? []).map((task) => [task.candidateId, task]));
   const activeCandidateIndex = Math.max(0, candidates.findIndex((candidate) => candidate.id === activeCandidateId));
   const activeCandidate = candidates[activeCandidateIndex];
+  const sourceDuration = buffer?.duration ?? job?.duration ?? candidates.at(-1)?.end ?? 0;
   const selectRelativeCandidate = (offset: number) => {
     if (!candidates.length) return;
     const index = Math.max(0, Math.min(candidates.length - 1, activeCandidateIndex + offset));
@@ -802,7 +862,9 @@ export function BulkCreateWorkspace() {
 
               <input ref={fileInputRef} type="file" accept="audio/*,video/*,.mov,.m4a" aria-label="Bulk source file" className="sr-only" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) void handleFile(file);
+                if (file) void handleFile(file).then((prepared) => {
+                  if (prepared) void analyse(prepared);
+                });
               }} />
               <button type="button" onClick={() => fileInputRef.current?.click()} className="mt-6 flex min-h-32 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--hairline)] bg-white/[0.02] px-5 text-center transition-colors hover:border-[var(--gold)] hover:bg-[rgba(201,162,75,0.04)]">
                 <span className="text-sm font-medium text-parchment">{decoding ? "Preparing media…" : sourceFile?.name ?? "Choose a video or audio file"}</span>
@@ -814,8 +876,22 @@ export function BulkCreateWorkspace() {
                 <input value={link} onChange={(event) => { setLink(event.target.value); setRightsConfirmed(false); }} className="field min-h-11 px-3 text-sm" placeholder="https://youtu.be/…" aria-label="YouTube link" />
                 <input value={linkStart} onChange={(event) => setLinkStart(event.target.value)} className="field min-h-11 px-3 text-sm" aria-label="Start time" />
                 <input value={linkEnd} onChange={(event) => setLinkEnd(event.target.value)} className="field min-h-11 px-3 text-sm" aria-label="End time" />
-                <button type="button" onClick={() => void importLink()} disabled={linkLoading} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-50">{linkLoading ? "Importing…" : "Import"}</button>
+                <button type="button" onClick={() => void importLink()} disabled={linkLoading} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-50">{linkLoading ? "Importing…" : "Import & create"}</button>
               </div>
+              <fieldset className="mt-4">
+                <legend className="text-xs text-[var(--muted)]">YouTube import quality</legend>
+                <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Bulk YouTube import quality">
+                  {([
+                    ["fast", "Fast draft", "480p · fastest path"],
+                    ["hd", "HD source", "Up to 720p · slower"],
+                  ] as const).map(([value, label, detail]) => (
+                    <button key={value} type="button" role="radio" aria-checked={sourceQuality === value} onClick={() => setSourceQuality(value)} className={`min-h-11 rounded-xl border px-3 py-2 text-left ${sourceQuality === value ? "border-[var(--gold)] bg-[rgba(201,162,75,0.08)]" : "border-[var(--hairline-soft)]"}`}>
+                      <span className="block text-xs font-medium text-parchment">{label}</span>
+                      <span className="mt-0.5 block text-[10px] text-[var(--muted)]">{detail}</span>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
               <label className="mt-4 flex cursor-pointer items-start gap-3 text-xs leading-5 text-[var(--muted)]">
                 <input type="checkbox" checked={rightsConfirmed} onChange={(event) => setRightsConfirmed(event.target.checked)} className="mt-1 h-4 w-4 accent-[var(--gold)]" />
                 <span>I own this video or have permission from its rights holder to download and edit it.</span>
@@ -833,11 +909,47 @@ export function BulkCreateWorkspace() {
                 <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Up to this many. Short sources may contain fewer trustworthy complete passages.</p>
               </fieldset>
               <fieldset className="mt-6">
-                <legend className="text-sm font-medium text-parchment">Ideal clip length</legend>
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {BULK_IDEAL_CLIP_SECONDS.map((seconds) => <button key={seconds} type="button" onClick={() => setIdealClipSeconds(seconds)} aria-pressed={idealClipSeconds === seconds} className={`min-h-11 rounded-xl border text-sm ${idealClipSeconds === seconds ? "border-[var(--gold)] bg-[rgba(201,162,75,0.12)] text-parchment" : "border-[var(--hairline-soft)] text-[var(--muted)]"}`}>{seconds}s</button>)}
+                <legend className="text-sm font-medium text-parchment">How should ayahs be grouped?</legend>
+                <div className="mt-3 grid gap-2">
+                  {([
+                    ["duration", "Smart length", "Balance duration without cutting an ayah"],
+                    ["exact", "Exact ayah count", "Every draft has the count you choose"],
+                    ["whole-passage", "Whole detected passage", "Keep Al-Fatihah or another contiguous passage together"],
+                  ] as const).map(([value, label, detail]) => (
+                    <button key={value} type="button" onClick={() => setGroupingMode(value)} aria-pressed={groupingMode === value} className={`min-h-11 rounded-xl border px-3 py-2 text-left ${groupingMode === value ? "border-[var(--gold)] bg-[rgba(201,162,75,0.1)]" : "border-[var(--hairline-soft)]"}`}>
+                      <span className="block text-xs font-medium text-parchment">{label}</span>
+                      <span className="mt-0.5 block text-[10px] leading-4 text-[var(--muted)]">{detail}</span>
+                    </button>
+                  ))}
                 </div>
-                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Usually 1–4 complete ayahs. The cut may run slightly short or long to protect verse boundaries.</p>
+                {groupingMode === "duration" && (
+                  <div className="mt-3 grid grid-cols-4 gap-2" aria-label="Ideal clip length">
+                    {BULK_IDEAL_CLIP_SECONDS.map((seconds) => <button key={seconds} type="button" onClick={() => setIdealClipSeconds(seconds)} aria-pressed={idealClipSeconds === seconds} className={`min-h-11 rounded-xl border text-sm ${idealClipSeconds === seconds ? "border-[var(--gold)] bg-[rgba(201,162,75,0.12)] text-parchment" : "border-[var(--hairline-soft)] text-[var(--muted)]"}`}>{seconds}s</button>)}
+                  </div>
+                )}
+                {groupingMode === "exact" && (
+                  <div className="mt-3 grid grid-cols-4 gap-2" aria-label="Exact ayahs per clip">
+                    {BULK_AYAHS_PER_CLIP.map((count) => <button key={count} type="button" onClick={() => setAyahsPerClip(count)} aria-pressed={ayahsPerClip === count} className={`min-h-11 rounded-xl border text-sm ${ayahsPerClip === count ? "border-[var(--gold)] bg-[rgba(201,162,75,0.12)] text-parchment" : "border-[var(--hairline-soft)] text-[var(--muted)]"}`}>{count}</button>)}
+                  </div>
+                )}
+                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                  {groupingMode === "exact"
+                    ? `Only complete groups of ${ayahsPerClip} ayahs become drafts; an incomplete remainder is withheld.`
+                    : groupingMode === "whole-passage"
+                      ? "One draft is created for each uninterrupted detected passage in a surah."
+                      : "Usually 1–4 complete ayahs; duration bends to protect the Quran boundary."}
+                </p>
+              </fieldset>
+              <fieldset className="mt-6">
+                <legend className="text-sm font-medium text-parchment">Visuals</legend>
+                <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Bulk clip visuals">
+                  {([
+                    ["source", "Keep source video"],
+                    ["template", "Use preset background"],
+                  ] as const).map(([value, label]) => (
+                    <button key={value} type="button" role="radio" aria-checked={visualMode === value} onClick={() => setVisualMode(value)} className={`min-h-11 rounded-xl border px-3 text-xs ${visualMode === value ? "border-[var(--gold)] bg-[rgba(201,162,75,0.1)] text-parchment" : "border-[var(--hairline-soft)] text-[var(--muted)]"}`}>{label}</button>
+                  ))}
+                </div>
               </fieldset>
               <div className="mt-6 rounded-xl border border-[var(--hairline-soft)] p-4">
                 <label className="flex cursor-pointer items-start justify-between gap-4 text-sm text-parchment">
@@ -854,7 +966,7 @@ export function BulkCreateWorkspace() {
               <select id="bulk-template" value={templateId} onChange={(event) => setTemplateId(event.target.value)} className="field mt-3 min-h-11 w-full px-3 text-sm">
                 {availableTemplates.map((template) => <option key={template.id} value={template.id}>{template.source === "user" ? "My preset · " : ""}{template.name}</option>)}
               </select>
-              <button type="button" onClick={() => void analyse()} disabled={!buffer || decoding || linkLoading || surahs.length === 0} className="btn-gold mt-7 min-h-12 w-full rounded-xl px-5 text-sm disabled:cursor-not-allowed disabled:opacity-45">Create verse-complete drafts</button>
+              <button type="button" onClick={() => void analyse()} disabled={!buffer || decoding || linkLoading || surahs.length === 0} className="btn-gold mt-7 min-h-12 w-full rounded-xl px-5 text-sm disabled:cursor-not-allowed disabled:opacity-45">{job?.nextWindowIndex ? "Resume creating drafts" : "Create verse-complete drafts"}</button>
               <p className="mt-3 text-center text-xs leading-5 text-[var(--muted)]">{job?.nextWindowIndex ? `Resume from saved window ${job.nextWindowIndex + 1}.` : "A 30-minute source may take 5–8 minutes."} Progress is saved after every window.</p>
             </aside>
           </div>
@@ -896,6 +1008,16 @@ export function BulkCreateWorkspace() {
                 setActivePreview(null);
               }
             }} />}
+
+            {candidates.length > 0 && (
+              <BulkTimelineOverview
+                candidates={candidates}
+                duration={sourceDuration}
+                activeCandidateId={activeCandidate?.id ?? null}
+                renderTaskById={renderTaskById}
+                onSelect={setActiveCandidateId}
+              />
+            )}
 
             {candidates.length === 0 ? (
               <div className="mt-8 rounded-2xl border border-dashed border-[var(--hairline)] px-6 py-16 text-center">
@@ -975,6 +1097,73 @@ export function BulkCreateWorkspace() {
         )}
       </div>
     </main>
+  );
+}
+
+function BulkTimelineOverview({
+  candidates,
+  duration,
+  activeCandidateId,
+  renderTaskById,
+  onSelect,
+}: {
+  candidates: BulkClipCandidate[];
+  duration: number;
+  activeCandidateId: string | null;
+  renderTaskById: Record<string, BulkRenderTask | undefined>;
+  onSelect: (candidateId: string) => void;
+}) {
+  const safeDuration = Math.max(duration, candidates.at(-1)?.end ?? 1, 1);
+
+  return (
+    <section className="mt-6 rounded-2xl border border-[var(--hairline-soft)] bg-[rgba(16,17,21,0.62)] p-4" aria-labelledby="bulk-timeline-heading">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 id="bulk-timeline-heading" className="text-sm font-medium text-parchment">Source timeline</h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">Each segment is a complete-ayah draft. Select a range to review its text, listen, render, or open it in Studio.</p>
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-[var(--muted)]">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-gold" />Active</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-300" />Ready</span>
+          <span className="tabular-nums">{fmt(safeDuration)}</span>
+        </div>
+      </div>
+      <div className="mt-4 overflow-x-auto pb-1">
+        <div className="relative h-20 min-w-[720px] rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]">
+          <div className="absolute inset-x-3 top-8 h-2 rounded-full bg-white/[0.07]" />
+          {candidates.map((candidate) => {
+            const left = Math.max(0, Math.min(100, (candidate.start / safeDuration) * 100));
+            const width = Math.max(2.5, Math.min(100 - left, ((candidate.end - candidate.start) / safeDuration) * 100));
+            const active = candidate.id === activeCandidateId;
+            const task = renderTaskById[candidate.id];
+            const statusClass = task?.status === "ready"
+              ? "bg-emerald-300 text-[var(--ink-deep)]"
+              : candidate.approved
+                ? "bg-gold text-[var(--ink-deep)]"
+                : "bg-white/[0.18] text-parchment";
+
+            return (
+              <button
+                key={candidate.id}
+                type="button"
+                onClick={() => onSelect(candidate.id)}
+                aria-label={`Review clip ${candidate.order}, ${fmt(candidate.start)} to ${fmt(candidate.end)}`}
+                aria-current={active ? "true" : undefined}
+                className={`absolute top-4 h-11 min-w-8 rounded-lg px-2 text-left transition-[transform,border-color,background-color] hover:translate-y-[-1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${statusClass} ${active ? "ring-2 ring-gold-soft ring-offset-2 ring-offset-[var(--ink-deep)]" : ""}`}
+                style={{ left: `calc(${left}% + 12px)`, width: `calc(${width}% - 24px)` }}
+              >
+                <span className="block truncate text-[10px] font-semibold tabular-nums">{candidate.order}</span>
+                <span className="block truncate text-[9px] tabular-nums opacity-75">{fmt(candidate.start)}-{fmt(candidate.end)}</span>
+              </button>
+            );
+          })}
+          <div className="absolute bottom-2 left-3 right-3 flex justify-between text-[9px] tabular-nums text-[var(--muted-deep)]">
+            <span>0:00</span>
+            <span>{fmt(safeDuration)}</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

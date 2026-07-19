@@ -85,6 +85,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(draft.segments.isEmpty)
         XCTAssertTrue(draft.arabic.isEmpty)
         XCTAssertTrue(draft.translation.isEmpty)
+        XCTAssertEqual(draft.arabicSize, 24)
+        XCTAssertEqual(draft.translationSize, 12)
         let snapshot = MobileProjectSnapshotV1(project: draft, media: [])
         XCTAssertTrue(snapshot.isValid)
         XCTAssertNil(snapshot.quran)

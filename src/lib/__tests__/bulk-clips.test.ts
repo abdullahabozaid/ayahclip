@@ -41,6 +41,47 @@ describe("buildVerseCompleteCandidates", () => {
     expect(result.map((candidate) => candidate.duration)).toEqual([30, 30, 30]);
   });
 
+  it.each([2, 3] as const)("creates exactly %i ayahs per clip when requested", (ayahsPerClip) => {
+    const input = Array.from({ length: 7 }, (_, index) => ayah(index + 1, index * 10, (index + 1) * 10));
+    const result = buildVerseCompleteCandidates({
+      ayahs: input,
+      requestedCount: 15,
+      templateId: "clean-ink",
+      groupingMode: "exact",
+      ayahsPerClip,
+    });
+    expect(result.every((candidate) => candidate.timings.length === ayahsPerClip)).toBe(true);
+    expect(result).toHaveLength(Math.floor(input.length / ayahsPerClip));
+  });
+
+  it("keeps a complete detected surah passage together when requested", () => {
+    const input = Array.from({ length: 7 }, (_, index) => ayah(index + 1, index * 8, (index + 1) * 8, { surah: 1 }));
+    const result = buildVerseCompleteCandidates({
+      ayahs: input,
+      requestedCount: 15,
+      templateId: "clean-ink",
+      groupingMode: "whole-passage",
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ surah: 1, ayahStart: 1, ayahEnd: 7 });
+  });
+
+  it("never promotes a window-edge partial ayah into an upload-ready draft", () => {
+    const result = buildVerseCompleteCandidates({
+      ayahs: [
+        ayah(1, 0, 8, { wordRange: { from: 3, to: 7 }, alignedWordStarts: Array.from({ length: 8 }, (_, i) => i) }),
+        ayah(2, 8, 18),
+        ayah(3, 18, 28),
+      ],
+      requestedCount: 15,
+      templateId: "clean-ink",
+      groupingMode: "exact",
+      ayahsPerClip: 2,
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ ayahStart: 2, ayahEnd: 3 });
+  });
+
   it("keeps a long single ayah whole even when it exceeds the ideal", () => {
     const result = buildVerseCompleteCandidates({
       ayahs: [ayah(1, 0, 76), ayah(2, 76, 88)],
@@ -65,5 +106,15 @@ describe("buildVerseCompleteCandidates", () => {
     ]);
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({ start: 21, end: 31, confidence: "high", sourceWindow: 1 });
+  });
+
+  it("prefers a complete overlapping ayah over a longer partial edge", () => {
+    const result = mergeBulkAyahs([
+      ayah(5, 20, 34, { confidence: "high", wordRange: { from: 4, to: 9 }, alignedWordStarts: Array.from({ length: 10 }, (_, i) => i) }),
+      ayah(5, 21, 31, { confidence: "medium" }),
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].wordRange).toBeUndefined();
+    expect(result[0]).toMatchObject({ start: 21, end: 31 });
   });
 });

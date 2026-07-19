@@ -69,7 +69,9 @@ test("loaded desktop import presents one ordered verification journey", async ({
 
   const order = await page.evaluate(() => {
     const top = (selector: string) => document.querySelector<HTMLElement>(selector)?.getBoundingClientRect().top ?? -1;
-    const confirm = document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.closest("label");
+    const confirm = Array.from(document.querySelectorAll("label")).find((label) =>
+      label.textContent?.includes("I confirm this Quran range for Studio"),
+    );
     const cta = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Choose a template"));
     return {
       overflow: document.documentElement.scrollWidth - window.innerWidth,

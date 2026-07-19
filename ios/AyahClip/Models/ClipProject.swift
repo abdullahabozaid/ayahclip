@@ -74,8 +74,8 @@ struct ClipProject: Identifiable, Codable, Equatable {
     var webEditorDocumentJSON: String?
     var createdAt = Date()
     var updatedAt = Date()
-    var arabicSize: Double = 36
-    var translationSize: Double = 15
+    var arabicSize: Double = 24
+    var translationSize: Double = 12
     var overlayOpacity: Double = 0.35
     var layout: ClipLayout = .centered
     var captionStyle: CaptionStyle = .softGlow

@@ -125,7 +125,10 @@ Public TikTok and Instagram post links, plus bounded segments from a creator's
 own or permitted YouTube videos, are resolved on the self-hosted VPS with
 [yt-dlp](https://github.com/yt-dlp/yt-dlp). The resolver accepts only exact
 platform hosts, never playlists, caps source size and runtime, and normalizes
-YouTube segments to H.264/AAC MP4 before browser editing. YouTube imports require
+YouTube segments to H.264/AAC MP4 before browser editing. The default fast path
+requests a 480p/30fps section directly; creators can explicitly request an HD
+source up to 720p. The resolver does not download the whole source before trimming.
+YouTube imports require
 an explicit start/end range of no more than eight minutes and a rights
 confirmation. Public supported videos import directly; private or restricted
 sources cannot be resolved, but the same media can still be added through local

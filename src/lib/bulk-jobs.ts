@@ -2,13 +2,15 @@ import { del, get, set } from "idb-keyval";
 import type { Verse } from "@/types";
 import type {
   BulkArabicLineLimit,
+  BulkAyahsPerClip,
   BulkClipCandidate,
   BulkClipCount,
   BulkDetectedAyah,
+  BulkGroupingMode,
   BulkIdealClipSeconds,
 } from "./bulk-clips";
 
-export const BULK_JOB_SCHEMA_VERSION = 2 as const;
+export const BULK_JOB_SCHEMA_VERSION = 3 as const;
 const ACTIVE_JOB_KEY = "ayahclip:bulk:active:v1";
 const JOB_INDEX_KEY = "ayahclip:bulk:index:v1";
 const jobKey = (id: string) => `ayahclip:bulk:job:${id}:v1`;
@@ -47,8 +49,12 @@ export interface BulkJob {
   duration: number;
   requestedCount: BulkClipCount;
   idealClipSeconds: BulkIdealClipSeconds;
+  groupingMode: BulkGroupingMode;
+  ayahsPerClip: BulkAyahsPerClip;
   smartCaptionSplits: boolean;
   maxArabicLines: BulkArabicLineLimit;
+  sourceQuality: "fast" | "hd";
+  visualMode: "source" | "template";
   templateId: string;
   nextWindowIndex: number;
   detectedAyahs: BulkDetectedAyah[];
@@ -64,16 +70,24 @@ export function createBulkJob({
   requestedCount,
   templateId,
   idealClipSeconds = 45,
+  groupingMode = "duration",
+  ayahsPerClip = 2,
   smartCaptionSplits = true,
   maxArabicLines = 2,
+  sourceQuality = "fast",
+  visualMode = "source",
 }: {
   source: File;
   duration: number;
   requestedCount: BulkClipCount;
   templateId: string;
   idealClipSeconds?: BulkIdealClipSeconds;
+  groupingMode?: BulkGroupingMode;
+  ayahsPerClip?: BulkAyahsPerClip;
   smartCaptionSplits?: boolean;
   maxArabicLines?: BulkArabicLineLimit;
+  sourceQuality?: "fast" | "hd";
+  visualMode?: "source" | "template";
 }): BulkJob {
   const now = Date.now();
   return {
@@ -87,8 +101,12 @@ export function createBulkJob({
     duration,
     requestedCount,
     idealClipSeconds,
+    groupingMode,
+    ayahsPerClip,
     smartCaptionSplits,
     maxArabicLines,
+    sourceQuality,
+    visualMode,
     templateId,
     nextWindowIndex: 0,
     detectedAyahs: [],
@@ -102,7 +120,7 @@ export function createBulkJob({
 function parseBulkJob(value: unknown): BulkJob | null {
   if (!value || typeof value !== "object") return null;
   const item = value as Partial<Omit<BulkJob, "schemaVersion">> & { schemaVersion?: number };
-  const valid = (item.schemaVersion === 1 || item.schemaVersion === BULK_JOB_SCHEMA_VERSION)
+  const valid = ([1, 2, BULK_JOB_SCHEMA_VERSION] as number[]).includes(item.schemaVersion ?? 0)
     && typeof item.id === "string"
     && typeof item.sourceName === "string"
     && typeof item.duration === "number"
@@ -116,8 +134,12 @@ function parseBulkJob(value: unknown): BulkJob | null {
     ...item,
     schemaVersion: BULK_JOB_SCHEMA_VERSION,
     idealClipSeconds: item.idealClipSeconds ?? 45,
+    groupingMode: item.groupingMode ?? "duration",
+    ayahsPerClip: item.ayahsPerClip ?? 2,
     smartCaptionSplits: item.smartCaptionSplits ?? true,
     maxArabicLines: item.maxArabicLines ?? 2,
+    sourceQuality: item.sourceQuality ?? "fast",
+    visualMode: item.visualMode ?? "source",
   } as BulkJob;
 }
 

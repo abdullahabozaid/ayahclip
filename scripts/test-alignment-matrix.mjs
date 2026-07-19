@@ -50,6 +50,16 @@ const cases = [
     max: 0.8,
   },
   {
+    name: "Alafasy starts midway through Ayat al-Kursi",
+    dir: "alafasy-mid-ayah",
+    args: ["--crop-first", "18"],
+    range: "2:255-256",
+    confidence: "high",
+    partialVerse: 255,
+    mean: 0.4,
+    max: 0.8,
+  },
+  {
     name: "Alafasy mid-surah start",
     dir: "alafasy-mid-surah",
     args: [],
@@ -95,6 +105,9 @@ for (const testCase of cases) {
   const passed =
     result.recognition.detectedRange === expectedRange &&
     result.recognition.detectionConfidence === expectedConfidence &&
+    (!testCase.partialVerse || result.alignment.partialWordRanges.some(
+      (range) => range.verse === testCase.partialVerse && range.from > 0,
+    )) &&
     result.cutMeanAbsoluteErrorSeconds <= testCase.mean &&
     result.cutMaxAbsoluteErrorSeconds <= testCase.max;
   console.log(

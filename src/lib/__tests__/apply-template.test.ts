@@ -19,10 +19,17 @@ describe("template application media handoff", () => {
     });
   });
 
-  it("ships the split preset with a real bold Naskh face fitted to its reading panel", () => {
+  it("ships the split preset with a real bold Naskh face and compact upload-ready scale", () => {
     expect(split.settings.arabicFont).toBe("scheherazade-new");
     expect(split.settings.arabicFontWeight).toBe(700);
-    expect(split.settings.arabicFontSize).toBe(30);
+    expect(split.settings.arabicFontSize).toBe(24);
+  });
+
+  it("starts every built-in preset at 24px Arabic and 12px English", () => {
+    for (const template of TEMPLATES) {
+      expect(template.settings.arabicFontSize, template.name).toBe(24);
+      expect(template.settings.translationFontSize, template.name).toBe(12);
+    }
   });
 
   it("creates an ordered media request for every reusable slot", () => {

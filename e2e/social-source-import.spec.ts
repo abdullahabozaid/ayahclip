@@ -58,13 +58,15 @@ test("desktop link import reveals precise YouTube segment controls", async ({ pa
   const linkField = page.getByLabel("Import from a link");
   await linkField.fill("https://www.youtube.com/watch?v=owned-video");
 
-  await expect(page.getByLabel("Start")).toHaveValue("0:00");
-  await expect(page.getByLabel("End")).toHaveValue("3:00");
+  await expect(page.getByRole("textbox", { name: "Start", exact: true })).toHaveValue("0:00");
+  await expect(page.getByRole("textbox", { name: "End", exact: true })).toHaveValue("3:00");
+  await expect(page.getByRole("radio", { name: /Fast/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("checkbox", { name: /Recognise verses after import/ })).toBeChecked();
   const importButton = page.getByRole("button", { name: "Import 3:00 segment" });
   await expect(importButton).toBeDisabled();
 
   await page.getByRole("button", { name: "5 min" }).click();
-  await expect(page.getByLabel("End")).toHaveValue("5:00");
+  await expect(page.getByRole("textbox", { name: "End", exact: true })).toHaveValue("5:00");
   await page.getByText("I own this video or have permission", { exact: false }).click();
   await expect(page.getByRole("button", { name: "Import 5:00 segment" })).toBeEnabled();
 });
@@ -77,8 +79,24 @@ test("a real public social post resolves to an editable MP4", async ({ request }
   const response = await request.post("/api/social-download", { data: { url } });
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toBe("video/mp4");
+  expect(response.headers()["x-ayahclip-import-quality"]).toBe("source");
+  expect(Number(response.headers()["x-ayahclip-processing-ms"])).toBeGreaterThan(0);
   expect(Number(response.headers()["content-length"])).toBeGreaterThan(100_000);
   expect((await response.body()).subarray(4, 8).toString("ascii")).toBe("ftyp");
+});
+
+test("Bulk Create exposes exact ayah, whole-passage, quality, and visual automation", async ({ page }) => {
+  await page.goto("/bulk");
+  const newBatch = page.getByRole("button", { name: /New batch|Create your first batch/ }).first();
+  if (await newBatch.isVisible()) await newBatch.click();
+
+  await expect(page.getByRole("button", { name: /Exact ayah count/ })).toBeVisible();
+  await page.getByRole("button", { name: /Exact ayah count/ }).click();
+  await expect(page.getByLabel("Exact ayahs per clip").getByRole("button", { name: "2" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /Whole detected passage/ })).toBeVisible();
+  await expect(page.getByRole("radio", { name: /Fast draft/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: /Keep source video/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "Import & create" })).toBeVisible();
 });
 
 test("a permitted YouTube segment resolves to an editable MP4", async ({ request }) => {
@@ -91,6 +109,8 @@ test("a permitted YouTube segment resolves to an editable MP4", async ({ request
   });
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toBe("video/mp4");
+  expect(response.headers()["x-ayahclip-import-quality"]).toBe("fast");
+  expect(Number(response.headers()["x-ayahclip-processing-ms"])).toBeGreaterThan(0);
   expect(Number(response.headers()["content-length"])).toBeGreaterThan(100_000);
   expect((await response.body()).subarray(4, 8).toString("ascii")).toBe("ftyp");
 });

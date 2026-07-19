@@ -8,6 +8,7 @@ import { getTranslationLanguage } from "@/lib/translations";
 import {
   decodeAudioFile,
   autoSegment,
+  verseTextAt,
 } from "@/lib/audio-import";
 import {
   getVerseWeights,
@@ -54,6 +55,11 @@ import {
   youtubeRangeError,
 } from "@/lib/source-link";
 
+// Very short files are often UI test tones, accidental taps, or a single
+// breath. Loading the full local ASR model for them adds memory pressure while
+// producing little useful evidence; the manual Recognise action remains ready.
+const MIN_AUTOMATIC_RECOGNITION_SECONDS = 10;
+
 export default function ImportPage() {
   const router = useRouter();
   const store = useAppStore();
@@ -75,6 +81,9 @@ export default function ImportPage() {
   const [segmentStart, setSegmentStart] = useState("0:00");
   const [segmentEnd, setSegmentEnd] = useState("3:00");
   const [youtubeRightsConfirmed, setYoutubeRightsConfirmed] = useState(false);
+  const [sourceQuality, setSourceQuality] = useState<"fast" | "hd">("fast");
+  const [autoRecognize, setAutoRecognize] = useState(true);
+  const [socialElapsed, setSocialElapsed] = useState(0);
   const socialImportStartedRef = useRef(false);
 
   const detectedSourcePlatform = sourcePlatform(socialURL);
@@ -121,8 +130,11 @@ export default function ImportPage() {
   const [nativeSourceURL, setNativeSourceURL] = useState<string | null>(null);
   const nativeHydrationStartedRef = useRef(false);
 
-  const autoDetect = async () => {
-    if (!buffer) return;
+  const runRecognition = useCallback(async (targetBuffer: AudioBuffer) => {
+    if (surahs.length === 0) {
+      setDetectError("The Quran index is still loading. Wait a moment, then recognise again.");
+      return;
+    }
     detectAbortRef.current?.abort();
     const controller = new AbortController();
     detectAbortRef.current = controller;
@@ -130,12 +142,13 @@ export default function ImportPage() {
     setDetectError(null);
     try {
       const outcome = await recognizeQuranPassage({
-        buffer,
+        buffer: targetBuffer,
         surahs,
         deviceMemoryGb: browserDeviceMemoryGb(),
         signal: controller.signal,
         onProgress: setDetectProgress,
       });
+      if (controller.signal.aborted || detectAbortRef.current !== controller) return;
       if (outcome.kind === "matched") {
         const result = outcome.result;
         setSurahId(result.surah);
@@ -155,9 +168,11 @@ export default function ImportPage() {
           : outcome.message);
       }
     } catch (error) {
-      setDetectError(`${alignmentFailureMessage(error)} ${detected
-        ? "Your previous Quran range is still available below."
-        : "You can still pick the verses manually below."}`);
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        setDetectError(`${alignmentFailureMessage(error)} ${detected
+          ? "Your previous Quran range is still available below."
+          : "You can still pick the verses manually below."}`);
+      }
     } finally {
       if (detectAbortRef.current === controller) {
         detectAbortRef.current = null;
@@ -165,6 +180,10 @@ export default function ImportPage() {
         setDetectProgress(null);
       }
     }
+  }, [detected, surahs]);
+
+  const autoDetect = () => {
+    if (buffer) void runRecognition(buffer);
   };
 
   const chooseRecognitionCandidate = (candidate: RecognitionCandidate) => {
@@ -178,6 +197,10 @@ export default function ImportPage() {
   };
 
   const clearRecognitionChoice = () => {
+    // A deliberate manual correction always wins over an in-flight automatic
+    // result. Otherwise a late model response could overwrite the creator's
+    // selected range just as they continue to Studio.
+    detectAbortRef.current?.abort();
     setDetected(null);
     setRecognitionCandidates([]);
     setDetectError(null);
@@ -197,6 +220,18 @@ export default function ImportPage() {
   }, []);
 
   useEffect(() => () => detectAbortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!socialDownloading) {
+      setSocialElapsed(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const tick = () => setSocialElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1_000)));
+    tick();
+    const timer = window.setInterval(tick, 1_000);
+    return () => window.clearInterval(timer);
+  }, [socialDownloading]);
 
   useEffect(() => {
     if (!sourceAudio) {
@@ -236,13 +271,13 @@ export default function ImportPage() {
 
   const surah = surahs.find((s) => s.id === surahId);
 
-  const handleFile = useCallback(async (f: File | undefined) => {
-    if (!f) return;
+  const handleFile = useCallback(async (f: File | undefined): Promise<AudioBuffer | null> => {
+    if (!f) return null;
     detectAbortRef.current?.abort();
     const sizeError = importSizeError(f.size);
     if (sizeError) {
       setError(sizeError);
-      return;
+      return null;
     }
     const operation = ++decodeOperationRef.current;
     setFile(f);
@@ -277,27 +312,29 @@ export default function ImportPage() {
           setDecodeMsg("Converting video audio…");
           const { extractAudioFromVideo } = await import("@/lib/video-audio");
           audioBlob = await extractAudioFromVideo(f);
-          if (decodeOperationRef.current !== operation) return;
+          if (decodeOperationRef.current !== operation) return null;
           buf = await decodeAudioFile(audioBlob);
         }
       } else {
         setDecodeMsg("Reading audio…");
         buf = await decodeAudioFile(audioBlob);
       }
-      if (decodeOperationRef.current !== operation) return;
+      if (decodeOperationRef.current !== operation) return null;
       setSourceAudio(audioBlob);
       setBuffer(buf);
       trackProductEvent("source_loaded", {
         sourceKind: isVideo ? "video" : "audio",
         durationBucket: durationBucket(buf.duration),
       });
+      return buf;
     } catch (cause) {
-      if (decodeOperationRef.current !== operation) return;
+      if (decodeOperationRef.current !== operation) return null;
       setError(
         cause instanceof Error && cause.message === "native-video-decode"
           ? "This video’s audio format is not supported on iPhone. Export it as an MP4 with AAC audio, then try again."
           : "Couldn't read the audio from this file. Try an MP3/M4A/WAV, or a different video."
       );
+      return null;
     } finally {
       if (decodeOperationRef.current === operation) {
         setDecoding(false);
@@ -335,6 +372,7 @@ export default function ImportPage() {
             startSeconds,
             endSeconds,
             attestedRights: youtubeRightsConfirmed,
+            quality: sourceQuality,
           } : {}),
         }),
       });
@@ -350,16 +388,17 @@ export default function ImportPage() {
         ? decodeURIComponent(encodedName)
         : plainName || `social-source-${Date.now()}.mp4`;
       const resolvedFile = new File([blob], name, { type: "video/mp4" });
-      await handleFile(resolvedFile);
+      const decoded = await handleFile(resolvedFile);
       setVideoMode("keep-video");
       if (platform === "youtube") setVideoFit("cover");
       setSocialURL(url);
+      if (decoded && autoRecognize) void runRecognition(decoded);
     } catch (reason) {
       setSocialError(reason instanceof Error ? reason.message : "AyahClip could not download that post.");
     } finally {
       setSocialDownloading(false);
     }
-  }, [handleFile, segmentEnd, segmentStart, socialDownloading, socialURL, youtubeRightsConfirmed]);
+  }, [autoRecognize, handleFile, runRecognition, segmentEnd, segmentStart, socialDownloading, socialURL, sourceQuality, youtubeRightsConfirmed]);
 
   const pasteSocialLink = async () => {
     try {
@@ -408,7 +447,10 @@ export default function ImportPage() {
       });
       setNativeSnapshot(snapshot);
       setNativeSourceURL(source.url);
-      await handleFile(nativeFile);
+      const decoded = await handleFile(nativeFile);
+      if (decoded && autoRecognize && decoded.duration >= MIN_AUTOMATIC_RECOGNITION_SECONDS) {
+        void runRecognition(decoded);
+      }
     }).catch((reason: unknown) => {
       if (!cancelled) {
         setError(reason instanceof Error
@@ -417,7 +459,7 @@ export default function ImportPage() {
       }
     });
     return () => { cancelled = true; };
-  }, [handleFile]);
+  }, [autoRecognize, handleFile, runRecognition]);
 
   const cancelDecode = async () => {
     decodeOperationRef.current += 1;
@@ -614,6 +656,10 @@ export default function ImportPage() {
                 autoCapitalize="none"
                 autoCorrect="off"
                 value={socialURL}
+                onInput={(event) => {
+                  setSocialURL(event.currentTarget.value);
+                  setSocialError(null);
+                }}
                 onChange={(event) => {
                   setSocialURL(event.target.value);
                   setSocialError(null);
@@ -682,6 +728,31 @@ export default function ImportPage() {
                   <span id="youtube-range-help" className="ml-auto text-xs text-[var(--muted-deep)]">Use m:ss or h:mm:ss</span>
                 </div>
                 {segmentProblem && <p className="mt-2 text-xs text-red-300">{segmentProblem}</p>}
+                <fieldset className="mt-3">
+                  <legend className="text-xs text-[var(--muted)]">Import quality</legend>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2" role="radiogroup" aria-label="YouTube import quality">
+                    {([
+                      ["fast", "Fast", "480p · usually seconds"],
+                      ["hd", "HD", "Up to 720p · may be slower"],
+                    ] as const).map(([value, label, detail]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={sourceQuality === value}
+                        onClick={() => setSourceQuality(value)}
+                        className={`min-h-11 rounded-lg border px-3 py-2 text-left transition-colors ${
+                          sourceQuality === value
+                            ? "border-[var(--gold)] bg-[rgba(201,162,75,0.08)]"
+                            : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"
+                        }`}
+                      >
+                        <span className="block text-xs font-medium text-parchment">{label}</span>
+                        <span className="mt-0.5 block text-xs text-[var(--muted)] sm:text-[10px]">{detail}</span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
                 <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs leading-4 text-[var(--muted)]">
                   <input
                     type="checkbox"
@@ -693,6 +764,18 @@ export default function ImportPage() {
                 </label>
               </div>
             )}
+            <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-[var(--hairline-soft)] px-3 py-2 text-xs text-parchment">
+              <span>
+                <span className="block font-medium">Recognise verses after import</span>
+                <span className="mt-0.5 block text-xs leading-4 text-[var(--muted)]">Starts local Quran matching automatically for clips of 10 seconds or longer.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={autoRecognize}
+                onChange={(event) => setAutoRecognize(event.target.checked)}
+                className="h-5 w-5 shrink-0 accent-[var(--gold)]"
+              />
+            </label>
             <button
               type="button"
               onClick={() => void importSocialPost()}
@@ -712,7 +795,7 @@ export default function ImportPage() {
             {socialDownloading && (
               <p role="status" className="mt-2 text-xs text-gold-soft">
                 {isYouTubeSource
-                  ? "Fetching and trimming this segment. Keep AyahClip open; long source videos can take a minute."
+                  ? `${sourceQuality === "fast" ? "Fetching the fast mobile draft" : "Fetching the HD source"} · ${socialElapsed}s elapsed. Only the selected range is downloaded.`
                   : "Resolving the source video. Keep AyahClip open; public posts usually take a few seconds."}
               </p>
             )}
@@ -729,7 +812,14 @@ export default function ImportPage() {
             ref={fileInputRef}
             type="file"
             accept="audio/*,video/*,.mov,.m4v"
-            onChange={(e) => handleFile(e.target.files?.[0])}
+            onChange={(event) => {
+              const selected = event.target.files?.[0];
+              void handleFile(selected).then((decoded) => {
+                if (decoded && autoRecognize && decoded.duration >= MIN_AUTOMATIC_RECOGNITION_SECONDS) {
+                  void runRecognition(decoded);
+                }
+              });
+            }}
             className="sr-only"
             aria-hidden="true"
             tabIndex={-1}
@@ -960,6 +1050,7 @@ export default function ImportPage() {
                           previewCurrentTime >= timing.start &&
                           previewCurrentTime <= timing.end;
                         const verse = detectedVerses.find((item) => item.verse_number === timing.verseNumber);
+                        const partial = Boolean(timing.wordRange);
                         const duration = Math.max(0.05, timing.end - timing.start);
                         const progress = playing || playingInPassage
                           ? Math.max(0, Math.min(100, ((previewCurrentTime - timing.start) / duration) * 100))
@@ -981,13 +1072,18 @@ export default function ImportPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.13em] text-gold-soft/75">Ayah {timing.verseNumber}</span>
+                                {partial && (
+                                  <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.07] px-2 py-0.5 text-xs uppercase tracking-[0.1em] text-amber-100 sm:text-[10px]">
+                                    Partial ayah recognised
+                                  </span>
+                                )}
                                 <span className="ml-auto rounded border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-1.5 py-0.5 text-xs sm:text-[10px] tabular-nums text-[var(--muted-deep)]">{fmt(timing.start)}–{fmt(timing.end)}</span>
                               </div>
                               <p className="font-arabic mt-1 truncate text-right text-lg leading-9 text-parchment sm:text-xl" dir="rtl">
-                                {verse?.text_uthmani ?? "Quran text loads here for comparison"}
+                                {verse ? verseTextAt(timing, verse.text_uthmani, timing.start) : "Quran text loads here for comparison"}
                               </p>
                               {verse?.translation && (
-                                <p className="truncate text-xs sm:text-[11px] leading-4 text-[var(--muted)]">{verse.translation}</p>
+                                <p className="truncate text-xs sm:text-[11px] leading-4 text-[var(--muted)]">{verseTextAt(timing, verse.translation, timing.start)}</p>
                               )}
                               <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-white/[0.06]" aria-hidden="true">
                                 <div className="h-full bg-gold transition-[width] duration-100 ease-linear motion-reduce:transition-none" style={{ width: `${progress}%` }} />
@@ -1099,6 +1195,7 @@ export default function ImportPage() {
               checked={rangeConfirmed}
               onChange={(event) => {
                 const confirmed = event.target.checked;
+                if (confirmed) detectAbortRef.current?.abort();
                 setRangeConfirmed(confirmed);
                 if (confirmed) {
                   trackProductEvent("range_confirmed", {

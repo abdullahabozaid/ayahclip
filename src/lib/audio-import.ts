@@ -61,6 +61,21 @@ export function effectiveAudioBounds(
 ): [number, number] {
   if (!timing.wordRange || wordCount <= 0) return [timing.start, timing.end];
   const { from, to } = timing.wordRange;
+  const aligned = timing.alignedWordStarts;
+  if (aligned && aligned.length > 0) {
+    const clampedFrom = Math.max(0, Math.min(aligned.length - 1, from));
+    const clampedTo = Math.max(clampedFrom, Math.min(aligned.length - 1, to));
+    const lo = Math.max(timing.start, Math.min(timing.end, aligned[clampedFrom] ?? timing.start));
+    const currentOnset = aligned[clampedTo] ?? lo;
+    const nextOnset = aligned[clampedTo + 1];
+    // When the next word was not recited, transcript alignment fills it with
+    // the last known onset. Keep the source end instead of cutting at that
+    // repeated timestamp.
+    const hi = nextOnset !== undefined && nextOnset > currentOnset + 0.02
+      ? Math.min(timing.end, nextOnset)
+      : timing.end;
+    return [lo, Math.max(lo, hi)];
+  }
   const dur = timing.end - timing.start;
   if (dur <= 0) return [timing.start, timing.end];
   const lo = timing.start + (Math.max(0, from) / wordCount) * dur;
@@ -78,6 +93,22 @@ function applyWordRange(words: string[], wordRange?: { from: number; to: number 
   const hi = Math.min(words.length - 1, wordRange.to);
   if (hi < lo) return words;
   return words.slice(lo, hi + 1);
+}
+
+function wordRangeForText(
+  timing: VerseTiming,
+  targetWordCount: number,
+): { from: number; to: number } | undefined {
+  const range = timing.wordRange;
+  if (!range) return undefined;
+  const sourceWordCount = timing.alignedWordStarts?.length;
+  if (!sourceWordCount || sourceWordCount === targetWordCount) return range;
+  const from = Math.floor((range.from / sourceWordCount) * targetWordCount);
+  const to = Math.ceil(((range.to + 1) / sourceWordCount) * targetWordCount) - 1;
+  return {
+    from: Math.max(0, Math.min(targetWordCount - 1, from)),
+    to: Math.max(0, Math.min(targetWordCount - 1, Math.max(from, to))),
+  };
 }
 
 /** Snap a translation word boundary to a nearby sentence break (. ? !) within
@@ -145,7 +176,8 @@ export function verseTextAt(
   t: number
 ): string {
   const allWords = fullText.split(/\s+/).filter(Boolean);
-  const kept = applyWordRange(allWords, timing.wordRange);
+  const displayRange = wordRangeForText(timing, allWords.length);
+  const kept = applyWordRange(allWords, displayRange);
   const keptText = kept.join(" ");
   const splits = timing.splits;
   if (!splits || splits.length === 0) return keptText;
@@ -168,7 +200,7 @@ export function verseTextAt(
     const wordBounds = [0, ...scaled, allWords.length];
     const wLo = wordBounds[segIdx];
     const wHi = wordBounds[segIdx + 1];
-    const range = timing.wordRange;
+    const range = displayRange;
     const keepLo = range ? Math.max(wLo, range.from) : wLo;
     const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
     if (keepHi <= keepLo) return "";
@@ -186,7 +218,7 @@ export function verseTextAt(
     allWords.length,
     Math.max(wLo + 1, Math.floor(((hi - timing.start) / dur) * allWords.length))
   );
-  const range = timing.wordRange;
+  const range = displayRange;
   const keepLo = range ? Math.max(wLo, range.from) : wLo;
   const keepHi = range ? Math.min(wHi, range.to + 1) : wHi;
   if (keepHi <= keepLo) return keptText;
@@ -201,12 +233,13 @@ export function verseTextAt(
  */
 export function verseSegments(timing: VerseTiming, fullText: string): string[] {
   const allWords = fullText.split(/\s+/).filter(Boolean);
-  const kept = applyWordRange(allWords, timing.wordRange);
+  const displayRange = wordRangeForText(timing, allWords.length);
+  const kept = applyWordRange(allWords, displayRange);
   const splits = timing.splits ?? [];
   if (splits.length === 0) return [kept.join(" ")];
 
   const sw = timing.splitWords;
-  const range = timing.wordRange;
+  const range = displayRange;
   const out: string[] = [];
 
   if (sw && sw.length === splits.length) {
