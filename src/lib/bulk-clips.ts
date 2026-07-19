@@ -22,6 +22,8 @@ export interface BulkClipCandidate {
   confidence: BulkDetectedAyah["confidence"];
   templateId: string;
   approved: boolean;
+  /** Compact review frame persisted with the batch. Audio-only sources omit it. */
+  thumbnail?: string;
 }
 
 const confidenceRank = { selected: 0, medium: 1, high: 2 } as const;

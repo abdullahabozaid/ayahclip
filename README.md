@@ -127,5 +127,6 @@ own or permitted YouTube videos, are resolved on the self-hosted VPS with
 platform hosts, never playlists, caps source size and runtime, and normalizes
 YouTube segments to H.264/AAC MP4 before browser editing. YouTube imports require
 an explicit start/end range of no more than eight minutes and a rights
-confirmation. Private or restricted creator uploads should be downloaded with
-YouTube Studio and added through local file import instead.
+confirmation. Public supported videos import directly; private or restricted
+sources cannot be resolved, but the same media can still be added through local
+file import when the creator already has the file.

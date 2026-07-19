@@ -15,6 +15,10 @@ export interface BulkRecognitionResult {
   unresolvedWindows: { start: number; end: number; reason: string }[];
 }
 
+export interface BulkRecognitionWindowComplete extends BulkRecognitionResult {
+  nextWindowIndex: number;
+}
+
 export function bulkRecognitionWindows(
   duration: number,
   windowSeconds = 4 * 60,
@@ -50,17 +54,25 @@ export async function recognizeQuranInWindows({
   surahs,
   signal,
   onProgress,
+  startWindowIndex = 0,
+  initialAyahs = [],
+  initialUnresolvedWindows = [],
+  onWindowComplete,
 }: {
   buffer: AudioBuffer;
   surahs: readonly Surah[];
   signal?: AbortSignal;
   onProgress?: (progress: BulkRecognitionProgress) => void;
+  startWindowIndex?: number;
+  initialAyahs?: BulkDetectedAyah[];
+  initialUnresolvedWindows?: BulkRecognitionResult["unresolvedWindows"];
+  onWindowComplete?: (result: BulkRecognitionWindowComplete) => void | Promise<void>;
 }): Promise<BulkRecognitionResult> {
   const windows = bulkRecognitionWindows(buffer.duration);
-  const ayahs: BulkDetectedAyah[] = [];
-  const unresolvedWindows: BulkRecognitionResult["unresolvedWindows"] = [];
+  const ayahs: BulkDetectedAyah[] = initialAyahs.map((ayah) => ({ ...ayah }));
+  const unresolvedWindows: BulkRecognitionResult["unresolvedWindows"] = initialUnresolvedWindows.map((window) => ({ ...window }));
 
-  for (let index = 0; index < windows.length; index++) {
+  for (let index = Math.max(0, startWindowIndex); index < windows.length; index++) {
     if (signal?.aborted) throw new DOMException("Bulk recognition cancelled", "AbortError");
     const window = windows[index];
     const outcome = await recognizeQuranPassage({
@@ -77,6 +89,7 @@ export async function recognizeQuranInWindows({
     });
     if (outcome.kind !== "matched") {
       unresolvedWindows.push({ start: window.start, end: window.end, reason: outcome.message });
+      await onWindowComplete?.({ ayahs, unresolvedWindows, nextWindowIndex: index + 1 });
       continue;
     }
     for (const timing of outcome.result.timings) {
@@ -90,6 +103,7 @@ export async function recognizeQuranInWindows({
         sourceWindow: index,
       });
     }
+    await onWindowComplete?.({ ayahs, unresolvedWindows, nextWindowIndex: index + 1 });
   }
   return { ayahs, unresolvedWindows };
 }

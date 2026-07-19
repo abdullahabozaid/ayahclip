@@ -15,11 +15,33 @@ import {
   recognizeQuranInWindows,
   type BulkRecognitionProgress,
 } from "@/lib/bulk-recognition";
+import {
+  createBulkJob,
+  deleteBulkOutput,
+  deleteBulkJob,
+  loadActiveBulkJob,
+  loadBulkOutput,
+  loadBulkSource,
+  saveBulkJob,
+  saveBulkOutput,
+  saveBulkSource,
+  type BulkJob,
+  type BulkRenderTask,
+} from "@/lib/bulk-jobs";
+import { captureBulkThumbnails } from "@/lib/bulk-thumbnails";
 import { decodeAudioFile } from "@/lib/audio-import";
 import { importSizeError } from "@/lib/import-limits";
 import { isSupportedVideoFile } from "@/lib/media-file";
 import { useAppStore } from "@/lib/store";
-import { TEMPLATES } from "@/lib/templates";
+import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "@/lib/templates";
+import { getSavedTemplates } from "@/lib/saved-templates";
+import type { TemplateDefinition } from "@/lib/template-model";
+import {
+  deliverBulkFilesInGesture,
+  deliverFileInGesture,
+  renderClipFile,
+  saveRenderedToLibrary,
+} from "@/lib/clip-export";
 import type { Surah, Verse } from "@/types";
 import {
   bulkYoutubeRangeError,
@@ -44,6 +66,9 @@ export function BulkCreateWorkspace() {
   const abortRef = useRef<AbortController | null>(null);
   const previewRef = useRef<HTMLVideoElement>(null);
   const previewEndRef = useRef<number | null>(null);
+  const jobRef = useRef<BulkJob | null>(null);
+  const restoredRef = useRef(false);
+  const stopRenderingRef = useRef(false);
 
   const [stage, setStage] = useState<WorkspaceStage>("source");
   const [surahs, setSurahs] = useState<Surah[]>([]);
@@ -67,9 +92,73 @@ export function BulkCreateWorkspace() {
   const [inspirationIndex, setInspirationIndex] = useState(0);
   const [inspirationVerses, setInspirationVerses] = useState<VerseLookup>({});
   const [activePreview, setActivePreview] = useState<string | null>(null);
+  const [job, setJob] = useState<BulkJob | null>(null);
+  const [restoring, setRestoring] = useState(true);
+  const [thumbnailProgress, setThumbnailProgress] = useState<number | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<TemplateDefinition[]>(FEATURED_TEMPLATES);
+
+  const replaceJob = async (next: BulkJob) => {
+    const saved = await saveBulkJob(next);
+    jobRef.current = saved;
+    setJob(saved);
+    return saved;
+  };
+
+  useEffect(() => {
+    jobRef.current = job;
+  }, [job]);
+
+  useEffect(() => {
+    setAvailableTemplates([...FEATURED_TEMPLATES, ...getSavedTemplates(DEFAULT_TEMPLATE_STYLE)]);
+  }, []);
 
   useEffect(() => {
     void fetchSurahs().then(setSurahs).catch(() => setError("The Quran index could not be loaded. Check your connection and reload."));
+  }, []);
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const restoredJob = await loadActiveBulkJob();
+        if (!restoredJob) return;
+        const stored = await loadBulkSource(restoredJob.id);
+        if (!stored || cancelled) return;
+        const source = new File([stored.source], restoredJob.sourceName, { type: restoredJob.sourceType });
+        const decoded = await decodeAudioFile(stored.audio);
+        if (cancelled) return;
+        const nextUrl = URL.createObjectURL(source);
+        setSourceFile(source);
+        setAudioBlob(stored.audio);
+        setBuffer(decoded);
+        setSourceUrl(nextUrl);
+        setRequestedCount(restoredJob.requestedCount);
+        setTemplateId(restoredJob.templateId);
+        setCandidates(restoredJob.candidates);
+        setUnresolvedCount(restoredJob.unresolvedWindows.length);
+        setVerseLookup(Object.fromEntries(restoredJob.verses.map((verse) => [verse.verse_key, verse])));
+        const interrupted = restoredJob.stage === "analysing";
+        const normalizedTasks = restoredJob.renderTasks.map((task) =>
+          task.status === "rendering" ? { ...task, status: "queued" as const, progress: 0 } : task,
+        );
+        const normalized = interrupted || restoredJob.stage === "rendering"
+          ? await replaceJob({ ...restoredJob, stage: interrupted ? "source" : "results", renderTasks: normalizedTasks })
+          : restoredJob;
+        jobRef.current = normalized;
+        setJob(normalized);
+        setStage(normalized.candidates.length > 0 ? "results" : "source");
+        if (interrupted) setError(`Analysis was safely checkpointed after window ${restoredJob.nextWindowIndex}. Resume when ready.`);
+      } catch (reason) {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : "The saved batch could not be restored.");
+      } finally {
+        if (!cancelled) setRestoring(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -120,11 +209,25 @@ export function BulkCreateWorkspace() {
       if (decoded.duration > 30 * 60 + 1) {
         throw new RangeError("Bulk Create currently supports up to 30 minutes. Trim or select a 30-minute section first.");
       }
+      const previousJob = jobRef.current;
       if (sourceUrl) URL.revokeObjectURL(sourceUrl);
       setSourceFile(file);
       setAudioBlob(resolvedAudio);
       setBuffer(decoded);
       setSourceUrl(URL.createObjectURL(file));
+      setCandidates([]);
+      setVerseLookup({});
+      setUnresolvedCount(0);
+      const nextJob = createBulkJob({ source: file, duration: decoded.duration, requestedCount, templateId });
+      jobRef.current = nextJob;
+      setJob(nextJob);
+      try {
+        if (previousJob) await deleteBulkJob(previousJob);
+        await saveBulkSource(nextJob.id, file, resolvedAudio);
+        await replaceJob(nextJob);
+      } catch {
+        setError("The source is ready, but this browser could not preserve the batch for refresh recovery. Keep this tab open.");
+      }
     } catch (reason) {
       setSourceFile(null);
       setAudioBlob(null);
@@ -180,23 +283,68 @@ export function BulkCreateWorkspace() {
     setStage("analysing");
     setError(null);
     setProgress(null);
+    const existing = jobRef.current ?? createBulkJob({ source: sourceFile, duration: buffer.duration, requestedCount, templateId });
+    let workingJob: BulkJob = {
+      ...existing,
+      stage: "analysing",
+      requestedCount,
+      templateId,
+      candidates: [],
+      verses: [],
+      renderTasks: [],
+    };
     try {
+      workingJob = await replaceJob(workingJob);
       const result = await recognizeQuranInWindows({
         buffer,
         surahs,
         signal: controller.signal,
         onProgress: setProgress,
+        startWindowIndex: workingJob.nextWindowIndex,
+        initialAyahs: workingJob.detectedAyahs,
+        initialUnresolvedWindows: workingJob.unresolvedWindows,
+        onWindowComplete: async (checkpoint) => {
+          workingJob = await replaceJob({
+            ...workingJob,
+            detectedAyahs: checkpoint.ayahs.map((ayah) => ({ ...ayah })),
+            unresolvedWindows: checkpoint.unresolvedWindows.map((window) => ({ ...window })),
+            nextWindowIndex: checkpoint.nextWindowIndex,
+          });
+        },
       });
-      const generated = buildVerseCompleteCandidates({
+      let generated = buildVerseCompleteCandidates({
         ayahs: result.ayahs,
         requestedCount,
         templateId,
       });
       const surahIds = [...new Set(generated.map((candidate) => candidate.surah))];
       const groups = await Promise.all(surahIds.map((surah) => fetchVerses(surah)));
-      setVerseLookup(Object.fromEntries(groups.flat().map((verse) => [verse.verse_key, verse])));
+      const verses = groups.flat();
+      setVerseLookup(Object.fromEntries(verses.map((verse) => [verse.verse_key, verse])));
+      if (sourceUrl && isSupportedVideoFile(sourceFile) && generated.length > 0) {
+        setThumbnailProgress(0);
+        try {
+          const thumbs = await captureBulkThumbnails(sourceUrl, generated, (complete, total) => {
+            setThumbnailProgress(Math.round((complete / total) * 100));
+          });
+          generated = generated.map((candidate) => ({ ...candidate, thumbnail: thumbs[candidate.id] }));
+        } catch {
+          // A missing review frame must not block Quran review or rendering.
+        } finally {
+          setThumbnailProgress(null);
+        }
+      }
       setCandidates(generated);
       setUnresolvedCount(result.unresolvedWindows.length);
+      workingJob = await replaceJob({
+        ...workingJob,
+        stage: "results",
+        detectedAyahs: result.ayahs,
+        unresolvedWindows: result.unresolvedWindows,
+        candidates: generated,
+        verses,
+        renderTasks: generated.map((candidate) => ({ candidateId: candidate.id, status: "idle", progress: 0 })),
+      });
       setStage("results");
     } catch (reason) {
       if (reason instanceof Error && reason.name === "AbortError") {
@@ -212,10 +360,23 @@ export function BulkCreateWorkspace() {
 
   const applyTemplateToAll = (nextTemplateId: string) => {
     setTemplateId(nextTemplateId);
-    setCandidates((items) => items.map((candidate) => ({ ...candidate, templateId: nextTemplateId })));
+    setCandidates((items) => {
+      const next = items.map((candidate) => ({ ...candidate, templateId: nextTemplateId }));
+      const current = jobRef.current;
+      if (current) {
+        const renderTasks = current.renderTasks.map((task) => ({
+          candidateId: task.candidateId,
+          status: "idle" as const,
+          progress: 0,
+        }));
+        void replaceJob({ ...current, stage: "results", templateId: nextTemplateId, candidates: next, renderTasks });
+        void Promise.all(current.renderTasks.map((task) => deleteBulkOutput(current.id, task.candidateId))).catch(() => {});
+      }
+      return next;
+    });
   };
 
-  const openCandidate = async (candidate: BulkClipCandidate) => {
+  const prepareCandidate = async (candidate: BulkClipCandidate) => {
     if (!audioBlob || !sourceFile) return;
     const surah = surahs.find((item) => item.id === candidate.surah);
     if (!surah) return;
@@ -235,14 +396,168 @@ export function BulkCreateWorkspace() {
       delete (timing as Partial<typeof timing>).sourceWindow;
       return timing;
     }));
+    store.setBackground({ ...DEFAULT_TEMPLATE_STYLE.background });
+    store.setBackgroundFit(DEFAULT_TEMPLATE_STYLE.backgroundFit ?? "cover");
+    store.setFitBackdrop(DEFAULT_TEMPLATE_STYLE.fitBackdrop ?? "black");
     if (isSupportedVideoFile(sourceFile) && sourceUrl) {
       store.setBackground({ type: "video", value: sourceUrl, label: sourceFile.name });
       store.setBackgroundFit("cover");
       store.setBackgroundVideoSync(true);
     }
-    const template = TEMPLATES.find((item) => item.id === candidate.templateId);
+    const template = availableTemplates.find((item) => item.id === candidate.templateId);
     if (template) applyTemplate(template);
+    return true;
+  };
+
+  const openCandidate = async (candidate: BulkClipCandidate) => {
+    const prepared = await prepareCandidate(candidate);
+    if (!prepared) return;
     router.push("/studio");
+  };
+
+  const updateCandidates = (next: BulkClipCandidate[]) => {
+    setCandidates(next);
+    const current = jobRef.current;
+    if (current) void replaceJob({ ...current, candidates: next });
+  };
+
+  const toggleApproved = (candidateId: string) => {
+    updateCandidates(candidates.map((candidate) =>
+      candidate.id === candidateId ? { ...candidate, approved: !candidate.approved } : candidate,
+    ));
+  };
+
+  const updateRenderTask = async (candidateId: string, patch: Partial<BulkRenderTask>, persist = true) => {
+    const current = jobRef.current;
+    if (!current) return null;
+    const existing = current.renderTasks.find((task) => task.candidateId === candidateId)
+      ?? { candidateId, status: "idle" as const, progress: 0 };
+    const nextTask = { ...existing, ...patch };
+    const renderTasks = current.renderTasks.some((task) => task.candidateId === candidateId)
+      ? current.renderTasks.map((task) => task.candidateId === candidateId ? nextTask : task)
+      : [...current.renderTasks, nextTask];
+    const next = { ...current, renderTasks };
+    jobRef.current = next;
+    setJob(next);
+    return persist ? await replaceJob(next) : next;
+  };
+
+  const runRenderQueue = async (candidateIds?: string[]) => {
+    const currentJob = jobRef.current;
+    if (!currentJob || rendering) return;
+    const targets = candidates.filter((candidate) =>
+      (candidateIds ? candidateIds.includes(candidate.id) : candidate.approved)
+      && currentJob.renderTasks.find((task) => task.candidateId === candidate.id)?.status !== "ready",
+    );
+    if (targets.length === 0) return;
+    stopRenderingRef.current = false;
+    setRendering(true);
+    setError(null);
+    let queuedJob = { ...currentJob, stage: "rendering" as const };
+    for (const candidate of targets) {
+      const existing = queuedJob.renderTasks.find((task) => task.candidateId === candidate.id);
+      const queuedTask: BulkRenderTask = { ...existing, candidateId: candidate.id, status: "queued", progress: 0, error: undefined };
+      queuedJob = {
+        ...queuedJob,
+        renderTasks: queuedJob.renderTasks.some((task) => task.candidateId === candidate.id)
+          ? queuedJob.renderTasks.map((task) => task.candidateId === candidate.id ? queuedTask : task)
+          : [...queuedJob.renderTasks, queuedTask],
+      };
+    }
+    await replaceJob(queuedJob);
+    try {
+      for (const candidate of targets) {
+        if (stopRenderingRef.current) {
+          await updateRenderTask(candidate.id, { status: "cancelled", progress: 0 });
+          continue;
+        }
+        await updateRenderTask(candidate.id, { status: "rendering", progress: 1, error: undefined });
+        try {
+          const prepared = await prepareCandidate(candidate);
+          if (!prepared) throw new Error("The source media is unavailable.");
+          const rendered = await renderClipFile((complete, total) => {
+            const percent = total > 0 ? Math.max(1, Math.min(99, Math.round((complete / total) * 100))) : 1;
+            void updateRenderTask(candidate.id, { progress: percent }, false);
+          });
+          if (!rendered) throw new Error("No complete Quran rows were available to render.");
+          const extension = rendered.file.type.includes("mp4") ? "mp4" : "webm";
+          const output = new File(
+            [rendered.file],
+            `ayahclip-${candidate.surah}-${candidate.ayahStart}-${candidate.ayahEnd}.${extension}`,
+            { type: rendered.file.type },
+          );
+          await saveBulkOutput(currentJob.id, candidate.id, output);
+          const librarySaved = await saveRenderedToLibrary(output);
+          await updateRenderTask(candidate.id, {
+            status: "ready",
+            progress: 100,
+            outputName: output.name,
+            outputType: output.type,
+            outputSize: output.size,
+            librarySaved,
+          });
+        } catch (reason) {
+          await updateRenderTask(candidate.id, {
+            status: "failed",
+            progress: 0,
+            error: reason instanceof Error ? reason.message : "This clip could not be rendered.",
+          });
+        }
+      }
+    } finally {
+      const latest = jobRef.current;
+      if (latest) {
+        const completed = latest.renderTasks.filter((task) => task.status === "ready").length;
+        await replaceJob({ ...latest, stage: completed > 0 ? "complete" : "results" });
+      }
+      setRendering(false);
+    }
+  };
+
+  const outputFile = async (candidateId: string) => {
+    const current = jobRef.current;
+    const task = current?.renderTasks.find((item) => item.candidateId === candidateId);
+    if (!current || !task?.outputName) return null;
+    const blob = await loadBulkOutput(current.id, candidateId);
+    return blob ? new File([blob], task.outputName, { type: task.outputType ?? blob.type }) : null;
+  };
+
+  const deliverCandidate = async (candidateId: string) => {
+    const file = await outputFile(candidateId);
+    if (file) await deliverFileInGesture(file);
+  };
+
+  const deliverReadyBatch = async () => {
+    const current = jobRef.current;
+    if (!current) return;
+    setDeliveryBusy(true);
+    try {
+      const files = (await Promise.all(
+        current.renderTasks.filter((task) => task.status === "ready").map((task) => outputFile(task.candidateId)),
+      )).filter((file): file is File => Boolean(file));
+      await deliverBulkFilesInGesture(files);
+    } finally {
+      setDeliveryBusy(false);
+    }
+  };
+
+  const startNewBatch = async () => {
+    abortRef.current?.abort();
+    stopRenderingRef.current = true;
+    const current = jobRef.current;
+    if (current) await deleteBulkJob(current);
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    jobRef.current = null;
+    setJob(null);
+    setSourceFile(null);
+    setAudioBlob(null);
+    setBuffer(null);
+    setSourceUrl(null);
+    setCandidates([]);
+    setVerseLookup({});
+    setUnresolvedCount(0);
+    setError(null);
+    setStage("source");
   };
 
   const togglePreview = async (candidate: BulkClipCandidate) => {
@@ -262,6 +577,10 @@ export function BulkCreateWorkspace() {
   const overallProgress = progress
     ? Math.round(((progress.window - 1 + STAGE_ORDER[progress.recognition.stage]) / progress.windowCount) * 100)
     : 1;
+  const approvedCount = candidates.filter((candidate) => candidate.approved).length;
+  const readyCount = job?.renderTasks.filter((task) => task.status === "ready").length ?? 0;
+  const failedCount = job?.renderTasks.filter((task) => task.status === "failed").length ?? 0;
+  const renderTaskById = Object.fromEntries((job?.renderTasks ?? []).map((task) => [task.candidateId, task]));
 
   return (
     <main className="bg-mihrab min-h-[calc(100dvh-65px)] px-4 pb-24 pt-8 sm:px-5 sm:pt-12">
@@ -274,7 +593,13 @@ export function BulkCreateWorkspace() {
           </p>
         </header>
 
-        {stage === "source" && (
+        {restoring && (
+          <div className="mt-8 rounded-2xl border border-[var(--hairline-soft)] bg-white/[0.025] px-5 py-4 text-sm text-[var(--muted)]" role="status">
+            Restoring your last bulk batch…
+          </div>
+        )}
+
+        {!restoring && stage === "source" && (
           <div className="mt-9 grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
             <section className="panel p-5 sm:p-7" aria-labelledby="bulk-source-heading">
               <div className="flex items-start justify-between gap-4">
@@ -319,31 +644,35 @@ export function BulkCreateWorkspace() {
               </fieldset>
               <label className="mt-6 block text-sm font-medium text-parchment" htmlFor="bulk-template">Text and layout preset</label>
               <select id="bulk-template" value={templateId} onChange={(event) => setTemplateId(event.target.value)} className="field mt-3 min-h-11 w-full px-3 text-sm">
-                {FEATURED_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                {availableTemplates.map((template) => <option key={template.id} value={template.id}>{template.source === "user" ? "My preset · " : ""}{template.name}</option>)}
               </select>
               <button type="button" onClick={() => void analyse()} disabled={!buffer || decoding || linkLoading || surahs.length === 0} className="btn-gold mt-7 min-h-12 w-full rounded-xl px-5 text-sm disabled:cursor-not-allowed disabled:opacity-45">Create verse-complete drafts</button>
-              <p className="mt-3 text-center text-xs text-[var(--muted)]">A 30-minute source may take 5–8 minutes. Keep this tab open during beta.</p>
+              <p className="mt-3 text-center text-xs leading-5 text-[var(--muted)]">{job?.nextWindowIndex ? `Resume from saved window ${job.nextWindowIndex + 1}.` : "A 30-minute source may take 5–8 minutes."} Progress is saved after every window.</p>
             </aside>
           </div>
         )}
 
         {stage === "analysing" && (
-          <AnalysisView progress={progress} overallProgress={overallProgress} inspiration={inspiration[inspirationIndex]} onCancel={() => abortRef.current?.abort()} />
+          <AnalysisView progress={progress} overallProgress={overallProgress} thumbnailProgress={thumbnailProgress} inspiration={inspiration[inspirationIndex]} onCancel={() => abortRef.current?.abort()} />
         )}
 
         {stage === "results" && (
           <section className="mt-9">
-            <div className="flex flex-col gap-5 border-b border-[var(--hairline-soft)] pb-6 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex flex-col gap-5 border-b border-[var(--hairline-soft)] pb-6 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold-soft/70">Review</p>
                 <h2 className="mt-2 text-2xl font-medium text-parchment">{candidates.length} verse-complete drafts</h2>
-                <p className="mt-2 text-sm text-[var(--muted)]">{unresolvedCount ? `${unresolvedCount} source window${unresolvedCount === 1 ? "" : "s"} need manual review and were not turned into clips.` : "The analysed source is fully covered by confident windows."}</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">{approvedCount} approved · {readyCount} rendered{failedCount ? ` · ${failedCount} need attention` : ""}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-deep)]">{unresolvedCount ? `${unresolvedCount} ambiguous source window${unresolvedCount === 1 ? " was" : "s were"} withheld instead of guessed.` : "Every analysed window produced a confident Quran match."}</p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <select value={templateId} onChange={(event) => applyTemplateToAll(event.target.value)} className="field min-h-11 px-3 text-sm" aria-label="Apply preset to all clips">
-                  {FEATURED_TEMPLATES.map((template) => <option key={template.id} value={template.id}>All · {template.name}</option>)}
+                  {availableTemplates.map((template) => <option key={template.id} value={template.id}>All clips · {template.name}</option>)}
                 </select>
-                <button type="button" onClick={() => setStage("source")} className="btn-ghost min-h-11 rounded-xl px-4 text-sm">New batch</button>
+                <button type="button" onClick={() => void runRenderQueue()} disabled={rendering || approvedCount === 0} className="btn-gold min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">{rendering ? "Rendering queue…" : `Render approved (${approvedCount})`}</button>
+                {readyCount > 0 && <button type="button" onClick={() => void deliverReadyBatch()} disabled={deliveryBusy} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">{deliveryBusy ? "Preparing…" : `Download ready (${readyCount})`}</button>}
+                {rendering && <button type="button" onClick={() => { stopRenderingRef.current = true; }} className="btn-ghost min-h-11 rounded-xl px-4 text-sm">Stop after current</button>}
+                <button type="button" onClick={() => void startNewBatch()} disabled={rendering} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">New batch</button>
               </div>
             </div>
 
@@ -361,32 +690,50 @@ export function BulkCreateWorkspace() {
                 <button type="button" onClick={() => setStage("source")} className="btn-gold mt-5 min-h-11 rounded-xl px-5 text-sm">Try another section</button>
               </div>
             ) : (
-              <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div className="mt-6 space-y-3">
                 {candidates.map((candidate) => {
                   const firstVerse = verseLookup[`${candidate.surah}:${candidate.ayahStart}`];
                   const surah = surahs.find((item) => item.id === candidate.surah);
-                  const template = TEMPLATES.find((item) => item.id === candidate.templateId);
+                  const template = availableTemplates.find((item) => item.id === candidate.templateId);
+                  const task = renderTaskById[candidate.id];
                   return (
-                    <article key={candidate.id} className="panel overflow-hidden">
-                      <div className="flex items-center justify-between gap-3 border-b border-[var(--hairline-soft)] px-4 py-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-parchment">{surah?.name_simple ?? `Surah ${candidate.surah}`} · {candidate.ayahStart}{candidate.ayahEnd === candidate.ayahStart ? "" : `–${candidate.ayahEnd}`}</p>
-                          <p className="mt-0.5 text-xs text-[var(--muted)]">{fmt(candidate.start)}–{fmt(candidate.end)} · {fmt(candidate.duration)}</p>
+                    <article key={candidate.id} className={`overflow-hidden rounded-2xl border bg-[rgba(16,17,21,0.78)] transition-colors ${candidate.approved ? "border-[var(--hairline)]" : "border-white/[0.06] opacity-65"}`}>
+                      <div className="grid gap-0 sm:grid-cols-[2.5rem_7rem_minmax(0,1fr)] lg:grid-cols-[2.5rem_7rem_minmax(0,1fr)_13rem]">
+                        <label className="flex min-h-12 cursor-pointer items-center justify-center border-b border-[var(--hairline-soft)] sm:border-b-0 sm:border-r">
+                          <input type="checkbox" checked={candidate.approved} onChange={() => toggleApproved(candidate.id)} aria-label={`Approve clip ${candidate.order}`} className="h-5 w-5 accent-[var(--gold)]" />
+                        </label>
+                        <div className="relative aspect-video overflow-hidden bg-black sm:aspect-[9/16]">
+                          {candidate.thumbnail ? <div role="img" aria-label={`Source frame for clip ${candidate.order}`} className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${candidate.thumbnail})` }} /> : <div className="flex h-full items-center justify-center px-2 text-center text-[10px] text-[var(--muted-deep)]">Audio source</div>}
+                          <span className="absolute bottom-2 left-2 rounded-md bg-black/75 px-1.5 py-1 text-[10px] tabular-nums text-white">{fmt(candidate.duration)}</span>
                         </div>
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] ${candidate.confidence === "high" ? "bg-emerald-400/10 text-emerald-200" : "bg-amber-400/10 text-amber-100"}`}>{candidate.confidence}</span>
-                      </div>
-                      <div className="px-4 py-4">
-                        <p dir="rtl" lang="ar" className="font-arabic line-clamp-2 text-right text-xl font-normal leading-9 text-parchment">{firstVerse?.text_uthmani ?? "Quran text loading"}</p>
-                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{firstVerse?.translation ?? "Translation loading"}</p>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="h-7 w-7 shrink-0 rounded-lg border border-white/10" style={{ background: template?.swatch }} />
+                        <div className="min-w-0 p-4 sm:p-5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-parchment">{surah?.name_simple ?? `Surah ${candidate.surah}`} · {candidate.ayahStart}{candidate.ayahEnd === candidate.ayahStart ? "" : `–${candidate.ayahEnd}`}</p>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] ${candidate.confidence === "high" ? "bg-emerald-400/10 text-emerald-200" : "bg-amber-400/10 text-amber-100"}`}>{candidate.confidence}</span>
+                            <span className="text-xs tabular-nums text-[var(--muted-deep)]">{fmt(candidate.start)}–{fmt(candidate.end)}</span>
+                          </div>
+                          <p dir="rtl" lang="ar" className="font-arabic mt-3 line-clamp-2 text-right text-xl font-normal leading-9 text-parchment">{firstVerse?.text_uthmani ?? "Quran text loading"}</p>
+                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{firstVerse?.translation ?? "Translation loading"}</p>
+                          <div className="mt-3 flex min-w-0 items-center gap-2">
+                            <span className="h-6 w-6 shrink-0 rounded-md border border-white/10" style={{ background: template?.swatch }} />
                             <span className="truncate text-xs text-[var(--muted)]">{template?.name}</span>
                           </div>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => void togglePreview(candidate)} className="btn-ghost min-h-10 rounded-xl px-3 text-xs">{activePreview === candidate.id ? "Pause" : "Listen"}</button>
-                            <button type="button" onClick={() => void openCandidate(candidate)} className="btn-gold min-h-10 rounded-xl px-4 text-xs">Open in Studio</button>
-                          </div>
+                        </div>
+                        <div className="flex flex-wrap content-center gap-2 border-t border-[var(--hairline-soft)] p-4 sm:col-start-2 sm:col-end-4 lg:col-start-auto lg:col-end-auto lg:border-l lg:border-t-0">
+                          {task?.status === "rendering" || task?.status === "queued" ? (
+                            <div className="w-full" role="status">
+                              <div className="flex justify-between text-xs text-[var(--muted)]"><span>{task.status === "queued" ? "Queued" : "Rendering"}</span><span>{task.progress}%</span></div>
+                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full bg-gold transition-[width]" style={{ width: `${task.progress}%` }} /></div>
+                            </div>
+                          ) : task?.status === "ready" ? (
+                            <button type="button" onClick={() => void deliverCandidate(candidate.id)} className="btn-gold min-h-10 flex-1 rounded-xl px-3 text-xs">Download</button>
+                          ) : (
+                            <button type="button" onClick={() => void runRenderQueue([candidate.id])} disabled={rendering} className="btn-gold min-h-10 flex-1 rounded-xl px-3 text-xs disabled:opacity-45">{task?.status === "failed" ? "Retry render" : "Render"}</button>
+                          )}
+                          <button type="button" onClick={() => void togglePreview(candidate)} className="btn-ghost min-h-10 flex-1 rounded-xl px-3 text-xs">{activePreview === candidate.id ? "Pause" : "Listen"}</button>
+                          <button type="button" onClick={() => void openCandidate(candidate)} className="btn-ghost min-h-10 w-full rounded-xl px-3 text-xs">Open in Studio</button>
+                          {task?.status === "failed" && <p className="w-full text-xs leading-5 text-red-200">{task.error}</p>}
+                          {task?.status === "ready" && task.librarySaved === false && <p className="w-full text-[10px] leading-4 text-amber-100">Rendered, but local Library storage was full.</p>}
                         </div>
                       </div>
                     </article>
@@ -401,9 +748,10 @@ export function BulkCreateWorkspace() {
   );
 }
 
-function AnalysisView({ progress, overallProgress, inspiration, onCancel }: {
+function AnalysisView({ progress, overallProgress, thumbnailProgress, inspiration, onCancel }: {
   progress: BulkRecognitionProgress | null;
   overallProgress: number;
+  thumbnailProgress: number | null;
   inspiration: (typeof BULK_HADITHS)[number] | ({ kind: "ayah"; surah: number; ayah: number; reference: string; verse: Verse }) | undefined;
   onCancel: () => void;
 }) {
@@ -414,12 +762,12 @@ function AnalysisView({ progress, overallProgress, inspiration, onCancel }: {
         <span className="absolute inset-4 rounded-full border border-gold/30 bulk-orbit-reverse" />
         <span className="font-arabic text-3xl font-normal text-gold-soft">اقْرَأْ</span>
       </div>
-      <p className="mt-7 text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/70">Analysing window {progress?.window ?? 1} of {progress?.windowCount ?? "…"}</p>
-      <h2 className="mt-3 text-2xl font-medium text-parchment">{progress?.recognition.detail ?? "Preparing the Quran recognition model"}</h2>
+      <p className="mt-7 text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/70">{thumbnailProgress === null ? `Analysing window ${progress?.window ?? 1} of ${progress?.windowCount ?? "…"}` : "Preparing review frames"}</p>
+      <h2 className="mt-3 text-2xl font-medium text-parchment">{thumbnailProgress === null ? progress?.recognition.detail ?? "Preparing the Quran recognition model" : `Building visual results · ${thumbnailProgress}%`}</h2>
       <div className="mx-auto mt-6 h-1.5 max-w-xl overflow-hidden rounded-full bg-white/[0.08]">
-        <div className="h-full rounded-full bg-gold transition-[width] duration-500" style={{ width: `${Math.max(2, overallProgress)}%` }} />
+        <div className="h-full rounded-full bg-gold transition-[width] duration-500" style={{ width: `${thumbnailProgress === null ? Math.max(2, overallProgress) : thumbnailProgress}%` }} />
       </div>
-      <p className="mt-2 text-xs tabular-nums text-[var(--muted)]">{overallProgress}% · cuts are placed only after complete ayahs</p>
+      <p className="mt-2 text-xs tabular-nums text-[var(--muted)]">{thumbnailProgress ?? overallProgress}% · cuts are placed only after complete ayahs</p>
 
       {inspiration && (
         <div key={inspiration.kind === "hadith" ? inspiration.reference : inspiration.reference} className="bulk-inspiration mx-auto mt-10 max-w-2xl border-y border-[var(--hairline-soft)] px-4 py-7">

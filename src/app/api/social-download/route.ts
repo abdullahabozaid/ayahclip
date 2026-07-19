@@ -11,7 +11,7 @@ import {
   youtubeRangeError,
   type SourcePlatform,
 } from "@/lib/source-link";
-import { checkRateLimit, rateLimitHeaders } from "@/lib/server-rate-limit";
+import { checkRateLimit, rateLimitHeaders, releaseRateLimit } from "@/lib/server-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,14 +35,14 @@ function downloadErrorMessage(stderr: string, platform: SourcePlatform): string 
   const lower = stderr.toLowerCase();
   if (lower.includes("login") || lower.includes("private") || lower.includes("not available")) {
     return platform === "youtube"
-      ? "That YouTube video is private, restricted, or unavailable. You can download your upload in YouTube Studio and add the file instead."
+      ? "That YouTube video is private, restricted, or unavailable. Public videos and your permitted uploads are supported."
       : "That post is private, restricted, or unavailable. Try a public TikTok or Instagram post.";
   }
   if (lower.includes("unsupported url")) {
     return "That link is not a supported YouTube, TikTok, or Instagram video.";
   }
   return platform === "youtube"
-    ? "AyahClip could not import that segment. Check the times, or download your upload in YouTube Studio and add the file instead."
+    ? "AyahClip could not import that public segment right now. Check the times and try once more."
     : "AyahClip could not resolve that post right now. Check the link and try again.";
 }
 
@@ -301,6 +301,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     await rm(workDirectory, { recursive: true, force: true });
+    // Failed extractor/network attempts should not lock a legitimate creator
+    // out. Only completed imports consume the rolling anti-abuse allowance.
+    releaseRateLimit(request, SOURCE_IMPORT_RATE_LIMIT);
     const stderr = typeof error === "object" && error && "stderr" in error
       ? String((error as { stderr?: unknown }).stderr ?? "")
       : error instanceof Error ? error.message : "";

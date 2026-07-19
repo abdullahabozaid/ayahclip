@@ -262,3 +262,33 @@ export async function deliverFileInGesture(file: File): Promise<void> {
   }
   await saveFile(file);
 }
+
+/**
+ * Deliver a completed local batch from one explicit user gesture. Mobile share
+ * sheets receive all files together when the platform supports it; desktop
+ * browsers receive normal downloads and may ask once to allow multiple files.
+ */
+export async function deliverBulkFilesInGesture(files: readonly File[]): Promise<void> {
+  if (files.length === 0) return;
+  if (files.length === 1) return deliverFileInGesture(files[0]);
+  const isTouch =
+    typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  if (isTouch && navigator.canShare?.({ files: [...files] })) {
+    try {
+      await navigator.share({ files: [...files], title: "AyahClip batch", text: "Made with AyahClip" });
+      return;
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") return;
+    }
+  }
+  for (const file of files) {
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = file.name;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }
+}

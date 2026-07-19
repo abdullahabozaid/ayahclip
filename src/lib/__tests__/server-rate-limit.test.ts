@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   checkRateLimit,
   rateLimitHeaders,
+  releaseRateLimit,
   resetRateLimitsForTests,
 } from "../server-rate-limit";
 
@@ -43,5 +44,15 @@ describe("server request throttling", () => {
   it("rejects invalid policies instead of silently disabling protection", () => {
     const request = new Request("https://ayahclip.test/api");
     expect(() => checkRateLimit(request, { ...policy, limit: 0 })).toThrow("Invalid rate-limit policy");
+  });
+
+  it("returns a reserved slot after an upstream operation fails", () => {
+    const request = new Request("https://ayahclip.test/api", {
+      headers: { "x-forwarded-for": "203.0.113.8" },
+    });
+    const oneAttempt = { namespace: "source", limit: 1, windowMs: 60_000 };
+    expect(checkRateLimit(request, oneAttempt, 1_000).allowed).toBe(true);
+    releaseRateLimit(request, oneAttempt);
+    expect(checkRateLimit(request, oneAttempt, 1_001).allowed).toBe(true);
   });
 });

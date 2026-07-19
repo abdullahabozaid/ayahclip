@@ -83,6 +83,15 @@ export function rateLimitHeaders(result: RateLimitResult): HeadersInit {
   };
 }
 
+/** Release a reserved slot when the protected operation fails before success. */
+export function releaseRateLimit(request: Request, policy: RateLimitPolicy): void {
+  const key = `${policy.namespace}:${clientAddress(request)}`;
+  const bucket = buckets.get(key);
+  if (!bucket) return;
+  bucket.count = Math.max(0, bucket.count - 1);
+  if (bucket.count === 0) buckets.delete(key);
+}
+
 /** Test-only reset so suites do not share warm-instance state. */
 export function resetRateLimitsForTests(): void {
   buckets.clear();
