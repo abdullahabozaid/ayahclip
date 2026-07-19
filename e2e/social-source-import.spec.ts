@@ -54,7 +54,7 @@ test("validation mistakes do not consume the resolver quota", async ({ request }
 });
 
 test("desktop link import reveals precise YouTube segment controls", async ({ page }) => {
-  await page.goto("/import");
+  await page.goto("/import", { waitUntil: "networkidle" });
   const linkField = page.getByLabel("Import from a link");
   await linkField.fill("https://www.youtube.com/watch?v=owned-video");
 

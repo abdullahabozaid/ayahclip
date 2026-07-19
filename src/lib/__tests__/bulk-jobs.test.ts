@@ -20,6 +20,9 @@ describe("bulk job creation", () => {
       duration: 1_234.5,
       requestedCount: 30,
       templateId: "ayahclip-gold-line",
+      idealClipSeconds: 45,
+      smartCaptionSplits: true,
+      maxArabicLines: 2,
       nextWindowIndex: 0,
     });
     expect(job.detectedAyahs).toEqual([]);

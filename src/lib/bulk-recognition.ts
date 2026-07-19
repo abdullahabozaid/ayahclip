@@ -98,6 +98,7 @@ export async function recognizeQuranInWindows({
         start: timing.start + window.start,
         end: timing.end + window.start,
         splits: timing.splits?.map((split) => split + window.start),
+        alignedWordStarts: timing.alignedWordStarts?.map((time) => time + window.start),
         surah: outcome.result.surah,
         confidence: outcome.result.confidence,
         sourceWindow: index,

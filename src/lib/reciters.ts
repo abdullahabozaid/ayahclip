@@ -162,6 +162,28 @@ export function getReciter(id: string): Reciter | undefined {
   return reciters.find((reciter) => reciter.id === id);
 }
 
+/** Curated default based on prominent Quran.com voices and current listening
+ * popularity. The verified long-tail catalog remains available on demand. */
+export const POPULAR_RECITER_IDS = [
+  "alafasy",
+  "maher-muaiqly",
+  "yasser-dossary",
+  "sudais",
+  "basit-murattal",
+  "minshawi-murattal",
+  "husary",
+  "shuraym",
+  "saad-ghamdi",
+  "shaatree",
+  "raad-kurdi",
+  "juhany",
+] as const;
+
+export const popularReciters = POPULAR_RECITER_IDS.flatMap((id) => {
+  const reciter = getReciter(id);
+  return reciter ? [reciter] : [];
+});
+
 export function getReciterOrDefault(id: string): Reciter {
   return getReciter(id) ?? reciters.find((reciter) => reciter.id === "alafasy")!;
 }

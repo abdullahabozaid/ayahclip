@@ -37,6 +37,7 @@ import {
   trackOncePerJourney,
   trackProductEvent,
 } from "@/lib/telemetry";
+import { openBulkCandidateInStudio, type BulkStudioNavigation } from "@/lib/bulk-studio";
 
 // Editor zoom bounds. CSS `zoom` reflows layout, so the page scrolls naturally
 // when zoomed past the viewport (and shrinks within it when zoomed out).
@@ -92,12 +93,42 @@ export default function StudioPage() {
   );
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [bulkNavigation, setBulkNavigation] = useState<BulkStudioNavigation | null>(null);
+  const [bulkNavigationBusy, setBulkNavigationBusy] = useState(false);
   const savedResetRef = useRef<ReturnType<typeof setTimeout>>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const savedAudioUrlRef = useRef<string | null>(null);
   const savedVideoUrlRef = useRef<string | null>(null);
   const savedBackgroundUrlsRef = useRef<Set<string>>(new Set());
   const nativeSnapshotRef = useRef<MobileProjectSnapshotV1 | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get("bulk");
+    const candidateId = params.get("clip");
+    if (!jobId || !candidateId) return;
+    let cancelled = false;
+    setBulkNavigationBusy(true);
+    openBulkCandidateInStudio(jobId, candidateId)
+      .then((navigation) => { if (!cancelled) setBulkNavigation(navigation); })
+      .catch((reason: unknown) => { if (!cancelled) setSaveError(reason instanceof Error ? reason.message : "The bulk clip could not be opened."); })
+      .finally(() => { if (!cancelled) setBulkNavigationBusy(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const openBulkSibling = async (candidateId: string | undefined) => {
+    if (!bulkNavigation || !candidateId || bulkNavigationBusy) return;
+    setBulkNavigationBusy(true);
+    try {
+      const navigation = await openBulkCandidateInStudio(bulkNavigation.jobId, candidateId);
+      setBulkNavigation(navigation);
+      router.replace(`/studio?bulk=${encodeURIComponent(navigation.jobId)}&clip=${encodeURIComponent(candidateId)}`);
+    } catch (reason) {
+      setSaveError(reason instanceof Error ? reason.message : "The next bulk clip could not be opened.");
+    } finally {
+      setBulkNavigationBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!isNativeMobileEditor(window.location.search)) return;
@@ -495,14 +526,14 @@ export default function StudioPage() {
       <header className="relative z-40 flex min-h-[calc(48px+env(safe-area-inset-top))] min-w-0 shrink-0 items-end justify-between gap-2 border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-2 pb-1 pt-[env(safe-area-inset-top)] sm:px-3 lg:col-span-3 lg:h-[52px] lg:min-h-0 lg:items-center lg:px-4 lg:pb-0 lg:pt-0">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button
-            onClick={() => router.push(`/surah/${surah.id}`)}
+            onClick={() => router.push(bulkNavigation ? "/bulk" : `/surah/${surah.id}`)}
             className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment sm:w-auto sm:px-2 lg:h-8"
-            aria-label="Back to verses"
+            aria-label={bulkNavigation ? "Back to bulk collection" : "Back to verses"}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m6 6-6-6 6-6" />
             </svg>
-            <span className="hidden sm:inline">Verses</span>
+            <span className="hidden sm:inline">{bulkNavigation ? "Batch" : "Verses"}</span>
           </button>
           <button
             onClick={() => router.push("/")}
@@ -518,6 +549,13 @@ export default function StudioPage() {
             <span className="truncate text-sm font-semibold text-parchment">{surah.name_simple}</span>
             <span className="truncate text-[10px] uppercase tracking-[0.12em] text-[var(--muted-deep)] sm:text-[11px] sm:normal-case sm:tracking-normal">{verseRange}</span>
           </div>
+          {bulkNavigation && (
+            <div className="flex shrink-0 items-center rounded-md border border-[var(--hairline-soft)]" aria-label="Bulk clip navigation">
+              <button type="button" onClick={() => void openBulkSibling(bulkNavigation.previousId)} disabled={!bulkNavigation.previousId || bulkNavigationBusy} className="flex h-11 w-11 items-center justify-center text-parchment disabled:opacity-25 lg:h-8 lg:w-8" aria-label="Previous bulk clip">←</button>
+              <span className="px-1 text-[10px] tabular-nums text-[var(--muted)] sm:px-2">{bulkNavigation.index + 1}/{bulkNavigation.total}</span>
+              <button type="button" onClick={() => void openBulkSibling(bulkNavigation.nextId)} disabled={!bulkNavigation.nextId || bulkNavigationBusy} className="flex h-11 w-11 items-center justify-center text-parchment disabled:opacity-25 lg:h-8 lg:w-8" aria-label="Next bulk clip">→</button>
+            </div>
+          )}
         </div>
 
         {/* Preview-as frame selector */}

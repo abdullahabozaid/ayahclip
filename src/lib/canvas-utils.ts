@@ -708,6 +708,7 @@ export function analyzeArabicTextFit(
     qcfWords?: QcfWord[];
     arabicVerseNumber?: boolean;
     splitMask?: Partial<SplitMaskConfig>;
+    textLayout?: "center" | "left-panel";
     frameWidth?: number;
     minimumFontSize?: number;
   },
@@ -715,6 +716,7 @@ export function analyzeArabicTextFit(
   const frameWidth = options.frameWidth ?? 1080;
   const scale = frameWidth / 480;
   const region = splitTextRegion(frameWidth, options.splitMask);
+  const maxWidth = options.textLayout === "center" ? frameWidth * 0.85 : region.maxWidth;
   const useQcf = shouldUseQcf(options.arabicFont, options.qcfWords);
   const qcfWords = useQcf
     ? (options.arabicVerseNumber
@@ -731,8 +733,8 @@ export function analyzeArabicTextFit(
     const fontSize = styleSize * scale;
     ctx.font = `${weight} ${fontSize}px ${family}`;
     return useQcf
-      ? measureQcfLines(ctx, qcfWords, fontSize, region.maxWidth)
-      : measureLines(ctx, arabicTextForFont(text, options.arabicFont, options.qcfWords), region.maxWidth).length;
+      ? measureQcfLines(ctx, qcfWords, fontSize, maxWidth)
+      : measureLines(ctx, arabicTextForFont(text, options.arabicFont, options.qcfWords), maxWidth).length;
   };
 
   const lineCount = countAt(options.arabicFontSize);

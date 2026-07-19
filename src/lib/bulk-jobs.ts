@@ -1,9 +1,16 @@
 import { del, get, set } from "idb-keyval";
 import type { Verse } from "@/types";
-import type { BulkClipCandidate, BulkClipCount, BulkDetectedAyah } from "./bulk-clips";
+import type {
+  BulkArabicLineLimit,
+  BulkClipCandidate,
+  BulkClipCount,
+  BulkDetectedAyah,
+  BulkIdealClipSeconds,
+} from "./bulk-clips";
 
-export const BULK_JOB_SCHEMA_VERSION = 1 as const;
+export const BULK_JOB_SCHEMA_VERSION = 2 as const;
 const ACTIVE_JOB_KEY = "ayahclip:bulk:active:v1";
+const JOB_INDEX_KEY = "ayahclip:bulk:index:v1";
 const jobKey = (id: string) => `ayahclip:bulk:job:${id}:v1`;
 const sourceKey = (id: string) => `ayahclip:bulk:source:${id}:v1`;
 const audioKey = (id: string) => `ayahclip:bulk:audio:${id}:v1`;
@@ -39,6 +46,9 @@ export interface BulkJob {
   sourceType: string;
   duration: number;
   requestedCount: BulkClipCount;
+  idealClipSeconds: BulkIdealClipSeconds;
+  smartCaptionSplits: boolean;
+  maxArabicLines: BulkArabicLineLimit;
   templateId: string;
   nextWindowIndex: number;
   detectedAyahs: BulkDetectedAyah[];
@@ -53,11 +63,17 @@ export function createBulkJob({
   duration,
   requestedCount,
   templateId,
+  idealClipSeconds = 45,
+  smartCaptionSplits = true,
+  maxArabicLines = 2,
 }: {
   source: File;
   duration: number;
   requestedCount: BulkClipCount;
   templateId: string;
+  idealClipSeconds?: BulkIdealClipSeconds;
+  smartCaptionSplits?: boolean;
+  maxArabicLines?: BulkArabicLineLimit;
 }): BulkJob {
   const now = Date.now();
   return {
@@ -70,6 +86,9 @@ export function createBulkJob({
     sourceType: source.type,
     duration,
     requestedCount,
+    idealClipSeconds,
+    smartCaptionSplits,
+    maxArabicLines,
     templateId,
     nextWindowIndex: 0,
     detectedAyahs: [],
@@ -80,10 +99,10 @@ export function createBulkJob({
   };
 }
 
-function isBulkJob(value: unknown): value is BulkJob {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Partial<BulkJob>;
-  return item.schemaVersion === BULK_JOB_SCHEMA_VERSION
+function parseBulkJob(value: unknown): BulkJob | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<Omit<BulkJob, "schemaVersion">> & { schemaVersion?: number };
+  const valid = (item.schemaVersion === 1 || item.schemaVersion === BULK_JOB_SCHEMA_VERSION)
     && typeof item.id === "string"
     && typeof item.sourceName === "string"
     && typeof item.duration === "number"
@@ -92,11 +111,21 @@ function isBulkJob(value: unknown): value is BulkJob {
     && Array.isArray(item.candidates)
     && Array.isArray(item.verses)
     && Array.isArray(item.renderTasks);
+  if (!valid) return null;
+  return {
+    ...item,
+    schemaVersion: BULK_JOB_SCHEMA_VERSION,
+    idealClipSeconds: item.idealClipSeconds ?? 45,
+    smartCaptionSplits: item.smartCaptionSplits ?? true,
+    maxArabicLines: item.maxArabicLines ?? 2,
+  } as BulkJob;
 }
 
 export async function saveBulkJob(job: BulkJob): Promise<BulkJob> {
   const next = { ...job, updatedAt: Date.now() };
-  await Promise.all([set(ACTIVE_JOB_KEY, next.id), set(jobKey(next.id), next)]);
+  const ids = await get(JOB_INDEX_KEY) as string[] | undefined;
+  const index = [next.id, ...(ids ?? []).filter((id) => id !== next.id)];
+  await Promise.all([set(ACTIVE_JOB_KEY, next.id), set(JOB_INDEX_KEY, index), set(jobKey(next.id), next)]);
   return next;
 }
 
@@ -108,7 +137,23 @@ export async function loadActiveBulkJob(): Promise<BulkJob | null> {
   const id = await get(ACTIVE_JOB_KEY) as string | undefined;
   if (!id) return null;
   const value = await get(jobKey(id));
-  return isBulkJob(value) ? value : null;
+  return parseBulkJob(value);
+}
+
+export async function loadBulkJob(id: string): Promise<BulkJob | null> {
+  return parseBulkJob(await get(jobKey(id)));
+}
+
+export async function loadBulkJobs(): Promise<BulkJob[]> {
+  const indexed = await get(JOB_INDEX_KEY) as string[] | undefined;
+  const active = await get(ACTIVE_JOB_KEY) as string | undefined;
+  const ids = indexed?.length ? indexed : active ? [active] : [];
+  const jobs = (await Promise.all(ids.map(loadBulkJob))).filter((job): job is BulkJob => Boolean(job));
+  return jobs.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export async function activateBulkJob(id: string): Promise<void> {
+  await set(ACTIVE_JOB_KEY, id);
 }
 
 export async function loadBulkSource(jobId: string): Promise<{ source: Blob; audio: Blob } | null> {
@@ -132,8 +177,12 @@ export async function deleteBulkOutput(jobId: string, candidateId: string): Prom
 }
 
 export async function deleteBulkJob(job: BulkJob): Promise<void> {
+  const ids = await get(JOB_INDEX_KEY) as string[] | undefined;
+  const nextIds = (ids ?? []).filter((id) => id !== job.id);
+  const active = await get(ACTIVE_JOB_KEY) as string | undefined;
   await Promise.all([
-    del(ACTIVE_JOB_KEY),
+    active === job.id ? (nextIds[0] ? set(ACTIVE_JOB_KEY, nextIds[0]) : del(ACTIVE_JOB_KEY)) : Promise.resolve(),
+    set(JOB_INDEX_KEY, nextIds),
     del(jobKey(job.id)),
     del(sourceKey(job.id)),
     del(audioKey(job.id)),

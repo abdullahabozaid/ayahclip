@@ -26,6 +26,12 @@ export interface VerseTiming {
    *  splits onto translation text more accurately than word-count proportion. */
   splitCharFractions?: number[];
   /**
+   * Model-aligned acoustic onset for each Quran word in this ayah. Bulk Create
+   * uses these suggestions to place line-limited caption changes on the real
+   * recitation. They never alter the ayah's audio start/end boundaries.
+   */
+  alignedWordStarts?: number[];
+  /**
    * Contiguous word range to keep (0-indexed, inclusive). When set, only words
    * [from..to] of the verse are displayed and audibly kept; everything outside
    * is dropped from playback and export. Used to clip "half a verse" without

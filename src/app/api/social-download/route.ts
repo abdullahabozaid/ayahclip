@@ -28,7 +28,10 @@ const BULK_DOWNLOAD_TIMEOUT_MS = 9 * 60_000;
 const YOUTUBE_FORMAT = "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/b[height<=1080][vcodec^=avc1]";
 const SOURCE_IMPORT_RATE_LIMIT = {
   namespace: "source-import",
-  limit: 12,
+  // A shared home, school, mosque, or mobile-carrier address must not lock out
+  // legitimate creators during a review session. Completed imports alone use
+  // this allowance; validation and extractor failures release their slot.
+  limit: 30,
   windowMs: 10 * 60_000,
 };
 function downloadErrorMessage(stderr: string, platform: SourcePlatform): string {

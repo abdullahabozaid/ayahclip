@@ -307,7 +307,12 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
           silences: input.silences,
         });
         return {
-          timings: fused.timings,
+          timings: fused.timings.map((timing, index) => ({
+            ...timing,
+            alignedWordStarts: alternative.wordStartsByVerse[index]?.map(
+              (time) => Math.max(timing.start, Math.min(timing.end, time)),
+            ),
+          })),
           method: fused.usedCtcBoundaries.length ? "hybrid" : "transcript",
           transcriptSimilarity: alternative.similarity,
           methodAgreementSeconds: disagreement,

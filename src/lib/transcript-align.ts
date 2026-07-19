@@ -11,6 +11,8 @@ export interface TranscriptAlignInput {
 
 export interface TranscriptAlignment {
   timings: VerseTiming[];
+  /** Model-derived onset of each normalized Quran word, grouped by ayah. */
+  wordStartsByVerse: number[][];
   /** Normalized reference similarity: 1 is exact, 0 is unusable. */
   similarity: number;
 }
@@ -123,8 +125,18 @@ export function alignTranscriptVerses(input: TranscriptAlignInput): TranscriptAl
   }));
   const rawScore = scores[n * cols + m];
   const maxScore = Math.max(1, 2 * Math.max(n, m));
+  const wordStartsByVerse = reference.ranges.map((range) => {
+    const verseText = reference.text.slice(range.start, range.end);
+    const starts: number[] = [];
+    for (const match of verseText.matchAll(/\S+/g)) {
+      const offset = match.index ?? 0;
+      starts.push(times[range.start + offset] ?? timings[0]?.start ?? 0);
+    }
+    return starts;
+  });
   return {
     timings,
+    wordStartsByVerse,
     similarity: Math.max(0, Math.min(1, (rawScore + maxScore / 2) / (maxScore * 1.5))),
   };
 }
