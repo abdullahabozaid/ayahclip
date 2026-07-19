@@ -36,6 +36,7 @@ import {
   trackProductEvent,
 } from "@/lib/telemetry";
 import { isSupportedVideoFile } from "@/lib/media-file";
+import { describeImportProgress, importSocialSource, type SocialImportProgress } from "@/lib/social-import";
 import {
   recognizeQuranPassage,
   type QuranRecognitionCandidate as RecognitionCandidate,
@@ -77,6 +78,8 @@ export default function ImportPage() {
   const [detectError, setDetectError] = useState<string | null>(null);
   const [socialURL, setSocialURL] = useState("");
   const [socialDownloading, setSocialDownloading] = useState(false);
+  const [socialProgress, setSocialProgress] = useState<SocialImportProgress | null>(null);
+  const socialAbortRef = useRef<AbortController | null>(null);
   const [socialError, setSocialError] = useState<string | null>(null);
   const [segmentStart, setSegmentStart] = useState("0:00");
   const [segmentEnd, setSegmentEnd] = useState("3:00");
@@ -362,31 +365,22 @@ export default function ImportPage() {
     }
     setSocialDownloading(true);
     setSocialError(null);
+    setSocialProgress({ phase: "starting", percent: 0 });
+    const controller = new AbortController();
+    socialAbortRef.current = controller;
     try {
-      const response = await fetch("/api/social-download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url,
-          ...(platform === "youtube" ? {
-            startSeconds,
-            endSeconds,
-            attestedRights: youtubeRightsConfirmed,
-            quality: sourceQuality,
-          } : {}),
-        }),
+      const { blob, fileName } = await importSocialSource({
+        url,
+        ...(platform === "youtube" ? {
+          startSeconds,
+          endSeconds,
+          attestedRights: youtubeRightsConfirmed,
+          quality: sourceQuality,
+        } : {}),
+        signal: controller.signal,
+        onProgress: setSocialProgress,
       });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(payload?.error || "AyahClip could not download that post.");
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get("content-disposition") ?? "";
-      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-      const plainName = disposition.match(/filename="([^"]+)"/i)?.[1];
-      const name = encodedName
-        ? decodeURIComponent(encodedName)
-        : plainName || `social-source-${Date.now()}.mp4`;
+      const name = fileName || `social-source-${Date.now()}.mp4`;
       const resolvedFile = new File([blob], name, { type: "video/mp4" });
       const decoded = await handleFile(resolvedFile);
       setVideoMode("keep-video");
@@ -394,9 +388,13 @@ export default function ImportPage() {
       setSocialURL(url);
       if (decoded && autoRecognize) void runRecognition(decoded);
     } catch (reason) {
-      setSocialError(reason instanceof Error ? reason.message : "AyahClip could not download that post.");
+      if (!(reason instanceof DOMException && reason.name === "AbortError")) {
+        setSocialError(reason instanceof Error ? reason.message : "AyahClip could not download that post.");
+      }
     } finally {
+      if (socialAbortRef.current === controller) socialAbortRef.current = null;
       setSocialDownloading(false);
+      setSocialProgress(null);
     }
   }, [autoRecognize, handleFile, runRecognition, segmentEnd, segmentStart, socialDownloading, socialURL, sourceQuality, youtubeRightsConfirmed]);
 
@@ -793,11 +791,18 @@ export default function ImportPage() {
                   : "Import video"}
             </button>
             {socialDownloading && (
-              <p role="status" className="mt-2 text-xs text-gold-soft">
-                {isYouTubeSource
-                  ? `${sourceQuality === "fast" ? "Fetching the fast mobile draft" : "Fetching the HD source"} · ${socialElapsed}s elapsed. Only the selected range is downloaded.`
-                  : "Resolving the source video. Keep AyahClip open; public posts usually take a few seconds."}
-              </p>
+              <div role="status" className="mt-3 rounded-lg border border-[var(--hairline-soft)] bg-white/[0.02] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs tabular-nums text-gold-soft">{describeImportProgress(socialProgress)} · {socialElapsed}s</p>
+                  <button type="button" onClick={() => socialAbortRef.current?.abort()} className="text-xs text-[var(--muted)] underline-offset-2 hover:text-parchment hover:underline">Cancel</button>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                  <div className="h-full rounded-full bg-gold transition-[width] duration-300" style={{ width: `${Math.max(2, socialProgress?.percent ?? 0)}%` }} />
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-[var(--muted)]">
+                  {isYouTubeSource ? "Only the selected range is downloaded." : "Keep AyahClip open; public posts usually take a few seconds."}
+                </p>
+              </div>
             )}
             {socialError && <p role="alert" className="mt-2 text-xs leading-4 text-red-300">{socialError}</p>}
             <p className="mt-2 hidden text-xs leading-4 text-[var(--muted-deep)] sm:block">

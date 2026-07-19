@@ -38,6 +38,7 @@ import {
   type BulkRenderTask,
 } from "@/lib/bulk-jobs";
 import { captureBulkThumbnails } from "@/lib/bulk-thumbnails";
+import { describeImportProgress, importSocialSource, type SocialImportProgress } from "@/lib/social-import";
 import { decodeAudioFile } from "@/lib/audio-import";
 import { importSizeError } from "@/lib/import-limits";
 import { isSupportedVideoFile } from "@/lib/media-file";
@@ -155,6 +156,8 @@ export function BulkCreateWorkspace() {
   const [linkEnd, setLinkEnd] = useState("30:00");
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
+  const [linkProgress, setLinkProgress] = useState<SocialImportProgress | null>(null);
+  const linkAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestedCount, setRequestedCount] = useState<BulkClipCount>(20);
   const [idealClipSeconds, setIdealClipSeconds] = useState<BulkIdealClipSeconds>(45);
@@ -530,30 +533,30 @@ export function BulkCreateWorkspace() {
     if (!rightsConfirmed) return setError("Confirm that you own this video or have permission to edit it.");
     setLinkLoading(true);
     setError(null);
+    setLinkProgress({ phase: "starting", percent: 0 });
+    const controller = new AbortController();
+    linkAbortRef.current = controller;
     try {
-      const response = await fetch("/api/social-download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: link,
-          startSeconds,
-          endSeconds,
-          attestedRights: true,
-          bulk: true,
-          quality: sourceQuality,
-        }),
+      const { blob } = await importSocialSource({
+        url: link,
+        startSeconds,
+        endSeconds,
+        attestedRights: true,
+        bulk: true,
+        quality: sourceQuality,
+        signal: controller.signal,
+        onProgress: setLinkProgress,
       });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(payload?.error ?? "The source could not be imported.");
-      }
-      const blob = await response.blob();
       const prepared = await handleFile(new File([blob], "youtube-bulk-source.mp4", { type: "video/mp4" }));
       if (prepared) await analyse(prepared);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "The source could not be imported.");
+      if (!(reason instanceof DOMException && reason.name === "AbortError")) {
+        setError(reason instanceof Error ? reason.message : "The source could not be imported.");
+      }
     } finally {
+      if (linkAbortRef.current === controller) linkAbortRef.current = null;
       setLinkLoading(false);
+      setLinkProgress(null);
     }
   };
 
@@ -878,6 +881,18 @@ export function BulkCreateWorkspace() {
                 <input value={linkEnd} onChange={(event) => setLinkEnd(event.target.value)} className="field min-h-11 px-3 text-sm" aria-label="End time" />
                 <button type="button" onClick={() => void importLink()} disabled={linkLoading} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-50">{linkLoading ? "Importing…" : "Import & create"}</button>
               </div>
+              {linkLoading && (
+                <div role="status" className="mt-4 rounded-xl border border-[var(--hairline-soft)] bg-white/[0.02] px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-gold-soft/80">YouTube import</p>
+                    <button type="button" onClick={() => linkAbortRef.current?.abort()} className="text-xs text-[var(--muted)] underline-offset-2 hover:text-parchment hover:underline">Cancel</button>
+                  </div>
+                  <p className="mt-2 text-xs tabular-nums text-[var(--muted)]">{describeImportProgress(linkProgress)}</p>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div className="h-full rounded-full bg-gold transition-[width] duration-300" style={{ width: `${Math.max(2, linkProgress?.percent ?? 0)}%` }} />
+                  </div>
+                </div>
+              )}
               <fieldset className="mt-4">
                 <legend className="text-xs text-[var(--muted)]">YouTube import quality</legend>
                 <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Bulk YouTube import quality">

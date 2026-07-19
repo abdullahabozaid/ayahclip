@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSourceDownloadArgs,
-} from "./route";
+  parseFfmpegProgressSeconds,
+  parseProgressLine,
+} from "@/lib/social-download-jobs";
 
 describe("source resolver command", () => {
   it("requests only the selected YouTube range and normalizes it to MP4", () => {
@@ -49,5 +51,75 @@ describe("source resolver command", () => {
     expect(args).not.toContain("--download-sections");
     expect(args).toContain("--max-filesize");
     expect(args.join(" ")).toContain("format_note!*=watermarked");
+  });
+
+  it("emits per-line progress instead of silencing it", () => {
+    const args = buildSourceDownloadArgs({
+      platform: "youtube",
+      url: "https://youtube.com/watch?v=owned-video",
+      outputTemplate: "/tmp/%(id)s.%(ext)s",
+      startSeconds: 0,
+      endSeconds: 30,
+    });
+    expect(args).toContain("--newline");
+    expect(args).toContain("--progress-template");
+    expect(args).not.toContain("--no-progress");
+  });
+
+  it("asks ffmpeg for machine-readable progress on ranged YouTube downloads", () => {
+    const args = buildSourceDownloadArgs({
+      platform: "youtube",
+      url: "https://youtube.com/watch?v=owned-video",
+      outputTemplate: "/tmp/%(id)s.%(ext)s",
+      startSeconds: 0,
+      endSeconds: 30,
+    });
+    expect(args).toContain("--downloader-args");
+    expect(args.join(" ")).toContain("ffmpeg:-progress pipe:1");
+
+    const tiktok = buildSourceDownloadArgs({
+      platform: "tiktok",
+      url: "https://www.tiktok.com/@creator/video/123",
+      outputTemplate: "/tmp/%(id)s.%(ext)s",
+    });
+    expect(tiktok).not.toContain("--downloader-args");
+  });
+});
+
+describe("ffmpeg progress parsing", () => {
+  it("reads processed media seconds from out_time keys (microseconds either way)", () => {
+    expect(parseFfmpegProgressSeconds("out_time_us=12500000")).toBe(12.5);
+    expect(parseFfmpegProgressSeconds("out_time_ms=12500000")).toBe(12.5);
+  });
+
+  it("ignores unrelated ffmpeg progress keys", () => {
+    expect(parseFfmpegProgressSeconds("frame=250")).toBeNull();
+    expect(parseFfmpegProgressSeconds("out_time=00:00:12.500000")).toBeNull();
+    expect(parseFfmpegProgressSeconds("progress=continue")).toBeNull();
+  });
+});
+
+describe("progress line parsing", () => {
+  it("reads downloaded, total, and eta from a template line", () => {
+    expect(parseProgressLine("AC|1048576|10485760|NA|42")).toEqual({
+      downloadedBytes: 1048576,
+      totalBytes: 10485760,
+      etaSeconds: 42,
+    });
+  });
+
+  it("falls back to the total estimate when the exact total is unknown", () => {
+    expect(parseProgressLine("AC|500|NA|2000|NA")).toEqual({
+      downloadedBytes: 500,
+      totalBytes: 2000,
+      etaSeconds: null,
+    });
+  });
+
+  it("survives a carriage-return prefix and ignores unrelated output", () => {
+    expect(parseProgressLine("\rAC|1|2|NA|1")?.downloadedBytes).toBe(1);
+    expect(parseProgressLine("[download] Destination: video.mp4")).toBeNull();
+    expect(parseProgressLine("AC|NA|NA|NA|NA")).toBeNull();
+    expect(parseProgressLine("")).toBeNull();
   });
 });

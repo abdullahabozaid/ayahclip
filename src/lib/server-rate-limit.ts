@@ -83,9 +83,21 @@ export function rateLimitHeaders(result: RateLimitResult): HeadersInit {
   };
 }
 
+/**
+ * Stable bucket key for a client + policy, for callers that must release a
+ * slot later from a different request (e.g. a background job's failure path).
+ */
+export function rateLimitClientKey(request: Request, policy: RateLimitPolicy): string {
+  return `${policy.namespace}:${clientAddress(request)}`;
+}
+
 /** Release a reserved slot when the protected operation fails before success. */
 export function releaseRateLimit(request: Request, policy: RateLimitPolicy): void {
-  const key = `${policy.namespace}:${clientAddress(request)}`;
+  releaseRateLimitByKey(rateLimitClientKey(request, policy));
+}
+
+/** Key-based variant of {@link releaseRateLimit}. */
+export function releaseRateLimitByKey(key: string): void {
   const bucket = buckets.get(key);
   if (!bucket) return;
   bucket.count = Math.max(0, bucket.count - 1);

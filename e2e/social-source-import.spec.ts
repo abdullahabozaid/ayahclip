@@ -1,4 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
+
+async function resolveImportJob(request: APIRequestContext, jobId: string, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const status = await request.get(`/api/social-download/jobs/${jobId}`);
+    expect(status.status()).toBe(200);
+    const payload = await status.json() as { status: string; error?: string };
+    if (payload.status === "ready") return;
+    expect(payload.status, payload.error).not.toBe("error");
+    expect(Date.now()).toBeLessThan(deadline);
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+}
 
 test("social source import rejects non-platform URLs before resolving them", async ({ request }) => {
   const response = await request.post("/api/social-download", {
@@ -76,11 +89,15 @@ test("a real public social post resolves to an editable MP4", async ({ request }
   test.skip(!url, "Set SOCIAL_RESOLVER_SMOKE_URL to run the live resolver smoke test.");
   test.setTimeout(180_000);
 
-  const response = await request.post("/api/social-download", { data: { url } });
+  const created = await request.post("/api/social-download", { data: { url } });
+  expect(created.status()).toBe(202);
+  const { jobId } = await created.json() as { jobId: string };
+  await resolveImportJob(request, jobId, 150_000);
+
+  const response = await request.get(`/api/social-download/jobs/${jobId}/file`);
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toBe("video/mp4");
   expect(response.headers()["x-ayahclip-import-quality"]).toBe("source");
-  expect(Number(response.headers()["x-ayahclip-processing-ms"])).toBeGreaterThan(0);
   expect(Number(response.headers()["content-length"])).toBeGreaterThan(100_000);
   expect((await response.body()).subarray(4, 8).toString("ascii")).toBe("ftyp");
 });
@@ -104,13 +121,17 @@ test("a permitted YouTube segment resolves to an editable MP4", async ({ request
   test.skip(!url, "Set YOUTUBE_SOURCE_SMOKE_URL to an upload you own before running this live test.");
   test.setTimeout(360_000);
 
-  const response = await request.post("/api/social-download", {
+  const created = await request.post("/api/social-download", {
     data: { url, startSeconds: 0, endSeconds: 30, attestedRights: true },
   });
+  expect(created.status()).toBe(202);
+  const { jobId } = await created.json() as { jobId: string };
+  await resolveImportJob(request, jobId, 330_000);
+
+  const response = await request.get(`/api/social-download/jobs/${jobId}/file`);
   expect(response.status()).toBe(200);
   expect(response.headers()["content-type"]).toBe("video/mp4");
   expect(response.headers()["x-ayahclip-import-quality"]).toBe("fast");
-  expect(Number(response.headers()["x-ayahclip-processing-ms"])).toBeGreaterThan(0);
   expect(Number(response.headers()["content-length"])).toBeGreaterThan(100_000);
   expect((await response.body()).subarray(4, 8).toString("ascii")).toBe("ftyp");
 });
