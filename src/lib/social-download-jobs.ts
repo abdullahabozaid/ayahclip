@@ -74,16 +74,24 @@ export function buildSourceDownloadArgs({
     "--concurrent-fragments", "4",
   ];
   if (platform === "youtube") {
+    // A section request streams through ffmpeg at roughly playback speed;
+    // callers should only pass start/end here when the full-file strategy was
+    // ruled out (very long videos). Omitting them downloads the whole file on
+    // the fast native downloader and the caller trims locally.
+    if (typeof startSeconds === "number" && typeof endSeconds === "number") {
+      args.push(
+        "--download-sections", `*${startSeconds}-${endSeconds}`,
+        "--no-force-keyframes-at-cuts",
+        // Ranged downloads are delegated to ffmpeg, which bypasses yt-dlp's
+        // progress hooks entirely; ffmpeg's own machine-readable progress on
+        // stdout (out_time_us) is the only live signal for these jobs.
+        "--downloader-args", "ffmpeg:-progress pipe:1 -nostats",
+      );
+    }
     args.push(
-      "--download-sections", `*${startSeconds}-${endSeconds}`,
-      "--no-force-keyframes-at-cuts",
       "--merge-output-format", "mp4",
       "--remux-video", "mp4",
       "--format", YOUTUBE_FORMATS[quality],
-      // Ranged downloads are delegated to ffmpeg, which bypasses yt-dlp's
-      // progress hooks entirely; ffmpeg's own machine-readable progress on
-      // stdout (out_time_us) is the only live signal for these jobs.
-      "--downloader-args", "ffmpeg:-progress pipe:1 -nostats",
     );
   } else {
     // Prefer an iPhone-compatible, non-watermarked platform source. TikTok's
@@ -186,6 +194,11 @@ function releaseSlotOnce(job: SocialDownloadJob): void {
   releaseRateLimitByKey(job.rateLimitKey);
 }
 
+/** Phase read that survives TS narrowing — cancel mutates it across awaits. */
+function jobFailed(job: SocialDownloadJob): boolean {
+  return job.phase === "error";
+}
+
 function failJob(job: SocialDownloadJob, message: string): void {
   if (job.phase === "ready" || job.phase === "error") return;
   job.phase = "error";
@@ -195,6 +208,215 @@ function failJob(job: SocialDownloadJob, message: string): void {
   // out. Only completed imports consume the rolling anti-abuse allowance.
   releaseSlotOnce(job);
   void rm(job.workDirectory, { recursive: true, force: true });
+}
+
+const PROBE_TIMEOUT_MS = 20_000;
+// Below this source length the whole file downloads on the fast fragmented
+// path and gets stream-copy trimmed locally — measured ~10× quicker than
+// ffmpeg section streaming, which YouTube paces at roughly playback speed
+// (yt-dlp#6513). Longer sources fall back to section streaming so a small
+// clip never pays for a multi-GB download.
+const FULL_STRATEGY_MAX_VIDEO_SECONDS = 60 * 60;
+
+/**
+ * Run one job subprocess: wires progress parsing, stderr capture, the kill
+ * timer, and cancellation. Resolves true only on a clean zero exit.
+ */
+function runJobProcess(
+  job: SocialDownloadJob,
+  command: string,
+  args: string[],
+  timeoutMs: number,
+  { markDownloading = false }: { markDownloading?: boolean } = {},
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { env: { ...process.env, PYTHONUNBUFFERED: "1" } });
+    job.child = child;
+    const killTimer = setTimeout(() => {
+      failJob(job, downloadErrorMessage("", job.platform));
+      child.kill("SIGKILL");
+    }, timeoutMs);
+    killTimer.unref?.();
+
+    let stdoutRemainder = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdoutRemainder += chunk;
+      const lines = stdoutRemainder.split("\n");
+      stdoutRemainder = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!markDownloading) continue;
+        const sample = parseProgressLine(line);
+        if (sample) {
+          job.phase = "downloading";
+          job.downloadedBytes = sample.downloadedBytes;
+          // bv*+ba downloads run as two sequential streams; keep the largest
+          // total seen so the bar does not jump backwards on the audio leg.
+          if (sample.totalBytes !== null && (job.totalBytes === null || sample.totalBytes > job.totalBytes)) {
+            job.totalBytes = sample.totalBytes;
+          }
+          job.etaSeconds = sample.etaSeconds;
+          continue;
+        }
+        const mediaSeconds = parseFfmpegProgressSeconds(line);
+        if (mediaSeconds !== null && job.sectionSeconds) {
+          job.phase = "downloading";
+          // Sequential video + audio ffmpeg legs each restart out_time from
+          // zero; keeping the max seen holds the bar monotonic through both.
+          job.mediaPercent = Math.max(
+            job.mediaPercent,
+            Math.min(97, Math.round((mediaSeconds / job.sectionSeconds) * 100)),
+          );
+        }
+      }
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      job.stderrTail = (job.stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
+    });
+    child.on("error", () => {
+      clearTimeout(killTimer);
+      job.child = null;
+      resolve(false);
+    });
+    child.on("close", (code) => {
+      clearTimeout(killTimer);
+      job.child = null;
+      resolve(code === 0 && job.phase !== "error");
+    });
+  });
+}
+
+/** Fetch the source duration so the download strategy can be chosen. */
+async function probeDurationSeconds(ytDlpPath: string, url: string, job: SocialDownloadJob): Promise<number | null> {
+  let output = "";
+  const collected = await new Promise<boolean>((resolve) => {
+    const child = spawn(ytDlpPath, ["--no-playlist", "--no-warnings", "--skip-download", "--print", "duration", url], {
+      env: { ...process.env, PYTHONUNBUFFERED: "1" },
+    });
+    job.child = child;
+    const killTimer = setTimeout(() => child.kill("SIGKILL"), PROBE_TIMEOUT_MS);
+    killTimer.unref?.();
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => { output += chunk; });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      job.stderrTail = (job.stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
+    });
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => { job.child = null; resolve(code === 0); });
+  });
+  if (!collected) return null;
+  const duration = Number.parseFloat(output.trim().split("\n")[0] ?? "");
+  return Number.isFinite(duration) && duration > 0 ? duration : null;
+}
+
+export function chooseYoutubeStrategy({
+  durationSeconds,
+  startSeconds,
+  endSeconds,
+}: {
+  durationSeconds: number | null;
+  startSeconds: number;
+  endSeconds: number;
+}): { mode: "full" | "section"; trim: { startSeconds: number; durationSeconds: number } | null } {
+  if (durationSeconds === null || durationSeconds > FULL_STRATEGY_MAX_VIDEO_SECONDS) {
+    return { mode: "section", trim: null };
+  }
+  // A range that already spans the whole source needs no trim pass at all.
+  const wholeVideo = startSeconds <= 1 && endSeconds >= durationSeconds - 1;
+  return {
+    mode: "full",
+    trim: wholeVideo ? null : { startSeconds, durationSeconds: endSeconds - startSeconds },
+  };
+}
+
+async function finalizeJobFile(job: SocialDownloadJob): Promise<void> {
+  const files = await readdir(job.workDirectory);
+  const filename = files.find((item) => item.toLowerCase().endsWith(".mp4"));
+  if (!filename) throw new Error("No MP4 source was returned");
+  const filePath = join(job.workDirectory, filename);
+  const fileInfo = await stat(filePath);
+  if (!fileInfo.isFile() || fileInfo.size <= 0 || fileInfo.size > MAX_FILE_BYTES) {
+    throw new Error("Resolved source exceeded the import limit");
+  }
+  job.filePath = filePath;
+  job.fileName = filename;
+  job.fileBytes = fileInfo.size;
+  job.phase = "ready";
+  job.expiresAt = Date.now() + READY_TTL_MS;
+}
+
+async function orchestrateJob(job: SocialDownloadJob, {
+  url,
+  startSeconds,
+  endSeconds,
+  quality,
+  timeoutMs,
+  ytDlpPath,
+  outputTemplate,
+}: {
+  url: string;
+  startSeconds?: number;
+  endSeconds?: number;
+  quality: SourceImportQuality;
+  timeoutMs: number;
+  ytDlpPath: string;
+  outputTemplate: string;
+}): Promise<void> {
+  try {
+    let trim: { startSeconds: number; durationSeconds: number } | null = null;
+    let sectionArgs: { startSeconds?: number; endSeconds?: number } = {};
+    if (job.platform === "youtube" && typeof startSeconds === "number" && typeof endSeconds === "number") {
+      const durationSeconds = await probeDurationSeconds(ytDlpPath, url, job);
+      if (jobFailed(job)) return;
+      const strategy = chooseYoutubeStrategy({ durationSeconds, startSeconds, endSeconds });
+      if (strategy.mode === "section") {
+        sectionArgs = { startSeconds, endSeconds };
+      } else {
+        trim = strategy.trim;
+      }
+    }
+
+    const downloaded = await runJobProcess(job, ytDlpPath, buildSourceDownloadArgs({
+      platform: job.platform,
+      url,
+      outputTemplate,
+      quality,
+      ...sectionArgs,
+    }), timeoutMs, { markDownloading: true });
+    if (jobFailed(job)) return;
+    if (!downloaded) {
+      failJob(job, downloadErrorMessage(job.stderrTail, job.platform));
+      return;
+    }
+
+    job.phase = "processing";
+    if (trim) {
+      const files = await readdir(job.workDirectory);
+      const source = files.find((item) => item.toLowerCase().endsWith(".mp4"));
+      if (!source) throw new Error("No MP4 source was returned");
+      const sourcePath = join(job.workDirectory, source);
+      const trimmedPath = join(job.workDirectory, `trimmed-${source}`);
+      // Stream copy keeps this near-instant; cuts land on the nearest
+      // keyframe, matching what --download-sections produced before.
+      const trimmed = await runJobProcess(job, "ffmpeg", [
+        "-y", "-loglevel", "error",
+        "-ss", String(trim.startSeconds),
+        "-i", sourcePath,
+        "-t", String(trim.durationSeconds),
+        "-c", "copy",
+        trimmedPath,
+      ], timeoutMs);
+      if (jobFailed(job)) return;
+      if (!trimmed) throw new Error("Trimming the imported range failed");
+      job.phase = "processing";
+      await rm(sourcePath, { force: true });
+    }
+    await finalizeJobFile(job);
+  } catch {
+    if (job.phase !== "error") failJob(job, downloadErrorMessage(job.stderrTail, job.platform));
+  }
 }
 
 export async function startSocialDownloadJob({
@@ -242,95 +464,11 @@ export async function startSocialDownloadJob({
     child: null,
     rateLimitKey,
     rateLimitReleased: false,
-    expiresAt: Date.now() + timeoutMs + ERROR_TTL_MS,
+    expiresAt: Date.now() + timeoutMs + PROBE_TIMEOUT_MS + ERROR_TTL_MS,
   };
   jobs.set(job.id, job);
 
-  const child = spawn(ytDlpPath, buildSourceDownloadArgs({
-    platform,
-    url,
-    outputTemplate,
-    startSeconds,
-    endSeconds,
-    quality,
-  }), { env: { ...process.env, PYTHONUNBUFFERED: "1" } });
-  job.child = child;
-
-  const killTimer = setTimeout(() => {
-    failJob(job, downloadErrorMessage("", platform));
-    child.kill("SIGKILL");
-  }, timeoutMs);
-  killTimer.unref?.();
-
-  let stdoutRemainder = "";
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdoutRemainder += chunk;
-    const lines = stdoutRemainder.split("\n");
-    stdoutRemainder = lines.pop() ?? "";
-    for (const line of lines) {
-      const sample = parseProgressLine(line);
-      if (sample) {
-        job.phase = "downloading";
-        job.downloadedBytes = sample.downloadedBytes;
-        // bv*+ba downloads run as two sequential streams; keep the largest
-        // total seen so the bar does not jump backwards on the audio leg.
-        if (sample.totalBytes !== null && (job.totalBytes === null || sample.totalBytes > job.totalBytes)) {
-          job.totalBytes = sample.totalBytes;
-        }
-        job.etaSeconds = sample.etaSeconds;
-        continue;
-      }
-      const mediaSeconds = parseFfmpegProgressSeconds(line);
-      if (mediaSeconds !== null && job.sectionSeconds) {
-        job.phase = "downloading";
-        // Sequential video + audio ffmpeg legs each restart out_time from
-        // zero; keeping the max seen holds the bar monotonic through both.
-        job.mediaPercent = Math.max(
-          job.mediaPercent,
-          Math.min(97, Math.round((mediaSeconds / job.sectionSeconds) * 100)),
-        );
-      }
-    }
-  });
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk: string) => {
-    job.stderrTail = (job.stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
-  });
-  child.on("error", () => {
-    clearTimeout(killTimer);
-    failJob(job, downloadErrorMessage(job.stderrTail, platform));
-  });
-  child.on("close", (code) => {
-    clearTimeout(killTimer);
-    job.child = null;
-    if (job.phase === "error") return;
-    if (code !== 0) {
-      failJob(job, downloadErrorMessage(job.stderrTail, platform));
-      return;
-    }
-    job.phase = "processing";
-    void (async () => {
-      try {
-        const files = await readdir(workDirectory);
-        const filename = files.find((item) => item.toLowerCase().endsWith(".mp4"));
-        if (!filename) throw new Error("No MP4 source was returned");
-        const filePath = join(workDirectory, filename);
-        const fileInfo = await stat(filePath);
-        if (!fileInfo.isFile() || fileInfo.size <= 0 || fileInfo.size > MAX_FILE_BYTES) {
-          throw new Error("Resolved source exceeded the import limit");
-        }
-        job.filePath = filePath;
-        job.fileName = filename;
-        job.fileBytes = fileInfo.size;
-        job.phase = "ready";
-        job.expiresAt = Date.now() + READY_TTL_MS;
-      } catch {
-        failJob(job, downloadErrorMessage(job.stderrTail, platform));
-      }
-    })();
-  });
-
+  void orchestrateJob(job, { url, startSeconds, endSeconds, quality, timeoutMs, ytDlpPath, outputTemplate });
   return job.id;
 }
 

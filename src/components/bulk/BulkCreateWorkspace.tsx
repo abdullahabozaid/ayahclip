@@ -336,6 +336,9 @@ export function BulkCreateWorkspace() {
     }
     setDecoding(true);
     setError(null);
+    // Warm the recognition model and corpus during the decode.
+    void import("@/lib/asr").then((asr) => asr.prewarmRecognition());
+    void import("@/lib/verse-match").then((m) => m.loadCorpus()).catch(() => {});
     try {
       let resolvedAudio: Blob = file;
       let decoded: AudioBuffer;
@@ -534,6 +537,10 @@ export function BulkCreateWorkspace() {
     setLinkLoading(true);
     setError(null);
     setLinkProgress({ phase: "starting", percent: 0 });
+    // Warm the recognition model and Quran corpus while the server downloads,
+    // so analysis starts immediately once the file lands.
+    void import("@/lib/asr").then((asr) => asr.prewarmRecognition());
+    void import("@/lib/verse-match").then((m) => m.loadCorpus()).catch(() => {});
     const controller = new AbortController();
     linkAbortRef.current = controller;
     try {

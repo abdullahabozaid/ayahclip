@@ -30,7 +30,11 @@ ENV AYAHCLIP_SELF_HOSTED=1
 ARG YT_DLP_VERSION=2026.07.04
 ARG ASR_MODEL_SHA256=7e7f9aaccbf0f7d12104ebfee9a99625195454a359821139a777f389ec928b50
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg python3 \
+  && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg python3 python3-pip \
+  # yt-dlp's TikTok extractor requires browser impersonation via curl_cffi;
+  # the zipapp binary runs under system python3 and picks this up from
+  # site-packages (yt-dlp/yt-dlp#15418).
+  && pip3 install --no-cache-dir --break-system-packages "curl_cffi>=0.10" \
   && curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp" -o /usr/local/bin/yt-dlp \
   && chmod 0755 /usr/local/bin/yt-dlp \
   && /usr/local/bin/yt-dlp --version \

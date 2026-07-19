@@ -366,6 +366,10 @@ export default function ImportPage() {
     setSocialDownloading(true);
     setSocialError(null);
     setSocialProgress({ phase: "starting", percent: 0 });
+    // Warm the recognition model and Quran corpus while the server downloads,
+    // so auto-recognition starts immediately once the file lands.
+    void import("@/lib/asr").then((asr) => asr.prewarmRecognition());
+    void import("@/lib/verse-match").then((m) => m.loadCorpus()).catch(() => {});
     const controller = new AbortController();
     socialAbortRef.current = controller;
     try {

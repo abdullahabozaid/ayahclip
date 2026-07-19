@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSourceDownloadArgs,
+  chooseYoutubeStrategy,
   parseFfmpegProgressSeconds,
   parseProgressLine,
 } from "@/lib/social-download-jobs";
@@ -83,6 +84,41 @@ describe("source resolver command", () => {
       outputTemplate: "/tmp/%(id)s.%(ext)s",
     });
     expect(tiktok).not.toContain("--downloader-args");
+  });
+});
+
+describe("youtube download strategy", () => {
+  it("downloads the full file and trims locally for normal-length sources", () => {
+    // Section streaming is paced at ~playback speed by YouTube; the full
+    // fragmented download measured ~10× quicker for sources under an hour.
+    expect(chooseYoutubeStrategy({ durationSeconds: 600, startSeconds: 60, endSeconds: 180 })).toEqual({
+      mode: "full",
+      trim: { startSeconds: 60, durationSeconds: 120 },
+    });
+  });
+
+  it("skips the trim pass when the range already spans the whole source", () => {
+    expect(chooseYoutubeStrategy({ durationSeconds: 300, startSeconds: 0, endSeconds: 300 })).toEqual({
+      mode: "full",
+      trim: null,
+    });
+  });
+
+  it("falls back to section streaming for very long or unprobeable sources", () => {
+    expect(chooseYoutubeStrategy({ durationSeconds: 3 * 60 * 60, startSeconds: 0, endSeconds: 120 }).mode).toBe("section");
+    expect(chooseYoutubeStrategy({ durationSeconds: null, startSeconds: 0, endSeconds: 120 }).mode).toBe("section");
+  });
+
+  it("omits section args entirely for a full-strategy download", () => {
+    const args = buildSourceDownloadArgs({
+      platform: "youtube",
+      url: "https://youtube.com/watch?v=owned-video",
+      outputTemplate: "/tmp/%(id)s.%(ext)s",
+    });
+    expect(args).not.toContain("--download-sections");
+    expect(args).not.toContain("--downloader-args");
+    expect(args).toContain("--concurrent-fragments");
+    expect(args.join(" ")).toContain("height<=480");
   });
 });
 

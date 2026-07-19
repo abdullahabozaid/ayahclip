@@ -207,6 +207,19 @@ let vocab: Map<number, string> | null = null;
 let vocabRecord: Record<string, string> | null = null;
 let blankId = 1024;
 
+/**
+ * Fire-and-forget warm-up: fetch/cache the model and build the inference
+ * session while something else (a server download, a decode) is running, so
+ * the first recognition window doesn't pay the load on the critical path.
+ * Safe to call repeatedly — the session and vocab singletons dedupe.
+ */
+export function prewarmRecognition(): void {
+  void ensureReady().catch(() => {
+    // A failed warm-up is invisible: the real recognition call retries the
+    // same path and surfaces its own error to the user.
+  });
+}
+
 async function ensureReady(onProgress?: Progress, signal?: AbortSignal): Promise<void> {
   throwIfAborted(signal);
   if (session && vocab) return;
