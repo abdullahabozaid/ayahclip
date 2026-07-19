@@ -4,7 +4,7 @@ Date: 2026-07-19
 
 ## Outcome
 
-Turn one owned or permitted 20–30 minute recitation video into 15–20 reviewable, verse-complete vertical clips without forcing the creator to scrub the entire recording or render every suggestion blindly.
+Turn one owned or permitted 20–30 minute recitation video into 15, 20, 30, or 40 reviewable, verse-complete vertical clip drafts without forcing the creator to scrub the entire recording or render every suggestion blindly.
 
 The feature is successful when a creator can:
 
@@ -35,9 +35,10 @@ The creator chooses **Bulk create**, then provides:
 
 - a local audio/video file or an owned/permitted YouTube link;
 - one rights confirmation for the source;
-- desired number of clips, default 15;
-- target length: Short (15–30s), Balanced (30–60s), or Story (60–90s);
+- desired number of clips: 15, 20, 30, or 40, default 20;
 - output format, default 9:16.
+
+Clip count is the creator-facing control. Duration is an internal balancing signal only. If the soft target lands at 1:00 but the current ayah ends at 1:16, the candidate ends at 1:16. A requested count is treated as an upper target when the source does not contain enough trustworthy, complete Quran passages.
 
 The screen states the source duration, expected processing time, retention policy, and the fact that nothing will publish automatically.
 
@@ -52,6 +53,8 @@ Use a named, honest progress model:
 5. **Build previews** – fetch only the source video ranges needed for review.
 
 The job can be closed and revisited. Show completed units, not an indeterminate “AI magic” spinner.
+
+During analysis, rotate a restrained set of encouraging Quran ayahs and hadiths. Quran text and translation must come through the canonical Quran data path. Hadiths must be individually sourced to Sahih al-Bukhari or Sahih Muslim, show the exact collection reference, and link to the verified source. Motion communicates active window progress and respects reduced-motion preferences.
 
 ### 3. Review candidates
 
@@ -121,7 +124,7 @@ Do not build a large ZIP in memory. Stream an archive on demand or offer one-by-
 6. Prefer natural pauses, complete thematic spans, and target-duration fit.
 7. Penalize repeated phrases, low-confidence ranges, clipped audio, surah changes, and contaminated speech.
 8. Preserve distinct low-confidence alternatives for creator review instead of silently choosing one.
-9. Generate a modest overage—approximately 20–25 candidates for a target of 15–20—not an overwhelming dump.
+9. Generate no more than the chosen 15/20/30/40 draft target. Show an honest lower result when the source does not contain enough confident, complete passages.
 10. Never silently omit a long section: show coverage on a source timeline and label unrecognized gaps.
 
 Recommended candidate score components:
@@ -136,7 +139,7 @@ The score is an internal ranking aid. The UI should expose its factual component
 
 ## Technical architecture
 
-The existing browser-only architecture cannot safely hold a 20–30 minute source plus 15–20 renders on typical phones. Bulk creation needs a server job path while preserving the current local single-clip path.
+The current beta runs recognition in sequential overlapping browser windows so one long source never enters the single-pass model. It keeps the existing local recognition privacy model and is suitable for desktop validation. Durable background jobs and server rendering remain necessary before unattended phone processing and multi-clip rendering can be called production-ready.
 
 ### Services
 
@@ -234,9 +237,9 @@ Exit gate: a 20-clip batch survives refresh, one intentionally failed task, and 
 ## Beta limits
 
 - source duration: 30 minutes;
-- requested clips: 5–20;
-- candidate overage: maximum 25;
-- clip duration: 15–90 seconds;
+- requested clips: 15, 20, 30, or 40;
+- candidates: up to the requested count, limited by trustworthy complete passages;
+- clip duration: no hard creator-facing bucket; complete ayahs override the soft balancing target;
 - output: 9:16, 1080×1920 where the selected source supports it;
 - one active analysis job per anonymous session;
 - one active render batch per session;

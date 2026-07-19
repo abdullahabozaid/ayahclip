@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bulkYoutubeRangeError,
   formatTimecode,
   parseTimecode,
   sourcePlatform,
@@ -48,5 +49,10 @@ describe("source timecodes", () => {
     expect(youtubeRangeError(60, 180)).toBeNull();
     expect(youtubeRangeError(60, 60)).toContain("after");
     expect(youtubeRangeError(0, 481)).toContain("8 minutes");
+  });
+
+  it("allows a longer, explicitly bulk-scoped segment", () => {
+    expect(bulkYoutubeRangeError(0, 30 * 60)).toBeNull();
+    expect(bulkYoutubeRangeError(0, 30 * 60 + 1)).toContain("30 minutes");
   });
 });

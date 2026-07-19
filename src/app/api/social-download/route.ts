@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  bulkYoutubeRangeError,
   validateSourceLink,
   youtubeRangeError,
   type SourcePlatform,
@@ -176,6 +177,7 @@ export async function POST(request: Request) {
     startSeconds?: unknown;
     endSeconds?: unknown;
     attestedRights?: unknown;
+    bulk?: unknown;
   };
   const source = validateSourceLink(input?.url);
   if (!source) {
@@ -193,7 +195,9 @@ export async function POST(request: Request) {
     }
     startSeconds = typeof input.startSeconds === "number" ? input.startSeconds : NaN;
     endSeconds = typeof input.endSeconds === "number" ? input.endSeconds : NaN;
-    const rangeError = youtubeRangeError(startSeconds, endSeconds);
+    const rangeError = input.bulk === true
+      ? bulkYoutubeRangeError(startSeconds, endSeconds)
+      : youtubeRangeError(startSeconds, endSeconds);
     if (rangeError) return Response.json({ error: rangeError }, { status: 400 });
   }
 

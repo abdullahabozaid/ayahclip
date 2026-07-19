@@ -15,6 +15,7 @@ const LINKS: NavItem[] = [
     match: (p) => p.startsWith("/browse") || p.startsWith("/surah"),
   },
   { href: "/library", label: "Library", match: (p) => p.startsWith("/library") },
+  { href: "/bulk", label: "Bulk Create", match: (p) => p.startsWith("/bulk") },
   { href: "/styles", label: "Templates", match: (p) => p.startsWith("/styles") },
   { href: "/support", label: "Support", match: (p) => p.startsWith("/support") },
 ];

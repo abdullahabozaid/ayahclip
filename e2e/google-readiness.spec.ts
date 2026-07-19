@@ -32,7 +32,7 @@ test("Googlebot can discover the public product through robots and sitemap", asy
   expect(sitemapResponse.status()).toBe(200);
   expect(sitemapResponse.headers()["content-type"]).toContain("application/xml");
   const sitemap = await sitemapResponse.text();
-  for (const path of ["", "/browse", "/import", "/styles", "/support", "/privacy", "/terms"]) {
+  for (const path of ["", "/browse", "/import", "/bulk", "/styles", "/support", "/privacy", "/terms"]) {
     expect(sitemap).toContain(`<loc>${productionOrigin}${path}</loc>`);
   }
   for (const privatePath of ["/api/", "/diagnostics", "/library", "/studio", "/styles/editor"]) {
@@ -45,6 +45,7 @@ test("indexable pages publish distinct titles, descriptions, and canonical URLs"
     { path: "/", title: /AyahClip/, canonical: "/" },
     { path: "/browse", title: /Browse the Quran/, canonical: "/browse" },
     { path: "/import", title: /Import a recitation/, canonical: "/import" },
+    { path: "/bulk", title: /Bulk Create/, canonical: "/bulk" },
     { path: "/styles", title: /Templates/, canonical: "/styles" },
     { path: "/support", title: /Support AyahClip/, canonical: "/support" },
     { path: "/privacy", title: /Privacy/, canonical: "/privacy" },
