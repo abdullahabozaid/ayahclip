@@ -1,5 +1,5 @@
-export const MAX_YOUTUBE_SEGMENT_SECONDS = 8 * 60;
-export const MAX_BULK_YOUTUBE_SEGMENT_SECONDS = 30 * 60;
+export const MAX_YOUTUBE_SEGMENT_SECONDS = 60 * 60;
+export const MAX_BULK_YOUTUBE_SEGMENT_SECONDS = 60 * 60;
 export const MIN_YOUTUBE_SEGMENT_SECONDS = 1;
 
 export type SourcePlatform = "youtube" | "tiktok" | "instagram";
@@ -79,7 +79,7 @@ export function youtubeRangeError(startSeconds: number | null, endSeconds: numbe
   if (endSeconds <= startSeconds) return "End time must be after the start time.";
   const duration = endSeconds - startSeconds;
   if (duration < MIN_YOUTUBE_SEGMENT_SECONDS) return "Choose at least one second.";
-  if (duration > MAX_YOUTUBE_SEGMENT_SECONDS) return "Choose a segment of 8 minutes or less.";
+  if (duration > MAX_YOUTUBE_SEGMENT_SECONDS) return "Choose a segment of 60 minutes or less.";
   return null;
 }
 
@@ -88,6 +88,6 @@ export function bulkYoutubeRangeError(startSeconds: number | null, endSeconds: n
   if (endSeconds <= startSeconds) return "End time must be after the start time.";
   const duration = endSeconds - startSeconds;
   if (duration < MIN_YOUTUBE_SEGMENT_SECONDS) return "Choose at least one second.";
-  if (duration > MAX_BULK_YOUTUBE_SEGMENT_SECONDS) return "Bulk Create currently supports up to 30 minutes from one source.";
+  if (duration > MAX_BULK_YOUTUBE_SEGMENT_SECONDS) return "Bulk Create currently supports up to 60 minutes from one source.";
   return null;
 }

@@ -3,6 +3,7 @@ import { applyTemplate } from "./apply-template";
 import { loadBulkJob, loadBulkSource } from "./bulk-jobs";
 import { isSupportedVideoFile } from "./media-file";
 import { getSavedTemplates } from "./saved-templates";
+import { applyStyleSnapshot } from "./style-snapshot";
 import { useAppStore } from "./store";
 import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "./templates";
 
@@ -59,7 +60,14 @@ export async function openBulkCandidateInStudio(jobId: string, candidateId: stri
     store.setBackgroundVideoSync(true);
   }
   const template = [...TEMPLATES, ...getSavedTemplates(DEFAULT_TEMPLATE_STYLE)].find((item) => item.id === candidate.templateId);
-  if (template) applyTemplate(template);
+  // With source visuals the clip's media is the imported video: the template
+  // may only restyle it unless the batch explicitly opted into replacement.
+  if (template) {
+    applyTemplate(template, job.visualMode === "template"
+      ? undefined
+      : { replaceMedia: job.templateReplacesMedia === true });
+  }
+  if (job.styleOverride) applyStyleSnapshot(job.styleOverride);
   return {
     jobId,
     candidateId,

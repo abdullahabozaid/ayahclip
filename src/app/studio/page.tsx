@@ -19,7 +19,7 @@ import {
   snapshotFromWebProject,
 } from "@/lib/mobile-project-adapter";
 import { StudioPreview } from "@/components/StudioPreview";
-import { StudioSettings } from "@/components/StudioSettings";
+import { StudioSettings, type StudioSettingsSectionId } from "@/components/StudioSettings";
 import { VerseCardEditor } from "@/components/VerseCardEditor";
 import { ReciterVerseEditor } from "@/components/ReciterVerseEditor";
 import { TimelineEditor } from "@/components/TimelineEditor";
@@ -38,6 +38,8 @@ import {
   trackProductEvent,
 } from "@/lib/telemetry";
 import { openBulkCandidateInStudio, type BulkStudioNavigation } from "@/lib/bulk-studio";
+import { deleteBulkOutput, loadBulkJob, saveBulkJob } from "@/lib/bulk-jobs";
+import { captureStyleSnapshot } from "@/lib/style-snapshot";
 
 // Editor zoom bounds. CSS `zoom` reflows layout, so the page scrolls naturally
 // when zoomed past the viewport (and shrinks within it when zoomed out).
@@ -54,6 +56,7 @@ type SaveFailureReason = "invalid" | "media" | "project";
 type SaveResult =
   | { ok: true }
   | { ok: false; reason: SaveFailureReason };
+type StudioTool = "layouts" | "media" | "audio" | "text" | "captions" | "config";
 
 function saveFailureMessage(reason: SaveFailureReason): string {
   if (reason === "media") {
@@ -93,8 +96,13 @@ export default function StudioPage() {
   );
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<StudioTool>("layouts");
+  const [requestedInspectorSection, setRequestedInspectorSection] = useState<StudioSettingsSectionId | null>(null);
   const [bulkNavigation, setBulkNavigation] = useState<BulkStudioNavigation | null>(null);
   const [bulkNavigationBusy, setBulkNavigationBusy] = useState(false);
+  const [applyLookOpen, setApplyLookOpen] = useState(false);
+  const [applyLookMedia, setApplyLookMedia] = useState(false);
+  const [applyLookState, setApplyLookState] = useState<"idle" | "busy" | "done">("idle");
   const savedResetRef = useRef<ReturnType<typeof setTimeout>>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const savedAudioUrlRef = useRef<string | null>(null);
@@ -110,7 +118,14 @@ export default function StudioPage() {
     let cancelled = false;
     setBulkNavigationBusy(true);
     openBulkCandidateInStudio(jobId, candidateId)
-      .then((navigation) => { if (!cancelled) setBulkNavigation(navigation); })
+      .then((navigation) => {
+        if (!cancelled) {
+          setBulkNavigation(navigation);
+          setEditorView("timeline");
+          setTimelineOpen(true);
+          setActiveTool("captions");
+        }
+      })
       .catch((reason: unknown) => { if (!cancelled) setSaveError(reason instanceof Error ? reason.message : "The bulk clip could not be opened."); })
       .finally(() => { if (!cancelled) setBulkNavigationBusy(false); });
     return () => { cancelled = true; };
@@ -122,11 +137,36 @@ export default function StudioPage() {
     try {
       const navigation = await openBulkCandidateInStudio(bulkNavigation.jobId, candidateId);
       setBulkNavigation(navigation);
+      setEditorView("timeline");
+      setTimelineOpen(true);
+      setActiveTool("captions");
       router.replace(`/studio?bulk=${encodeURIComponent(navigation.jobId)}&clip=${encodeURIComponent(candidateId)}`);
     } catch (reason) {
       setSaveError(reason instanceof Error ? reason.message : "The next bulk clip could not be opened.");
     } finally {
       setBulkNavigationBusy(false);
+    }
+  };
+
+  const applyLookToAllClips = async () => {
+    if (!bulkNavigation || applyLookState === "busy") return;
+    setApplyLookState("busy");
+    try {
+      const job = await loadBulkJob(bulkNavigation.jobId);
+      if (!job) throw new Error("The bulk collection could not be loaded.");
+      const snapshot = captureStyleSnapshot(applyLookMedia);
+      await saveBulkJob({
+        ...job,
+        styleOverride: snapshot,
+        // Every clip's look just changed — previous renders are stale.
+        renderTasks: job.renderTasks.map((task) => ({ candidateId: task.candidateId, status: "idle" as const, progress: 0 })),
+      });
+      await Promise.all(job.renderTasks.map((task) => deleteBulkOutput(job.id, task.candidateId))).catch(() => {});
+      setApplyLookState("done");
+      setTimeout(() => { setApplyLookState("idle"); setApplyLookOpen(false); }, 2000);
+    } catch (reason) {
+      setApplyLookState("idle");
+      setSaveError(reason instanceof Error ? reason.message : "The look could not be applied to the collection.");
     }
   };
 
@@ -196,6 +236,16 @@ export default function StudioPage() {
   const openTimeline = (next: boolean) => {
     setTimelineOpen(next);
     if (next && !isDesktopWorkspace()) setSettingsOpen(false);
+  };
+  const openInspectorTool = (tool: StudioTool, sectionId: StudioSettingsSectionId) => {
+    setActiveTool(tool);
+    setRequestedInspectorSection(sectionId);
+    openSettings(true);
+  };
+  const openEditorTool = (tool: StudioTool, view: "words" | "timeline") => {
+    setActiveTool(tool);
+    setEditorView(view);
+    openTimeline(true);
   };
 
   const pendingTemplateName = store.pendingTemplateMedia?.templateName;
@@ -556,6 +606,36 @@ export default function StudioPage() {
               <button type="button" onClick={() => void openBulkSibling(bulkNavigation.nextId)} disabled={!bulkNavigation.nextId || bulkNavigationBusy} className="flex h-11 w-11 items-center justify-center text-parchment disabled:opacity-25 lg:h-8 lg:w-8" aria-label="Next bulk clip">→</button>
             </div>
           )}
+          {bulkNavigation && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setApplyLookOpen((open) => !open)}
+                aria-expanded={applyLookOpen}
+                className="btn-ghost flex h-11 items-center rounded-md px-3 text-xs lg:h-8"
+              >
+                Apply to all
+              </button>
+              {applyLookOpen && (
+                <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-4 shadow-xl">
+                  <p className="text-xs font-medium text-parchment">Apply this clip’s look to all {bulkNavigation.total} clips</p>
+                  <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">Copies text position, typography, colours, and effects. Each clip keeps its own media.</p>
+                  <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-4 text-[var(--muted)]">
+                    <input type="checkbox" checked={applyLookMedia} onChange={(event) => setApplyLookMedia(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--gold)]" />
+                    <span>Also replace each clip’s media with this clip’s media</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void applyLookToAllClips()}
+                    disabled={applyLookState === "busy"}
+                    className="btn-gold mt-3 min-h-10 w-full rounded-lg px-3 text-xs disabled:opacity-50"
+                  >
+                    {applyLookState === "busy" ? "Applying…" : applyLookState === "done" ? "Applied ✓" : "Apply to all clips"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Preview-as frame selector */}
@@ -727,14 +807,14 @@ export default function StudioPage() {
       </header>
 
       <aside aria-label="Studio tools" className="hidden border-r border-[var(--hairline-soft)] bg-[var(--ink)] lg:row-span-2 lg:row-start-2 lg:flex lg:flex-col">
-        {[
-          ["Layouts", "layout", () => openSettings(true)],
-          ["Media", "image", () => openSettings(true)],
-          ["Audio", "music", () => openTimeline(true)],
-          ["Text", "type", () => openSettings(true)],
-          ["Captions", "captions", () => openTimeline(true)],
-        ].map(([label, icon, action], index) => (
-          <button key={label as string} type="button" onClick={action as () => void} aria-label={`Open ${String(label).toLowerCase()} tool`} className={`flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors hover:bg-white/[0.03] hover:text-parchment ${index === 0 ? "bg-gold/[0.06] text-gold" : "text-[var(--muted)]"}`}>
+        {([
+          ["layouts", "Layouts", "layout", () => openInspectorTool("layouts", "studio-presets-section")],
+          ["media", "Media", "image", () => openInspectorTool("media", "studio-background-section")],
+          ["audio", "Audio", "music", () => openInspectorTool("audio", "studio-audio-section")],
+          ["text", "Text", "type", () => openInspectorTool("text", "studio-typography-section")],
+          ["captions", "Captions", "captions", () => openEditorTool("captions", "words")],
+        ] as const).map(([tool, label, icon, action]) => (
+          <button key={label} type="button" onClick={action} aria-label={`Open ${label.toLowerCase()} tool`} aria-current={activeTool === tool ? "page" : undefined} className={`flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors hover:bg-white/[0.03] hover:text-parchment ${activeTool === tool ? "bg-gold/[0.06] text-gold" : "text-[var(--muted)]"}`}>
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
               {icon === "layout" && <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M8 4v16M8 10h13" /></>}
               {icon === "image" && <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m3 17 5-4 4 3 3-2 6 5" /></>}
@@ -745,7 +825,7 @@ export default function StudioPage() {
             {label as string}
           </button>
         ))}
-        <button type="button" onClick={() => openSettings(true)} aria-label="Open configuration tool" className="mt-auto flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment">
+        <button type="button" onClick={() => openInspectorTool("config", "studio-format-section")} aria-label="Open configuration tool" aria-current={activeTool === "config" ? "page" : undefined} className={`mt-auto flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors hover:bg-white/[0.03] hover:text-parchment ${activeTool === "config" ? "bg-gold/[0.06] text-gold" : "text-[var(--muted)]"}`}>
           <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 7h10M18 7h2M4 12h3M11 12h9M4 17h8M16 17h4" /><circle cx="16" cy="7" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="14" cy="17" r="2" /></svg>
           Config
         </button>
@@ -809,7 +889,7 @@ export default function StudioPage() {
               </button>
             </div>
           )}
-          <StudioSettings />
+          <StudioSettings requestedSectionId={requestedInspectorSection} />
         </aside>
       </div>
 
@@ -903,11 +983,11 @@ export default function StudioPage() {
 
       <nav data-testid="studio-mobile-tools" aria-label="Studio tools" className="relative z-20 grid h-[calc(58px+env(safe-area-inset-bottom))] shrink-0 grid-cols-5 items-start border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden">
         {([
-          ["Media", () => openSettings(true), false, <path key="media" strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v14H4zM4 15l4-4 4 4 2-2 6 6M15.5 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />],
-          ["Audio", () => openTimeline(true), false, <path key="audio" strokeLinecap="round" strokeLinejoin="round" d="M9 18V6l10-2v12M9 10l10-2M6.5 20A2.5 2.5 0 106.5 15a2.5 2.5 0 000 5zm10-2a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />],
-          ["Text", () => openSettings(true), false, <path key="text" strokeLinecap="round" d="M5 5h14M12 5v14M8 19h8" />],
-          ["Captions", () => { setEditorView("timeline"); openTimeline(true); }, timelineOpen, <path key="captions" strokeLinecap="round" strokeLinejoin="round" d="M4 6h16v12H4zM7 11h4m2 0h4M7 14h3m2 0h5" />],
-          ["Format", () => openSettings(!settingsOpen), settingsOpen, <path key="format" strokeLinecap="round" strokeLinejoin="round" d="M7 3H3v4m14-4h4v4M7 21H3v-4m14 4h4v-4" />],
+          ["Media", () => openInspectorTool("media", "studio-background-section"), activeTool === "media", <path key="media" strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v14H4zM4 15l4-4 4 4 2-2 6 6M15.5 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />],
+          ["Audio", () => openInspectorTool("audio", "studio-audio-section"), activeTool === "audio", <path key="audio" strokeLinecap="round" strokeLinejoin="round" d="M9 18V6l10-2v12M9 10l10-2M6.5 20A2.5 2.5 0 106.5 15a2.5 2.5 0 000 5zm10-2a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />],
+          ["Text", () => openInspectorTool("text", "studio-typography-section"), activeTool === "text", <path key="text" strokeLinecap="round" d="M5 5h14M12 5v14M8 19h8" />],
+          ["Captions", () => openEditorTool("captions", "words"), activeTool === "captions", <path key="captions" strokeLinecap="round" strokeLinejoin="round" d="M4 6h16v12H4zM7 11h4m2 0h4M7 14h3m2 0h5" />],
+          ["Format", () => openInspectorTool("config", "studio-format-section"), activeTool === "config", <path key="format" strokeLinecap="round" strokeLinejoin="round" d="M7 3H3v4m14-4h4v4M7 21H3v-4m14 4h4v-4" />],
         ] as const).map(([label, action, active, icon]) => (
           <button key={label as string} type="button" onClick={action as () => void} aria-label={label === "Format" ? "Toggle settings" : undefined} aria-expanded={label === "Format" ? settingsOpen : undefined} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[10px] font-medium uppercase tracking-tight ${active ? "bg-gold/[0.06] text-gold-soft" : "text-[var(--muted)]"}`}>
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>{icon}</svg>

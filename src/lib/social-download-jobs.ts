@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { copyFile, mkdir, mkdtemp, readdir, rename, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SourcePlatform } from "@/lib/source-link";
@@ -10,8 +10,11 @@ export type SourceImportQuality = "fast" | "hd";
 export type SocialDownloadPhase = "starting" | "downloading" | "processing" | "ready" | "error";
 
 export const MAX_FILE_BYTES = 750 * 1024 * 1024;
-const DOWNLOAD_TIMEOUT_MS = 300_000;
-const BULK_DOWNLOAD_TIMEOUT_MS = 9 * 60_000;
+// Generous ceilings: full-strategy downloads finish in seconds-to-minutes,
+// but a 60-minute range from a very long source still section-streams at
+// roughly playback speed and legitimately needs most of this.
+const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
+const BULK_DOWNLOAD_TIMEOUT_MS = 35 * 60_000;
 // Finished files stay fetchable for a while so a flaky connection can retry
 // the transfer without re-running yt-dlp; failed jobs only need to live long
 // enough for the next status poll to read the error.
@@ -215,8 +218,68 @@ const PROBE_TIMEOUT_MS = 20_000;
 // path and gets stream-copy trimmed locally — measured ~10× quicker than
 // ffmpeg section streaming, which YouTube paces at roughly playback speed
 // (yt-dlp#6513). Longer sources fall back to section streaming so a small
-// clip never pays for a multi-GB download.
-const FULL_STRATEGY_MAX_VIDEO_SECONDS = 60 * 60;
+// clip never pays for a multi-GB download. 90 min at capped 480/720p stays
+// safely under MAX_FILE_BYTES.
+const FULL_STRATEGY_MAX_VIDEO_SECONDS = 90 * 60;
+
+// Full-strategy source files are cached so repeat clips from the same
+// recitation skip the download entirely. Simple LRU by mtime, bounded so the
+// container disk cannot fill.
+const SOURCE_CACHE_DIR = process.env.AYAHCLIP_SOCIAL_CACHE_DIR || join(tmpdir(), "ayahclip-social-cache");
+const SOURCE_CACHE_MAX_BYTES = Number(process.env.AYAHCLIP_SOCIAL_CACHE_MAX_BYTES) || 4 * 1024 * 1024 * 1024;
+
+function sourceCacheKey(url: string, quality: SourceImportQuality): string {
+  return createHash("sha256").update(`${url}|${quality}`).digest("hex");
+}
+
+/** Path of a cached source, with its recency refreshed — or null on miss. */
+async function readSourceCache(key: string): Promise<string | null> {
+  const path = join(SOURCE_CACHE_DIR, `${key}.mp4`);
+  try {
+    const info = await stat(path);
+    if (!info.isFile() || info.size <= 0) return null;
+    const now = new Date();
+    await utimes(path, now, now);
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+async function writeSourceCache(key: string, sourcePath: string, jobId: string): Promise<void> {
+  try {
+    await mkdir(SOURCE_CACHE_DIR, { recursive: true });
+    // Copy to a job-unique name first so concurrent writers of the same key
+    // never expose a half-written file; rename is atomic within the dir.
+    const staging = join(SOURCE_CACHE_DIR, `${key}.${jobId}.tmp`);
+    await copyFile(sourcePath, staging);
+    await rename(staging, join(SOURCE_CACHE_DIR, `${key}.mp4`));
+    await evictSourceCache();
+  } catch {
+    // The cache is an optimization — a failed write must never fail the job.
+  }
+}
+
+async function evictSourceCache(): Promise<void> {
+  const entries = await readdir(SOURCE_CACHE_DIR);
+  const files = (await Promise.all(entries
+    .filter((name) => name.endsWith(".mp4"))
+    .map(async (name) => {
+      const path = join(SOURCE_CACHE_DIR, name);
+      try {
+        const info = await stat(path);
+        return { path, size: info.size, mtimeMs: info.mtimeMs };
+      } catch {
+        return null;
+      }
+    }))).filter((item): item is NonNullable<typeof item> => item !== null);
+  let total = files.reduce((sum, file) => sum + file.size, 0);
+  for (const file of files.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+    if (total <= SOURCE_CACHE_MAX_BYTES) break;
+    await rm(file.path, { force: true });
+    total -= file.size;
+  }
+}
 
 /**
  * Run one job subprocess: wires progress parsing, stderr capture, the kill
@@ -367,6 +430,7 @@ async function orchestrateJob(job: SocialDownloadJob, {
   try {
     let trim: { startSeconds: number; durationSeconds: number } | null = null;
     let sectionArgs: { startSeconds?: number; endSeconds?: number } = {};
+    let fullStrategy = false;
     if (job.platform === "youtube" && typeof startSeconds === "number" && typeof endSeconds === "number") {
       const durationSeconds = await probeDurationSeconds(ytDlpPath, url, job);
       if (jobFailed(job)) return;
@@ -374,30 +438,43 @@ async function orchestrateJob(job: SocialDownloadJob, {
       if (strategy.mode === "section") {
         sectionArgs = { startSeconds, endSeconds };
       } else {
+        fullStrategy = true;
         trim = strategy.trim;
       }
     }
 
-    const downloaded = await runJobProcess(job, ytDlpPath, buildSourceDownloadArgs({
-      platform: job.platform,
-      url,
-      outputTemplate,
-      quality,
-      ...sectionArgs,
-    }), timeoutMs, { markDownloading: true });
-    if (jobFailed(job)) return;
-    if (!downloaded) {
-      failJob(job, downloadErrorMessage(job.stderrTail, job.platform));
-      return;
-    }
-
-    job.phase = "processing";
-    if (trim) {
+    // Creators typically cut many clips from one recitation: full-strategy
+    // source files are cached by URL+quality so only the first import pays
+    // for the download.
+    const cacheKey = fullStrategy ? sourceCacheKey(url, quality) : null;
+    const cachedPath = cacheKey ? await readSourceCache(cacheKey) : null;
+    let sourcePath: string | null = null;
+    if (cachedPath) {
+      job.phase = "processing";
+      sourcePath = cachedPath;
+    } else {
+      const downloaded = await runJobProcess(job, ytDlpPath, buildSourceDownloadArgs({
+        platform: job.platform,
+        url,
+        outputTemplate,
+        quality,
+        ...sectionArgs,
+      }), timeoutMs, { markDownloading: true });
+      if (jobFailed(job)) return;
+      if (!downloaded) {
+        failJob(job, downloadErrorMessage(job.stderrTail, job.platform));
+        return;
+      }
+      job.phase = "processing";
       const files = await readdir(job.workDirectory);
       const source = files.find((item) => item.toLowerCase().endsWith(".mp4"));
       if (!source) throw new Error("No MP4 source was returned");
-      const sourcePath = join(job.workDirectory, source);
-      const trimmedPath = join(job.workDirectory, `trimmed-${source}`);
+      sourcePath = join(job.workDirectory, source);
+      if (cacheKey) await writeSourceCache(cacheKey, sourcePath, job.id);
+    }
+
+    if (trim) {
+      const trimmedPath = join(job.workDirectory, "trimmed-source.mp4");
       // Stream copy keeps this near-instant; cuts land on the nearest
       // keyframe, matching what --download-sections produced before.
       const trimmed = await runJobProcess(job, "ffmpeg", [
@@ -411,7 +488,11 @@ async function orchestrateJob(job: SocialDownloadJob, {
       if (jobFailed(job)) return;
       if (!trimmed) throw new Error("Trimming the imported range failed");
       job.phase = "processing";
-      await rm(sourcePath, { force: true });
+      if (sourcePath.startsWith(job.workDirectory)) await rm(sourcePath, { force: true });
+    } else if (cachedPath) {
+      // Whole-video request served from cache: copy it into the job dir so
+      // the job's TTL owns its file lifecycle, not the cache's eviction.
+      await copyFile(cachedPath, join(job.workDirectory, "cached-source.mp4"));
     }
     await finalizeJobFile(job);
   } catch {

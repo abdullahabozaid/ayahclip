@@ -34,11 +34,11 @@ test("YouTube source imports require a bounded segment and ownership confirmatio
   });
 
   const excessiveRange = await request.post("/api/social-download", {
-    data: { url, startSeconds: 0, endSeconds: 481, attestedRights: true },
+    data: { url, startSeconds: 0, endSeconds: 3601, attestedRights: true },
   });
   expect(excessiveRange.status()).toBe(400);
   await expect(excessiveRange.json()).resolves.toEqual({
-    error: "Choose a segment of 8 minutes or less.",
+    error: "Choose a segment of 60 minutes or less.",
   });
 });
 

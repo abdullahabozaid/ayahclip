@@ -39,6 +39,7 @@ import {
 } from "@/lib/bulk-jobs";
 import { captureBulkThumbnails } from "@/lib/bulk-thumbnails";
 import { describeImportProgress, importSocialSource, type SocialImportProgress } from "@/lib/social-import";
+import { applyStyleSnapshot } from "@/lib/style-snapshot";
 import { decodeAudioFile } from "@/lib/audio-import";
 import { importSizeError } from "@/lib/import-limits";
 import { isSupportedVideoFile } from "@/lib/media-file";
@@ -168,6 +169,7 @@ export function BulkCreateWorkspace() {
   const [sourceQuality, setSourceQuality] = useState<"fast" | "hd">("fast");
   const [visualMode, setVisualMode] = useState<"source" | "template">("source");
   const [templateId, setTemplateId] = useState(FEATURED_TEMPLATES[0]?.id ?? "clean-ink");
+  const [templateReplacesMedia, setTemplateReplacesMedia] = useState(false);
   const [progress, setProgress] = useState<BulkRecognitionProgress | null>(null);
   const [candidates, setCandidates] = useState<BulkClipCandidate[]>([]);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
@@ -290,6 +292,7 @@ export function BulkCreateWorkspace() {
       setSourceQuality(normalized.sourceQuality);
       setVisualMode(normalized.visualMode);
       setTemplateId(normalized.templateId);
+      setTemplateReplacesMedia(normalized.templateReplacesMedia === true);
       setCandidates(normalized.candidates);
       setActiveCandidateId(normalized.candidates[0]?.id ?? null);
       setUnresolvedCount(normalized.unresolvedWindows.length);
@@ -351,8 +354,8 @@ export function BulkCreateWorkspace() {
         resolvedAudio = await extractAudioFromVideo(file);
         decoded = await decodeAudioFile(resolvedAudio);
       }
-      if (decoded.duration > 30 * 60 + 1) {
-        throw new RangeError("Bulk Create currently supports up to 30 minutes. Trim or select a 30-minute section first.");
+      if (decoded.duration > 60 * 60 + 1) {
+        throw new RangeError("Bulk Create currently supports up to 60 minutes. Trim or select a 60-minute section first.");
       }
       if (sourceUrl) URL.revokeObjectURL(sourceUrl);
       setSourceFile(file);
@@ -620,7 +623,15 @@ export function BulkCreateWorkspace() {
       store.setBackgroundVideoSync(true);
     }
     const template = availableTemplates.find((item) => item.id === candidate.templateId);
-    if (template) applyTemplate(template);
+    // With source visuals the clip's media is the imported video: the template
+    // may only restyle it unless the batch explicitly opted into replacement.
+    if (template) {
+      applyTemplate(template, visualMode === "template"
+        ? undefined
+        : { replaceMedia: jobRef.current?.templateReplacesMedia === true });
+    }
+    const override = jobRef.current?.styleOverride;
+    if (override) applyStyleSnapshot(override);
     return true;
   };
 
@@ -633,6 +644,12 @@ export function BulkCreateWorkspace() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "This clip could not be opened in Studio.");
     }
+  };
+
+  const setTemplateMediaPolicyForJob = (replaces: boolean) => {
+    setTemplateReplacesMedia(replaces);
+    const current = jobRef.current;
+    if (current) void replaceJob({ ...current, templateReplacesMedia: replaces });
   };
 
   const updateCandidates = (next: BulkClipCandidate[]) => {
@@ -865,7 +882,7 @@ export function BulkCreateWorkspace() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold-soft/70">1 · Source</p>
-                  <h2 id="bulk-source-heading" className="mt-2 text-xl font-medium text-parchment">Add up to 30 minutes</h2>
+                  <h2 id="bulk-source-heading" className="mt-2 text-xl font-medium text-parchment">Add up to 60 minutes</h2>
                 </div>
                 {buffer && <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">{fmt(buffer.duration)} ready</span>}
               </div>
@@ -989,7 +1006,7 @@ export function BulkCreateWorkspace() {
                 {availableTemplates.map((template) => <option key={template.id} value={template.id}>{template.source === "user" ? "My preset · " : ""}{template.name}</option>)}
               </select>
               <button type="button" onClick={() => void analyse()} disabled={!buffer || decoding || linkLoading || surahs.length === 0} className="btn-gold mt-7 min-h-12 w-full rounded-xl px-5 text-sm disabled:cursor-not-allowed disabled:opacity-45">{job?.nextWindowIndex ? "Resume creating drafts" : "Create verse-complete drafts"}</button>
-              <p className="mt-3 text-center text-xs leading-5 text-[var(--muted)]">{job?.nextWindowIndex ? `Resume from saved window ${job.nextWindowIndex + 1}.` : "A 30-minute source may take 5–8 minutes."} Progress is saved after every window.</p>
+              <p className="mt-3 text-center text-xs leading-5 text-[var(--muted)]">{job?.nextWindowIndex ? `Resume from saved window ${job.nextWindowIndex + 1}.` : "A 30-minute source may take 5–8 minutes; an hour roughly doubles that."} Progress is saved after every window.</p>
             </aside>
           </div>
         )}
@@ -1017,6 +1034,15 @@ export function BulkCreateWorkspace() {
                 <select value={templateId} onChange={(event) => applyTemplateToAll(event.target.value)} className="field min-h-11 px-3 text-sm" aria-label="Apply preset to all clips">
                   {availableTemplates.map((template) => <option key={template.id} value={template.id}>All clips · {template.name}</option>)}
                 </select>
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)]" title="When off, presets restyle text and layout but every clip keeps its current media.">
+                  <input
+                    type="checkbox"
+                    checked={templateReplacesMedia}
+                    onChange={(event) => setTemplateMediaPolicyForJob(event.target.checked)}
+                    className="h-4 w-4 accent-[var(--gold)]"
+                  />
+                  <span>Preset replaces media</span>
+                </label>
                 <button type="button" onClick={() => void runRenderQueue()} disabled={rendering || approvedCount === 0} className="btn-gold min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">{rendering ? "Rendering queue…" : `Render approved (${approvedCount})`}</button>
                 {readyCount > 0 && <button type="button" onClick={() => void deliverReadyBatch()} disabled={deliveryBusy} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">{deliveryBusy ? "Preparing…" : `Download ready (${readyCount})`}</button>}
                 {rendering && <button type="button" onClick={() => { stopRenderingRef.current = true; }} className="btn-ghost min-h-11 rounded-xl px-4 text-sm">Stop after current</button>}

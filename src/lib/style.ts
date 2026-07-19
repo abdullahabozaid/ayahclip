@@ -134,6 +134,25 @@ export function stripBackgroundKeys(
   return rest;
 }
 
+/** Every field that describes WHAT media shows and how it is framed/played —
+ *  the set that "keep my media" flows must never overwrite. */
+export const MEDIA_STYLE_KEYS = [
+  "background",
+  "backgroundFit",
+  "mediaTransform",
+  "mediaFrame",
+  "fitBackdrop",
+  "videoLoopMode",
+] as const satisfies readonly (keyof StyleSettings)[];
+
+export function stripMediaKeys(
+  style: Partial<StyleSettings>
+): Partial<StyleSettings> {
+  const rest = { ...style };
+  for (const key of MEDIA_STYLE_KEYS) delete rest[key];
+  return rest;
+}
+
 /** Pull just the style fields out of a larger state object. */
 export function extractStyle(state: StyleSettings): StyleSettings {
   return STYLE_KEYS.reduce((acc, key) => {

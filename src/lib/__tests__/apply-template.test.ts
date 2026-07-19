@@ -153,3 +153,46 @@ describe("template application media handoff", () => {
     expect(state.videoLoopMode).toBe("loop");
   });
 });
+
+describe("apply-time media override", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      background: { type: "video", value: "blob:my-clip", label: "My clip" },
+      backgroundFit: "cover",
+      backgroundSequenceEnabled: false,
+      backgroundScenes: [],
+      activeBackgroundSceneId: null,
+      pendingTemplateMedia: null,
+    });
+  });
+
+  it("strict keep mode never touches media, scenes, or slot prompts", () => {
+    applyTemplate(broll, { replaceMedia: false });
+    const state = useAppStore.getState();
+    expect(state.background).toEqual({ type: "video", value: "blob:my-clip", label: "My clip" });
+    expect(state.backgroundSequenceEnabled).toBe(false);
+    expect(state.backgroundScenes).toEqual([]);
+    expect(state.pendingTemplateMedia).toBeNull();
+  });
+
+  it("strict keep mode still applies the non-media styling", () => {
+    applyTemplate(split, { replaceMedia: false });
+    const state = useAppStore.getState();
+    expect(state.arabicFont).toBe(split.settings.arabicFont);
+    expect(state.textPosition).toBe(split.settings.textPosition);
+    expect(state.background.value).toBe("blob:my-clip");
+  });
+
+  it("replaceMedia: true forces the template's media composition on a preserve-policy template", () => {
+    applyTemplate(broll, { replaceMedia: true });
+    const state = useAppStore.getState();
+    expect(state.backgroundSequenceEnabled).toBe(true);
+    expect(state.backgroundScenes.length).toBeGreaterThan(1);
+    expect(state.pendingTemplateMedia?.templateName).toBe("B-roll Rotation");
+  });
+
+  it("omitting the option keeps the template's own legacy behaviour", () => {
+    applyTemplate(broll);
+    expect(useAppStore.getState().pendingTemplateMedia?.slots.length).toBe(3);
+  });
+});

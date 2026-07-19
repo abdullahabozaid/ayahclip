@@ -9,6 +9,7 @@ import type {
   BulkGroupingMode,
   BulkIdealClipSeconds,
 } from "./bulk-clips";
+import type { StyleSnapshot } from "./style-snapshot";
 
 export const BULK_JOB_SCHEMA_VERSION = 3 as const;
 const ACTIVE_JOB_KEY = "ayahclip:bulk:active:v1";
@@ -56,6 +57,10 @@ export interface BulkJob {
   sourceQuality: "fast" | "hd";
   visualMode: "source" | "template";
   templateId: string;
+  /** Whether applying a template to the batch may also replace clip media. */
+  templateReplacesMedia?: boolean;
+  /** A look captured from one clip in Studio, applied to every clip. */
+  styleOverride?: StyleSnapshot | null;
   nextWindowIndex: number;
   detectedAyahs: BulkDetectedAyah[];
   unresolvedWindows: BulkUnresolvedWindow[];
