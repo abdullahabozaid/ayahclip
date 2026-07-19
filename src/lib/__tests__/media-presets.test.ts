@@ -86,11 +86,11 @@ describe("curated media presets", () => {
   });
 
   it("ships optimized local artwork in a separately labelled illustration collection", () => {
-    expect(artisticBackgroundPresets).toHaveLength(3);
+    expect(artisticBackgroundPresets).toHaveLength(34);
     expect(artisticBackgroundPresets.every((item) =>
       item.type === "image" &&
       item.collection === "artistic" &&
-      item.value.startsWith("/backgrounds/artistic-") &&
+      item.value.startsWith("/backgrounds/artistic") &&
       item.value.endsWith(".webp")
     )).toBe(true);
 

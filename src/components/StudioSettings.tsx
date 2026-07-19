@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { ReciterSelect } from "@/components/ReciterSelect";
 import { FormatSelector } from "./FormatSelector";
@@ -84,6 +84,33 @@ function WeightControl({
         ))}
       </div>
     </div>
+  );
+}
+
+export const STUDIO_SETTINGS_SECTION_IDS = [
+  "studio-presets-section",
+  "studio-audio-section",
+  "studio-format-section",
+  "studio-typography-section",
+  "studio-background-section",
+  "studio-publishing-section",
+] as const;
+
+export type StudioSettingsSectionId = (typeof STUDIO_SETTINGS_SECTION_IDS)[number];
+
+function openSettingsSection(sectionId: StudioSettingsSectionId) {
+  const section = document.getElementById(sectionId);
+  for (const otherId of STUDIO_SETTINGS_SECTION_IDS) {
+    if (otherId === sectionId) continue;
+    const otherTrigger = document
+      .getElementById(otherId)
+      ?.querySelector<HTMLButtonElement>(":scope > button");
+    if (otherTrigger?.getAttribute("aria-expanded") === "true") otherTrigger.click();
+  }
+  const trigger = section?.querySelector<HTMLButtonElement>(":scope > button");
+  if (trigger?.getAttribute("aria-expanded") === "false") trigger.click();
+  requestAnimationFrame(() =>
+    section?.scrollIntoView({ behavior: "smooth", block: "start" })
   );
 }
 
@@ -227,7 +254,11 @@ function Field({
   );
 }
 
-export function StudioSettings() {
+export function StudioSettings({
+  requestedSectionId = null,
+}: {
+  requestedSectionId?: StudioSettingsSectionId | null;
+}) {
   const store = useAppStore();
   const [showAllArabicFonts, setShowAllArabicFonts] = useState(false);
   const selectedCount = store.selectedVerseNumbers.length;
@@ -238,6 +269,11 @@ export function StudioSettings() {
   const durationLabel = importedDuration == null
     ? formatClipDuration(selectedCount * 5, true)
     : formatClipDuration(importedDuration);
+
+  useEffect(() => {
+    if (!requestedSectionId) return;
+    requestAnimationFrame(() => openSettingsSection(requestedSectionId));
+  }, [requestedSectionId]);
 
   const advanceToNextPendingScene = () => {
     const nextSlot = useAppStore
@@ -315,29 +351,7 @@ export function StudioSettings() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  const section = document.getElementById(item.id);
-                  for (const sectionId of [
-                    "studio-presets-section",
-                    "studio-typography-section",
-                    "studio-background-section",
-                    "studio-audio-section",
-                    "studio-publishing-section",
-                  ]) {
-                    if (sectionId === item.id) continue;
-                    const otherTrigger = document
-                      .getElementById(sectionId)
-                      ?.querySelector<HTMLButtonElement>(":scope > button");
-                    if (otherTrigger?.getAttribute("aria-expanded") === "true") otherTrigger.click();
-                  }
-                  const trigger = section?.querySelector<HTMLButtonElement>(":scope > button");
-                  if (trigger?.getAttribute("aria-expanded") === "false") trigger.click();
-                  // Opening an accordion changes the scroll height. Wait for
-                  // that layout before positioning the chosen tool at the top.
-                  requestAnimationFrame(() =>
-                    section?.scrollIntoView({ behavior: "smooth", block: "start" })
-                  );
-                }}
+                onClick={() => openSettingsSection(item.id)}
                 className="min-h-10 rounded-lg px-1 text-[11px] font-medium text-[var(--muted)] transition-colors hover:bg-white/[0.05] hover:text-parchment focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
               >
                 {item.label}
@@ -431,7 +445,7 @@ export function StudioSettings() {
         </Section>
 
         {/* Format */}
-        <Section title="Format">
+        <Section title="Format" id="studio-format-section">
           <FormatSelector value={store.videoFormat} onChange={store.setVideoFormat} />
 
           {store.videoFormat === "9:16" && (
