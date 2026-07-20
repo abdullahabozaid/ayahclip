@@ -69,6 +69,9 @@ for (const reciter of RECITERS) {
     const errors = collectPageErrors(page);
 
     await page.goto("/surah/114");
+    // The picker starts with the popular twelve; the full catalog (which
+    // includes the MP3Quran long tail) is one deliberate tap away.
+    await page.getByRole("button", { name: /More reciters/ }).click();
     await page.getByLabel("Recitation").selectOption(reciter.id);
     await page.getByRole("button", { name: "6", exact: true }).first().click();
     await page.getByRole("link", { name: "Open studio" }).click();

@@ -5,6 +5,8 @@ test("the direct Surah workflow exposes the broad reciter catalog and preserves 
   await expect(page.getByRole("heading", { level: 1, name: "Al-Fatihah" })).toBeVisible();
 
   const recitation = page.getByLabel("Recitation");
+  // Popular-first picker: the broad catalog appears after one deliberate tap.
+  await page.getByRole("button", { name: /More reciters/ }).click();
   await expect(recitation.locator("option")).toHaveCount(101);
   await recitation.selectOption("yasser-dossary");
   await expect(page.getByText("Whole-verse captions")).toBeVisible();
@@ -24,6 +26,8 @@ test("creators can search, filter and save reciters without scanning the full ca
   await page.goto("/surah/1");
   await expect(page.getByRole("heading", { level: 1, name: "Al-Fatihah" })).toBeVisible();
 
+  // The search field lives inside the expanded catalog view.
+  await page.getByRole("button", { name: /More reciters/ }).click();
   const search = page.getByLabel("Search reciters");
   const recitation = page.getByLabel("Recitation");
   await search.fill("ياسر الدوسري");
@@ -44,6 +48,8 @@ test("creators can search, filter and save reciters without scanning the full ca
   await expect(recitation.locator('optgroup[label="Favourites"] option')).toHaveAttribute("value", "yasser-dossary");
   await expect(recitation.locator('optgroup[label="Recently used"] option')).toHaveAttribute("value", "alafasy");
 
+  // A reload returns to the popular-first view; the filter lives in the catalog.
+  await page.getByRole("button", { name: /More reciters/ }).click();
   const timingFilter = page.getByRole("button", { name: "Word synced" });
   await timingFilter.click();
   await expect(timingFilter).toHaveAttribute("aria-pressed", "true");

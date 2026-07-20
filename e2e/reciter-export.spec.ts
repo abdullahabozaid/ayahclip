@@ -56,6 +56,8 @@ test("timed MP3Quran chapters survive selection, save/reopen, preview and MP4 ex
   const errors = collectPageErrors(page);
 
   await page.goto("/surah/114");
+  // MP3Quran timed voices live in the full catalog, one tap past the popular set.
+  await page.getByRole("button", { name: /More reciters/ }).click();
   const recitation = page.getByLabel("Recitation");
   await recitation.selectOption("mansour-salimi");
   await expect(page.getByText("Whole-verse captions")).toBeVisible();

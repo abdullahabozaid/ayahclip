@@ -103,7 +103,7 @@ export function TemplateGallery({ fromImport = false, initialFilter = "featured"
           />
           <span>
             <span className="font-medium text-parchment">Replace my media with the template’s media</span>
-            <span className="mt-0.5 block text-[11px] text-[var(--muted-deep)]">Off: templates restyle text, layout, and effects while your current background stays.</span>
+            <span className="mt-0.5 block text-xs text-[var(--muted-deep)]">Off: templates restyle text, layout, and effects while your current background stays.</span>
           </span>
         </label>
 
