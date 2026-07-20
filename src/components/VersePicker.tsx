@@ -75,6 +75,7 @@ export function VersePicker({
   const [preview, setPreview] = useState<number>(verses[0]?.verse_number ?? 1);
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
+  const [rangeMessage, setRangeMessage] = useState("");
   const [individualOpen, setIndividualOpen] = useState(() => verses.length <= 40);
 
   useEffect(() => {
@@ -90,6 +91,10 @@ export function VersePicker({
     const f = clamp(parseInt(rangeFrom || rangeTo) || 1);
     const t = clamp(parseInt(rangeTo || rangeFrom) || f);
     onSelectRange(f, t);
+    const lo = Math.min(f, t);
+    const hi = Math.max(f, t);
+    setPreview(lo);
+    setRangeMessage(hi === lo ? `Ayah ${lo} selected.` : `Ayahs ${lo}–${hi} selected.`);
     setRangeFrom("");
     setRangeTo("");
   };
@@ -166,6 +171,9 @@ export function VersePicker({
               Add passage
             </button>
           </div>
+          <p className="mt-2 min-h-4 text-xs text-emerald-soft" role="status" aria-live="polite">
+            {rangeMessage}
+          </p>
         </section>
 
         <div className="lg:hidden">

@@ -8,6 +8,7 @@ import { getTranslationLanguage } from "@/lib/translations";
 import {
   decodeAudioFile,
   autoSegment,
+  verseTextAt,
 } from "@/lib/audio-import";
 import {
   getVerseWeights,
@@ -35,6 +36,7 @@ import {
   trackProductEvent,
 } from "@/lib/telemetry";
 import { isSupportedVideoFile } from "@/lib/media-file";
+import { describeImportProgress, importSocialSource, type SocialImportProgress } from "@/lib/social-import";
 import {
   recognizeQuranPassage,
   type QuranRecognitionCandidate as RecognitionCandidate,
@@ -47,6 +49,17 @@ import {
   type MobileProjectSnapshotV1,
 } from "@/lib/mobile-bridge";
 import { snapshotFromRecognition } from "@/lib/mobile-project-adapter";
+import {
+  formatTimecode,
+  parseTimecode,
+  sourcePlatform,
+  youtubeRangeError,
+} from "@/lib/source-link";
+
+// Very short files are often UI test tones, accidental taps, or a single
+// breath. Loading the full local ASR model for them adds memory pressure while
+// producing little useful evidence; the manual Recognise action remains ready.
+const MIN_AUTOMATIC_RECOGNITION_SECONDS = 10;
 
 export default function ImportPage() {
   const router = useRouter();
@@ -57,11 +70,35 @@ export default function ImportPage() {
   const [sourceAudio, setSourceAudio] = useState<Blob | null>(null); // audio used for the clip (extracted for video)
   const [videoUrl, setVideoUrl] = useState<string | null>(null); // original video, to optionally use as background
   const [videoMode, setVideoMode] = useState<"replace-visuals" | "keep-video">("replace-visuals");
+  const [videoFit, setVideoFit] = useState<"cover" | "contain">("contain");
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [decoding, setDecoding] = useState(false);
   const [decodeMsg, setDecodeMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [detectError, setDetectError] = useState<string | null>(null);
+  const [socialURL, setSocialURL] = useState("");
+  const [socialDownloading, setSocialDownloading] = useState(false);
+  const [socialProgress, setSocialProgress] = useState<SocialImportProgress | null>(null);
+  const socialAbortRef = useRef<AbortController | null>(null);
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const [segmentStart, setSegmentStart] = useState("0:00");
+  const [segmentEnd, setSegmentEnd] = useState("3:00");
+  const [youtubeRightsConfirmed, setYoutubeRightsConfirmed] = useState(false);
+  const [sourceQuality, setSourceQuality] = useState<"fast" | "hd">("fast");
+  const [autoRecognize, setAutoRecognize] = useState(true);
+  const [socialElapsed, setSocialElapsed] = useState(0);
+  const socialImportStartedRef = useRef(false);
+
+  const detectedSourcePlatform = sourcePlatform(socialURL);
+  const isYouTubeSource = detectedSourcePlatform === "youtube";
+  const segmentStartSeconds = parseTimecode(segmentStart);
+  const segmentEndSeconds = parseTimecode(segmentEnd);
+  const segmentProblem = isYouTubeSource
+    ? youtubeRangeError(segmentStartSeconds, segmentEndSeconds)
+    : null;
+  const segmentDuration = segmentStartSeconds !== null && segmentEndSeconds !== null
+    ? Math.max(0, segmentEndSeconds - segmentStartSeconds)
+    : 0;
 
   const [surahId, setSurahId] = useState(1);
   const [from, setFrom] = useState("1");
@@ -96,8 +133,11 @@ export default function ImportPage() {
   const [nativeSourceURL, setNativeSourceURL] = useState<string | null>(null);
   const nativeHydrationStartedRef = useRef(false);
 
-  const autoDetect = async () => {
-    if (!buffer) return;
+  const runRecognition = useCallback(async (targetBuffer: AudioBuffer) => {
+    if (surahs.length === 0) {
+      setDetectError("The Quran index is still loading. Wait a moment, then recognise again.");
+      return;
+    }
     detectAbortRef.current?.abort();
     const controller = new AbortController();
     detectAbortRef.current = controller;
@@ -105,12 +145,13 @@ export default function ImportPage() {
     setDetectError(null);
     try {
       const outcome = await recognizeQuranPassage({
-        buffer,
+        buffer: targetBuffer,
         surahs,
         deviceMemoryGb: browserDeviceMemoryGb(),
         signal: controller.signal,
         onProgress: setDetectProgress,
       });
+      if (controller.signal.aborted || detectAbortRef.current !== controller) return;
       if (outcome.kind === "matched") {
         const result = outcome.result;
         setSurahId(result.surah);
@@ -130,9 +171,11 @@ export default function ImportPage() {
           : outcome.message);
       }
     } catch (error) {
-      setDetectError(`${alignmentFailureMessage(error)} ${detected
-        ? "Your previous Quran range is still available below."
-        : "You can still pick the verses manually below."}`);
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        setDetectError(`${alignmentFailureMessage(error)} ${detected
+          ? "Your previous Quran range is still available below."
+          : "You can still pick the verses manually below."}`);
+      }
     } finally {
       if (detectAbortRef.current === controller) {
         detectAbortRef.current = null;
@@ -140,6 +183,10 @@ export default function ImportPage() {
         setDetectProgress(null);
       }
     }
+  }, [detected, surahs]);
+
+  const autoDetect = () => {
+    if (buffer) void runRecognition(buffer);
   };
 
   const chooseRecognitionCandidate = (candidate: RecognitionCandidate) => {
@@ -153,6 +200,10 @@ export default function ImportPage() {
   };
 
   const clearRecognitionChoice = () => {
+    // A deliberate manual correction always wins over an in-flight automatic
+    // result. Otherwise a late model response could overwrite the creator's
+    // selected range just as they continue to Studio.
+    detectAbortRef.current?.abort();
     setDetected(null);
     setRecognitionCandidates([]);
     setDetectError(null);
@@ -172,6 +223,18 @@ export default function ImportPage() {
   }, []);
 
   useEffect(() => () => detectAbortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!socialDownloading) {
+      setSocialElapsed(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const tick = () => setSocialElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1_000)));
+    tick();
+    const timer = window.setInterval(tick, 1_000);
+    return () => window.clearInterval(timer);
+  }, [socialDownloading]);
 
   useEffect(() => {
     if (!sourceAudio) {
@@ -211,13 +274,13 @@ export default function ImportPage() {
 
   const surah = surahs.find((s) => s.id === surahId);
 
-  const handleFile = useCallback(async (f: File | undefined) => {
-    if (!f) return;
+  const handleFile = useCallback(async (f: File | undefined): Promise<AudioBuffer | null> => {
+    if (!f) return null;
     detectAbortRef.current?.abort();
     const sizeError = importSizeError(f.size);
     if (sizeError) {
       setError(sizeError);
-      return;
+      return null;
     }
     const operation = ++decodeOperationRef.current;
     setFile(f);
@@ -233,30 +296,48 @@ export default function ImportPage() {
     const isVideo = isSupportedVideoFile(f);
     setVideoUrl(isVideo ? URL.createObjectURL(f) : null);
     setVideoMode("replace-visuals");
+    setVideoFit("contain");
     setDecoding(true);
     try {
       let audioBlob: Blob = f;
-      // Video → extract the audio track with ffmpeg.wasm so any container works.
+      let buf: AudioBuffer;
+      // Safari and Chromium can decode the AAC track in ordinary MP4/MOV files
+      // directly. This avoids copying a phone-sized video into ffmpeg.wasm — a
+      // large, unnecessary allocation that could terminate the iOS web view.
       if (isVideo) {
-        setDecodeMsg("Extracting audio from video (first time loads ffmpeg)…");
-        const { extractAudioFromVideo } = await import("@/lib/video-audio");
-        audioBlob = await extractAudioFromVideo(f);
-        if (decodeOperationRef.current !== operation) return;
+        setDecodeMsg("Reading video audio…");
+        try {
+          buf = await decodeAudioFile(f);
+        } catch {
+          if (isNativeMobileEditor(window.location.search)) {
+            throw new Error("native-video-decode");
+          }
+          setDecodeMsg("Converting video audio…");
+          const { extractAudioFromVideo } = await import("@/lib/video-audio");
+          audioBlob = await extractAudioFromVideo(f);
+          if (decodeOperationRef.current !== operation) return null;
+          buf = await decodeAudioFile(audioBlob);
+        }
+      } else {
+        setDecodeMsg("Reading audio…");
+        buf = await decodeAudioFile(audioBlob);
       }
-      setDecodeMsg("Reading audio…");
-      const buf = await decodeAudioFile(audioBlob);
-      if (decodeOperationRef.current !== operation) return;
+      if (decodeOperationRef.current !== operation) return null;
       setSourceAudio(audioBlob);
       setBuffer(buf);
       trackProductEvent("source_loaded", {
         sourceKind: isVideo ? "video" : "audio",
         durationBucket: durationBucket(buf.duration),
       });
-    } catch {
-      if (decodeOperationRef.current !== operation) return;
+      return buf;
+    } catch (cause) {
+      if (decodeOperationRef.current !== operation) return null;
       setError(
-        "Couldn't read the audio from this file. Try an MP3/M4A/WAV, or a different video."
+        cause instanceof Error && cause.message === "native-video-decode"
+          ? "This video’s audio format is not supported on iPhone. Export it as an MP4 with AAC audio, then try again."
+          : "Couldn't read the audio from this file. Try an MP3/M4A/WAV, or a different video."
       );
+      return null;
     } finally {
       if (decodeOperationRef.current === operation) {
         setDecoding(false);
@@ -264,6 +345,82 @@ export default function ImportPage() {
       }
     }
   }, [videoUrl]);
+
+  const importSocialPost = useCallback(async (value = socialURL) => {
+    const url = value.trim();
+    if (!url || socialDownloading) return;
+    const platform = sourcePlatform(url);
+    const startSeconds = parseTimecode(segmentStart);
+    const endSeconds = parseTimecode(segmentEnd);
+    if (platform === "youtube") {
+      const rangeError = youtubeRangeError(startSeconds, endSeconds);
+      if (rangeError) {
+        setSocialError(rangeError);
+        return;
+      }
+      if (!youtubeRightsConfirmed) {
+        setSocialError("Confirm that you own this YouTube video or have permission to edit it.");
+        return;
+      }
+    }
+    setSocialDownloading(true);
+    setSocialError(null);
+    setSocialProgress({ phase: "starting", percent: 0 });
+    // Warm the recognition model and Quran corpus while the server downloads,
+    // so auto-recognition starts immediately once the file lands.
+    void import("@/lib/asr").then((asr) => asr.prewarmRecognition());
+    void import("@/lib/verse-match").then((m) => m.loadCorpus()).catch(() => {});
+    const controller = new AbortController();
+    socialAbortRef.current = controller;
+    try {
+      const { blob, fileName } = await importSocialSource({
+        url,
+        ...(platform === "youtube" ? {
+          startSeconds,
+          endSeconds,
+          attestedRights: youtubeRightsConfirmed,
+          quality: sourceQuality,
+        } : {}),
+        signal: controller.signal,
+        onProgress: setSocialProgress,
+      });
+      const name = fileName || `social-source-${Date.now()}.mp4`;
+      const resolvedFile = new File([blob], name, { type: "video/mp4" });
+      const decoded = await handleFile(resolvedFile);
+      setVideoMode("keep-video");
+      if (platform === "youtube") setVideoFit("cover");
+      setSocialURL(url);
+      if (decoded && autoRecognize) void runRecognition(decoded);
+    } catch (reason) {
+      if (!(reason instanceof DOMException && reason.name === "AbortError")) {
+        setSocialError(reason instanceof Error ? reason.message : "AyahClip could not download that post.");
+      }
+    } finally {
+      if (socialAbortRef.current === controller) socialAbortRef.current = null;
+      setSocialDownloading(false);
+      setSocialProgress(null);
+    }
+  }, [autoRecognize, handleFile, runRecognition, segmentEnd, segmentStart, socialDownloading, socialURL, sourceQuality, youtubeRightsConfirmed]);
+
+  const pasteSocialLink = async () => {
+    try {
+      const pasted = await navigator.clipboard.readText();
+      setSocialURL(pasted.trim());
+      setYoutubeRightsConfirmed(false);
+      setSocialError(null);
+    } catch {
+      setSocialError("Clipboard access was blocked. Press and hold the field to paste the link.");
+    }
+  };
+
+  useEffect(() => {
+    if (socialImportStartedRef.current) return;
+    const sharedURL = new URLSearchParams(window.location.search).get("social");
+    if (!sharedURL) return;
+    socialImportStartedRef.current = true;
+    setSocialURL(sharedURL);
+    void importSocialPost(sharedURL);
+  }, [importSocialPost]);
 
   useEffect(() => {
     if (!isNativeMobileEditor(window.location.search) || nativeHydrationStartedRef.current) return;
@@ -292,7 +449,10 @@ export default function ImportPage() {
       });
       setNativeSnapshot(snapshot);
       setNativeSourceURL(source.url);
-      await handleFile(nativeFile);
+      const decoded = await handleFile(nativeFile);
+      if (decoded && autoRecognize && decoded.duration >= MIN_AUTOMATIC_RECOGNITION_SECONDS) {
+        void runRecognition(decoded);
+      }
     }).catch((reason: unknown) => {
       if (!cancelled) {
         setError(reason instanceof Error
@@ -301,7 +461,7 @@ export default function ImportPage() {
       }
     });
     return () => { cancelled = true; };
-  }, [handleFile]);
+  }, [autoRecognize, handleFile, runRecognition]);
 
   const cancelDecode = async () => {
     decodeOperationRef.current += 1;
@@ -354,15 +514,15 @@ export default function ImportPage() {
       store.setCurrentVerseIndex(0);
       store.setImportedAudio(url, file?.name ?? "Imported audio", timings);
       if (nativeSnapshot) store.setProjectId(nativeSnapshot.id);
-      // Use the uploaded video itself as the clip background, if requested — shown
-      // whole (contain) so it isn't cropped/zoomed to fill the 9:16 frame.
+      // Use the uploaded video itself as the clip background, with the creator's
+      // chosen initial 9:16 fit. Studio keeps crop, position, and scale editable.
       if (videoUrl && videoMode === "keep-video") {
         store.setBackground({
           type: "video",
           value: nativeSourceURL ?? videoUrl,
           label: file?.name ?? "Uploaded video",
         });
-        store.setBackgroundFit("contain");
+        store.setBackgroundFit(videoFit);
         store.setBackgroundVideoSync(true); // lip-sync the video to the recitation
       }
       if (videoUrl && videoMode === "replace-visuals") {
@@ -450,14 +610,14 @@ export default function ImportPage() {
             <p className="mb-2 text-xs uppercase tracking-[0.24em] text-gold-soft/70">
               Import recitation
             </p>
-            <h1 className="font-display max-w-2xl text-4xl tracking-wide text-parchment sm:text-5xl">
-              Turn a recitation into a vertical clip
+            <h1 className="font-display max-w-2xl text-2xl tracking-wide text-parchment sm:text-4xl">
+              Import a recitation
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Upload permitted audio or video, verify the Quran passage by ear, then refine every cut in Studio. Your media stays in this browser.
+              Add media, confirm the verses, then edit.
             </p>
           </div>
-          <ol className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--hairline-soft)] text-xs sm:text-[11px] text-[var(--muted)]">
+          <ol className="hidden grid-cols-3 gap-px overflow-hidden rounded-xl border border-[var(--hairline-soft)] bg-[var(--hairline-soft)] text-[11px] text-[var(--muted)] sm:grid">
           {[
             ["01", "Add media"],
             ["02", "Confirm verses"],
@@ -483,6 +643,176 @@ export default function ImportPage() {
               <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-xs sm:text-[10px] text-emerald-soft">Ready</span>
             )}
           </div>
+          <div className="mb-4 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-3">
+            <label htmlFor="social-post-url" className="text-xs font-medium text-parchment">
+              Import from a link
+            </label>
+            <p className="mt-1 text-xs leading-4 text-[var(--muted-deep)]">
+              Your YouTube video, or a permitted TikTok or Instagram post.
+            </p>
+            <div className="mt-3 flex min-w-0 flex-col gap-2 sm:flex-row">
+              <input
+                id="social-post-url"
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={socialURL}
+                onInput={(event) => {
+                  setSocialURL(event.currentTarget.value);
+                  setSocialError(null);
+                }}
+                onChange={(event) => {
+                  setSocialURL(event.target.value);
+                  setSocialError(null);
+                }}
+                onKeyDown={(event) => event.key === "Enter" && void importSocialPost()}
+                placeholder="https://youtube.com/watch?v=…"
+                className="field min-h-11 min-w-0 flex-1 px-3 text-base sm:text-sm"
+              />
+              <button
+                type="button"
+                onClick={pasteSocialLink}
+                disabled={socialDownloading}
+                className="min-h-11 rounded-lg border border-[var(--hairline)] px-3 text-xs text-parchment disabled:opacity-50"
+              >
+                Paste
+              </button>
+            </div>
+            {isYouTubeSource && (
+              <div className="mt-3 border-t border-[var(--hairline-soft)] pt-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="min-w-0 flex-1 text-xs text-[var(--muted)]">
+                    Start
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={segmentStart}
+                      onChange={(event) => setSegmentStart(event.target.value)}
+                      onBlur={() => segmentStartSeconds !== null && setSegmentStart(formatTimecode(segmentStartSeconds))}
+                      aria-describedby="youtube-range-help"
+                      className="field mt-1 min-h-10 w-full px-3 text-base tabular-nums sm:text-sm"
+                    />
+                  </label>
+                  <span className="pb-3 text-[var(--muted-deep)]" aria-hidden="true">→</span>
+                  <label className="min-w-0 flex-1 text-xs text-[var(--muted)]">
+                    End
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={segmentEnd}
+                      onChange={(event) => setSegmentEnd(event.target.value)}
+                      onBlur={() => segmentEndSeconds !== null && setSegmentEnd(formatTimecode(segmentEndSeconds))}
+                      aria-describedby="youtube-range-help"
+                      className="field mt-1 min-h-10 w-full px-3 text-base tabular-nums sm:text-sm"
+                    />
+                  </label>
+                  <span className="pb-2.5 text-xs tabular-nums text-gold-soft">
+                    {!segmentProblem && segmentDuration > 0 ? `${formatTimecode(segmentDuration)} selected` : "Max 8:00"}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Quick segment length">
+                  {[1, 3, 5].map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      onClick={() => {
+                        const start = parseTimecode(segmentStart) ?? 0;
+                        setSegmentStart(formatTimecode(start));
+                        setSegmentEnd(formatTimecode(start + minutes * 60));
+                        setSocialError(null);
+                      }}
+                      className="rounded-full border border-[var(--hairline-soft)] px-2.5 py-1 text-xs text-[var(--muted)] transition-colors hover:border-[var(--hairline)] hover:text-parchment"
+                    >
+                      {minutes} min
+                    </button>
+                  ))}
+                  <span id="youtube-range-help" className="ml-auto text-xs text-[var(--muted-deep)]">Use m:ss or h:mm:ss</span>
+                </div>
+                {segmentProblem && <p className="mt-2 text-xs text-red-300">{segmentProblem}</p>}
+                <fieldset className="mt-3">
+                  <legend className="text-xs text-[var(--muted)]">Import quality</legend>
+                  <div className="mt-1.5 grid grid-cols-2 gap-2" role="radiogroup" aria-label="YouTube import quality">
+                    {([
+                      ["fast", "Fast", "480p · usually seconds"],
+                      ["hd", "HD", "Up to 720p · may be slower"],
+                    ] as const).map(([value, label, detail]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={sourceQuality === value}
+                        onClick={() => setSourceQuality(value)}
+                        className={`min-h-11 rounded-lg border px-3 py-2 text-left transition-colors ${
+                          sourceQuality === value
+                            ? "border-[var(--gold)] bg-[rgba(201,162,75,0.08)]"
+                            : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"
+                        }`}
+                      >
+                        <span className="block text-xs font-medium text-parchment">{label}</span>
+                        <span className="mt-0.5 block text-xs text-[var(--muted)] sm:text-[10px]">{detail}</span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs leading-4 text-[var(--muted)]">
+                  <input
+                    type="checkbox"
+                    checked={youtubeRightsConfirmed}
+                    onChange={(event) => setYoutubeRightsConfirmed(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--gold)]"
+                  />
+                  <span>I own this video or have permission from its rights holder to download and edit it.</span>
+                </label>
+              </div>
+            )}
+            <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-[var(--hairline-soft)] px-3 py-2 text-xs text-parchment">
+              <span>
+                <span className="block font-medium">Recognise verses after import</span>
+                <span className="mt-0.5 block text-xs leading-4 text-[var(--muted)]">Starts local Quran matching automatically for clips of 10 seconds or longer.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={autoRecognize}
+                onChange={(event) => setAutoRecognize(event.target.checked)}
+                className="h-5 w-5 shrink-0 accent-[var(--gold)]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void importSocialPost()}
+              disabled={
+                !socialURL.trim()
+                || socialDownloading
+                || (isYouTubeSource && (Boolean(segmentProblem) || !youtubeRightsConfirmed))
+              }
+              className="btn-gold mt-3 min-h-11 w-full rounded-lg px-4 text-xs disabled:opacity-50"
+            >
+              {socialDownloading
+                ? isYouTubeSource ? "Importing segment…" : "Downloading…"
+                : isYouTubeSource && !segmentProblem
+                  ? `Import ${formatTimecode(segmentDuration)} segment`
+                  : "Import video"}
+            </button>
+            {socialDownloading && (
+              <div role="status" className="mt-3 rounded-lg border border-[var(--hairline-soft)] bg-white/[0.02] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs tabular-nums text-gold-soft">{describeImportProgress(socialProgress)} · {socialElapsed}s</p>
+                  <button type="button" onClick={() => socialAbortRef.current?.abort()} className="text-xs text-[var(--muted)] underline-offset-2 hover:text-parchment hover:underline">Cancel</button>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                  <div className="h-full rounded-full bg-gold transition-[width] duration-300" style={{ width: `${Math.max(2, socialProgress?.percent ?? 0)}%` }} />
+                </div>
+                <p className="mt-2 text-[11px] leading-4 text-[var(--muted)]">
+                  {isYouTubeSource ? "Only the selected range is downloaded." : "Keep AyahClip open; public posts usually take a few seconds."}
+                </p>
+              </div>
+            )}
+            {socialError && <p role="alert" className="mt-2 text-xs leading-4 text-red-300">{socialError}</p>}
+            <p className="mt-2 hidden text-xs leading-4 text-[var(--muted-deep)] sm:block">
+              Public links import directly. AyahClip trims only your selected range and keeps the video editable in Studio.
+            </p>
+          </div>
           {/* Defensive uploader: explicit ref + button.click() — iOS WebKit
               has historically refused to open the picker for label-wrapped
               hidden file inputs. The button is the user-gesture target;
@@ -491,7 +821,14 @@ export default function ImportPage() {
             ref={fileInputRef}
             type="file"
             accept="audio/*,video/*,.mov,.m4v"
-            onChange={(e) => handleFile(e.target.files?.[0])}
+            onChange={(event) => {
+              const selected = event.target.files?.[0];
+              void handleFile(selected).then((decoded) => {
+                if (decoded && autoRecognize && decoded.duration >= MIN_AUTOMATIC_RECOGNITION_SECONDS) {
+                  void runRecognition(decoded);
+                }
+              });
+            }}
             className="sr-only"
             aria-hidden="true"
             tabIndex={-1}
@@ -513,8 +850,8 @@ export default function ImportPage() {
                   : "MP3, M4A, WAV, MP4, WebM or MOV · processed locally"}
             </span>
           </button>
-          <div className="mt-3 flex items-start justify-between gap-4 text-xs sm:text-[10px] leading-4 text-[var(--muted-deep)]">
-            <p>
+          <div className="mt-3 flex items-start justify-between gap-4 text-[10px] leading-4 text-[var(--muted-deep)]">
+            <p className="hidden sm:block">
               Best under 20 minutes or {Math.round(RECOMMENDED_IMPORT_BYTES / 1024 / 1024)} MB. Longer media can use substantial browser memory during decoding and export.
             </p>
             {decoding && (
@@ -552,13 +889,35 @@ export default function ImportPage() {
                   description="Use the uploaded video intact and keep it lip-synced in Studio."
                 />
               </div>
-              <p className="mt-3 text-xs sm:text-[11px] leading-4 text-[var(--muted-deep)]">
-                Using your own YouTube upload? Download it from{" "}
-                <a href="https://support.google.com/youtube/answer/56100" target="_blank" rel="noopener noreferrer" className="text-gold-soft underline-offset-2 hover:underline">
-                  YouTube Studio or Google Takeout
-                </a>
-                , then upload the permitted file here. AyahClip does not download other people&apos;s videos.
-              </p>
+              {videoMode === "keep-video" && (
+                <div className="mt-3 flex flex-col gap-2 border-t border-[var(--hairline-soft)] pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-parchment">Mobile framing</p>
+                    <p className="mt-0.5 text-xs sm:text-[10px] text-[var(--muted-deep)]">You can fine-tune crop, position, and scale in Studio.</p>
+                  </div>
+                  <div className="flex shrink-0 gap-1 rounded-full border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-1" role="radiogroup" aria-label="Initial mobile framing">
+                    {([
+                      ["cover", "Fill 9:16 (crop)"],
+                      ["contain", "Show whole"],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="radio"
+                        aria-checked={videoFit === value}
+                        onClick={() => setVideoFit(value)}
+                        className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
+                          videoFit === value
+                            ? "bg-[var(--gold)] text-[var(--ink-deep)]"
+                            : "text-[var(--muted)] hover:text-parchment"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </fieldset>
           )}
         </section>
@@ -569,7 +928,7 @@ export default function ImportPage() {
             <div>
               <p className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft/75">Step 2</p>
               <h2 id="passage-heading" className="mt-1 text-base font-medium text-parchment">Identify and verify the passage</h2>
-              <p className="mt-1 text-xs sm:text-[11px] leading-4 text-[var(--muted)]">Recognition suggests a range. You listen, correct it if needed, then confirm.</p>
+              <p className="mt-1 hidden text-[11px] leading-4 text-[var(--muted)] sm:block">Listen, correct the range if needed, then confirm.</p>
             </div>
             {rangeConfirmed && (
               <span className="rounded-full border border-emerald-soft/20 bg-emerald-soft/10 px-2.5 py-1 text-xs sm:text-[10px] text-emerald-soft">Range confirmed</span>
@@ -580,14 +939,14 @@ export default function ImportPage() {
             <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-parchment">Recognise and align locally</p>
-                <p className="mt-0.5 text-xs sm:text-[11px] leading-4 text-[var(--muted)]">
+                <p className="mt-0.5 hidden text-[11px] leading-4 text-[var(--muted)] sm:block">
                   Finds the Quran range, then places editable ayah boundaries. Audio never leaves this browser.
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   onClick={autoDetect}
-                  disabled={detecting || !buffer || !!recognitionBlock}
+                  disabled={detecting || !buffer || surahs.length === 0 || !!recognitionBlock}
                   className="btn-gold min-h-11 rounded-full px-4 text-xs disabled:opacity-50"
                 >
                   {recognitionActionLabel(
@@ -700,6 +1059,7 @@ export default function ImportPage() {
                           previewCurrentTime >= timing.start &&
                           previewCurrentTime <= timing.end;
                         const verse = detectedVerses.find((item) => item.verse_number === timing.verseNumber);
+                        const partial = Boolean(timing.wordRange);
                         const duration = Math.max(0.05, timing.end - timing.start);
                         const progress = playing || playingInPassage
                           ? Math.max(0, Math.min(100, ((previewCurrentTime - timing.start) / duration) * 100))
@@ -721,13 +1081,18 @@ export default function ImportPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs sm:text-[10px] font-semibold uppercase tracking-[0.13em] text-gold-soft/75">Ayah {timing.verseNumber}</span>
+                                {partial && (
+                                  <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.07] px-2 py-0.5 text-xs uppercase tracking-[0.1em] text-amber-100 sm:text-[10px]">
+                                    Partial ayah recognised
+                                  </span>
+                                )}
                                 <span className="ml-auto rounded border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-1.5 py-0.5 text-xs sm:text-[10px] tabular-nums text-[var(--muted-deep)]">{fmt(timing.start)}–{fmt(timing.end)}</span>
                               </div>
                               <p className="font-arabic mt-1 truncate text-right text-lg leading-9 text-parchment sm:text-xl" dir="rtl">
-                                {verse?.text_uthmani ?? "Quran text loads here for comparison"}
+                                {verse ? verseTextAt(timing, verse.text_uthmani, timing.start) : "Quran text loads here for comparison"}
                               </p>
                               {verse?.translation && (
-                                <p className="truncate text-xs sm:text-[11px] leading-4 text-[var(--muted)]">{verse.translation}</p>
+                                <p className="truncate text-xs sm:text-[11px] leading-4 text-[var(--muted)]">{verseTextAt(timing, verse.translation, timing.start)}</p>
                               )}
                               <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-white/[0.06]" aria-hidden="true">
                                 <div className="h-full bg-gold transition-[width] duration-100 ease-linear motion-reduce:transition-none" style={{ width: `${progress}%` }} />
@@ -839,6 +1204,7 @@ export default function ImportPage() {
               checked={rangeConfirmed}
               onChange={(event) => {
                 const confirmed = event.target.checked;
+                if (confirmed) detectAbortRef.current?.abort();
                 setRangeConfirmed(confirmed);
                 if (confirmed) {
                   trackProductEvent("range_confirmed", {

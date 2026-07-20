@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { getReciter, reciters, supportsWordTimings } from "@/lib/reciters";
+import { getReciter, popularReciters, reciters, supportsWordTimings } from "@/lib/reciters";
 import { filterReciters, groupReciters } from "@/lib/reciter-discovery";
 
 interface ReciterSelectProps {
@@ -48,15 +48,22 @@ export function ReciterSelect({
   const [wordSyncedOnly, setWordSyncedOnly] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [catalogOpen, setCatalogOpen] = useState(false);
 
   useEffect(() => {
     setFavoriteIds(readStoredIds(FAVORITES_KEY));
     setRecentIds(readStoredIds(RECENTS_KEY));
   }, []);
 
+  const baseReciters = useMemo(() => {
+    if (catalogOpen) return reciters;
+    return popularReciters.some((reciter) => reciter.id === selected.id)
+      ? popularReciters
+      : [selected, ...popularReciters];
+  }, [catalogOpen, selected]);
   const visibleReciters = useMemo(
-    () => filterReciters(reciters, query, wordSyncedOnly),
-    [query, wordSyncedOnly],
+    () => filterReciters(baseReciters, query, wordSyncedOnly),
+    [baseReciters, query, wordSyncedOnly],
   );
   const groups = useMemo(
     () => groupReciters(visibleReciters, favoriteIds, recentIds),
@@ -89,13 +96,11 @@ export function ReciterSelect({
         </label>
         {showCatalogCount && (
           <span className="text-[11px] tabular-nums text-[var(--muted-deep)]">
-            {visibleReciters.length === reciters.length
-              ? `${reciters.length} verified voices`
-              : `${visibleReciters.length} of ${reciters.length} voices`}
+            {catalogOpen ? `${visibleReciters.length} of ${reciters.length} voices` : `${popularReciters.length} popular voices`}
           </span>
         )}
       </div>
-      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+      {catalogOpen && <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
         <div>
           <label htmlFor={searchId} className="sr-only">Search reciters</label>
           <input
@@ -118,7 +123,7 @@ export function ReciterSelect({
         >
           Word synced
         </button>
-      </div>
+      </div>}
       <select
         id={id}
         value={selectedIsVisible ? selected.id : ""}
@@ -134,12 +139,20 @@ export function ReciterSelect({
           <optgroup key={group.id} label={group.label} className="bg-[var(--surface)]">
             {group.reciters.map((reciter) => (
               <option key={reciter.id} value={reciter.id} className="bg-[var(--surface)]">
-                {reciter.name} · {reciter.style}{supportsWordTimings(reciter) ? " · Word synced" : ""}
+                {reciter.name}{supportsWordTimings(reciter) ? " · Word synced" : ""}
               </option>
             ))}
           </optgroup>
         ))}
       </select>
+
+      <button
+        type="button"
+        onClick={() => { setCatalogOpen((open) => !open); setQuery(""); setWordSyncedOnly(false); }}
+        className="mt-2 min-h-10 rounded-lg px-2 text-xs text-gold-soft transition-colors hover:bg-white/[0.03]"
+      >
+        {catalogOpen ? "Show popular reciters" : `More reciters · ${reciters.length - popularReciters.length}`}
+      </button>
 
       <div className="mt-2 flex min-w-0 items-center justify-between gap-3 text-[11px]">
         <div className="flex min-w-0 items-center gap-1.5">

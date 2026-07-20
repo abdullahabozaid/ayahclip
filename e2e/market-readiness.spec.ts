@@ -38,7 +38,7 @@ test("import clearly supports local audio and phone video formats", async ({ pag
   await page.goto("/import");
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Turn a recitation into a vertical clip" }),
+    page.getByRole("heading", { level: 1, name: "Import a recitation" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Choose audio or video" })).toBeVisible();
   await expect(page.locator('input[type="file"]')).toHaveAttribute(
@@ -119,7 +119,7 @@ test("a real local audio file survives import, template choice, save, and reopen
   const artisticPreset = page.getByRole("button", { name: "Use Reciter side fade" });
   await expect(artisticPreset).toBeVisible();
   await expect(page.getByRole("button", { name: "Use Quiet courtyard" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Use Prayer rows" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use Prayer rows", exact: true })).toBeVisible();
   await artisticPreset.click();
   await expect(artisticPreset).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("button", { name: "Text", exact: true }).click();
@@ -459,12 +459,99 @@ test("canvas creator saves a reusable preset with ordered B-roll slots", async (
   await expect(page.getByText("B-roll 3", { exact: true })).toBeVisible();
 
   await page.locator("header").getByRole("button", { name: "Save" }).click();
-  await expect(page.locator('[aria-live="polite"]')).toHaveText("Saved to My templates");
+  await expect(page.locator('[aria-live="polite"]')).toContainText("Saved on this device");
 
   await page.goto("/styles");
   await page.getByRole("button", { name: "My templates" }).click();
   await expect(page.getByRole("heading", { name: "My Canvas Preset" })).toBeVisible();
   assertNoErrors();
+});
+
+test("Golden Line geometry saves, updates, and reloads as one template", async ({ page }) => {
+  const assertNoErrors = failOnPageErrors(page);
+  await page.goto("/styles/editor?template=ayahclip-gold-line");
+
+  await page.getByLabel("Template name").fill("Golden Edge Test");
+  const treatmentInspector = page.getByTestId("inspector-treatment");
+  await treatmentInspector.locator("summary").click();
+  await expect(treatmentInspector.getByRole("button", { name: "Gold line", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await treatmentInspector.getByLabel("Line thickness").fill("65");
+  await treatmentInspector.getByLabel("Horizontal reach").fill("30");
+  await treatmentInspector.getByLabel("Corner roundness").fill("55");
+  await treatmentInspector.getByLabel("Horizontal offset").fill("3");
+
+  const translationInspector = page.getByTestId("inspector-translation");
+  await translationInspector.locator("summary").click();
+  await translationInspector.getByLabel("Translation line height").fill("1.35");
+  await translationInspector.getByLabel("Arabic to translation gap").fill("0.8");
+  await translationInspector.getByText("Translation verse number", { exact: true }).click();
+
+  const mediaInspector = page.getByTestId("inspector-media");
+  await mediaInspector.locator("summary").click();
+  await mediaInspector.getByRole("button", { name: "Rounded", exact: true }).click();
+  await mediaInspector.getByLabel("Container corner radius").fill("18");
+  await mediaInspector.getByRole("button", { name: "Freeze last frame", exact: true }).click();
+  await mediaInspector.getByText("Cinematic letterbox", { exact: true }).click();
+  await mediaInspector.getByRole("button", { name: "Blur", exact: true }).click();
+
+  const motionInspector = page.getByTestId("inspector-motion");
+  await motionInspector.locator("summary").click();
+  await motionInspector.getByLabel("Clip fade-in").fill("500");
+  await motionInspector.getByText("Fade in audio too", { exact: true }).click();
+  await motionInspector.getByText("Word-by-word emphasis", { exact: true }).click();
+
+  await page.locator("header").getByRole("button", { name: "Save copy" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText("Saved on this device");
+  await expect(page.locator("header").getByRole("button", { name: "Saved" })).toBeDisabled();
+  await expect(page).toHaveURL(/\/styles\/editor\?template=template-/);
+  const savedUrl = page.url();
+
+  await treatmentInspector.getByLabel("Corner roundness").fill("70");
+  await page.locator("header").getByRole("button", { name: "Save changes" }).click();
+  await expect(page.locator('[aria-live="polite"]')).toContainText("Saved on this device");
+
+  await page.goto("/styles?filter=mine");
+  await expect(page.getByRole("heading", { name: "Golden Edge Test" })).toHaveCount(1);
+
+  await page.goto(savedUrl);
+  const reloadedTreatment = page.getByTestId("inspector-treatment");
+  await reloadedTreatment.locator("summary").click();
+  await expect(reloadedTreatment.getByLabel("Line thickness")).toHaveValue("65");
+  await expect(reloadedTreatment.getByLabel("Horizontal reach")).toHaveValue("30");
+  await expect(reloadedTreatment.getByLabel("Corner roundness")).toHaveValue("70");
+  await expect(reloadedTreatment.getByLabel("Horizontal offset")).toHaveValue("3");
+
+  const reloadedTranslation = page.getByTestId("inspector-translation");
+  await reloadedTranslation.locator("summary").click();
+  await expect(reloadedTranslation.getByLabel("Translation line height")).toHaveValue("1.35");
+  await expect(reloadedTranslation.getByLabel("Arabic to translation gap")).toHaveValue("0.8");
+  await expect(reloadedTranslation.getByLabel("Translation verse number")).toBeChecked();
+
+  const reloadedMedia = page.getByTestId("inspector-media");
+  await reloadedMedia.locator("summary").click();
+  await expect(reloadedMedia.getByLabel("Container corner radius")).toHaveValue("18");
+  await expect(reloadedMedia.getByRole("button", { name: "Freeze last frame", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(reloadedMedia.getByLabel("Cinematic letterbox")).toBeChecked();
+
+  const reloadedMotion = page.getByTestId("inspector-motion");
+  await reloadedMotion.locator("summary").click();
+  await expect(reloadedMotion.getByLabel("Clip fade-in")).toHaveValue("500");
+  await expect(reloadedMotion.getByLabel("Fade in audio too")).toBeChecked();
+  await expect(reloadedMotion.getByLabel("Word-by-word emphasis")).toBeChecked();
+  assertNoErrors();
+});
+
+test("template editor protects unsaved work before leaving", async ({ page }) => {
+  await page.goto("/styles/editor?template=new");
+  await page.getByLabel("Template name").fill("Unfinished template");
+  await page.getByRole("link", { name: "Back to templates" }).click();
+  await expect(page.getByText("Leave the template editor?", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Keep it" }).click();
+  await expect(page).toHaveURL(/\/styles\/editor/);
+
+  await page.getByRole("link", { name: "Back to templates" }).click();
+  await page.getByRole("button", { name: "Discard changes" }).click();
+  await expect(page).toHaveURL(/\/styles$/);
 });
 
 test("split compositions expose precise media, panel, solid, and gradient controls", async ({ page }) => {
@@ -476,7 +563,7 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await expect(
     arabicInspector.getByRole("button", { name: /Traditional bold/ }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(arabicInspector.getByLabel("Size")).toHaveValue("30");
+  await expect(arabicInspector.getByLabel("Size")).toHaveValue("24");
   await expect(arabicInspector.getByText("Split text needs room", { exact: true })).toHaveCount(0);
   await arabicInspector.getByRole("button", { name: "Compare all five fonts" }).click();
   await expect(
@@ -550,17 +637,16 @@ test("split compositions expose precise media, panel, solid, and gradient contro
   await backgroundInspector.locator("summary").click();
   await backgroundInspector.getByRole("button", { name: "gradient", exact: true }).click();
   await expect(page.getByLabel("Gradient preview")).toBeVisible();
-  const previewCanvasTreatment = page.getByLabel("Preview canvas treatment");
-  await expect(previewCanvasTreatment.getByRole("button", { name: "Gradient canvas" })).toHaveAttribute("aria-pressed", "true");
+  await expect(backgroundInspector.getByRole("button", { name: "gradient", exact: true })).toHaveAttribute("aria-pressed", "true");
   await backgroundInspector.getByLabel("Gradient stop 1 color").fill("#123456");
   await backgroundInspector.getByRole("button", { name: "Add color stop" }).click();
   await expect(page.getByLabel("Gradient stop 3 color")).toBeVisible();
-  await previewCanvasTreatment.getByRole("button", { name: "Solid canvas" }).click();
+  await backgroundInspector.getByRole("button", { name: "solid", exact: true }).click();
   await expect(backgroundInspector.getByLabel("Canvas color")).toHaveValue("#123456");
   await backgroundInspector.getByLabel("Canvas color").fill("#654321");
-  await previewCanvasTreatment.getByRole("button", { name: "Gradient canvas" }).click();
+  await backgroundInspector.getByRole("button", { name: "gradient", exact: true }).click();
   await expect(backgroundInspector.getByLabel("Gradient stop 1 color")).toHaveValue("#123456");
-  await previewCanvasTreatment.getByRole("button", { name: "Solid canvas" }).click();
+  await backgroundInspector.getByRole("button", { name: "solid", exact: true }).click();
   await expect(backgroundInspector.getByLabel("Canvas color")).toHaveValue("#654321");
   assertNoErrors();
 });

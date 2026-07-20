@@ -307,7 +307,18 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
           silences: input.silences,
         });
         return {
-          timings: fused.timings,
+          timings: fused.timings.map((timing, index) => ({
+            ...timing,
+            alignedWordStarts: alternative.wordStartsByVerse[index]?.map(
+              (time) => Math.max(timing.start, Math.min(timing.end, time)),
+            ),
+            wordRange: (() => {
+              const range = alternative.recitedWordRangesByVerse[index];
+              const total = alternative.wordStartsByVerse[index]?.length ?? 0;
+              if (!range || total === 0 || (range.from === 0 && range.to === total - 1)) return undefined;
+              return { ...range };
+            })(),
+          })),
           method: fused.usedCtcBoundaries.length ? "hybrid" : "transcript",
           transcriptSimilarity: alternative.similarity,
           methodAgreementSeconds: disagreement,

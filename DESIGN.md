@@ -29,6 +29,7 @@ Midnight Mihrab. All tokens live in `src/app/globals.css` as CSS variables and T
 - **Quran Arabic**: selectable `Mushaf QCF`, `Uthmanic Hafs`, `Amiri Quran`, `Scheherazade New`, and `Noto Naskh Arabic`. QCF, Uthmanic Hafs, and Amiri Quran remain at their native Regular face. Scheherazade New and Noto Naskh Arabic expose real 400/500/600/700 faces for creators who need stronger social captions. Never synthesize Quran Arabic bold.
 - Font specimens, canvas previews, and export must describe and use the same native face. Export waits for the selected Quran font and fails clearly instead of recording a browser fallback; transient QCF page-font failures remain retryable.
 - Built-in templates open in a usable state. In particular, Reciter Split Fade fits the Short specimen to two Arabic lines by default, and gallery cards render settled frames rather than replaying entrance motion while creators scan choices.
+- Every built-in template and every new web/iOS project starts at Arabic `24` and translation `12`. These are quiet, editable starting sizes rather than a reason to scale text to fill the frame.
 - **Translation**: serif / sans / Cinzel / Times New Roman / Lora / Playfair Display (user-selectable).
 
 Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px (information density area), copy on browse/home is 14px+.
@@ -71,12 +72,20 @@ Scale: keep ≥1.25 ratio between steps. Most labels in the studio are 10–12px
 - Recent additions: emerald split markers + emerald segment-preview labels under each region of the active verse card.
 - Split compositions make Solid versus Fade explicit. Media can be dragged directly, centered, and zoomed beside the preview; the inspector mirrors the same zoom plus horizontal/vertical offsets, and Center image preserves the chosen zoom.
 
+## Template Studio
+
+- The preview is the task focus; on phones it stays compact enough that the inspector begins within the first viewport rather than forcing a full-screen scroll past controls.
+- Text/media mode and Short/Medium/Long specimens share one compact toolbar. Canvas color mode lives in Background instead of appearing twice.
+- Inspector sections progressively disclose a complete renderer-backed control set. Golden Line geometry uses plain creator language: thickness, horizontal reach, and corner roundness.
+- Saving must have a durable visible state: Save copy becomes Saved, the URL points to the saved record, later edits become Save changes, and Back returns to My templates. Never show success when browser storage failed.
+
 ## Recognition and alignment
 
 - Recognition progress uses named stages: **Prepare**, **Listen**, **Match**, and **Align** on import; Studio alignment uses **Prepare**, **Listen**, and **Place cuts**.
 - Never hide model download or local processing behind a generic “AI analysing” message. Show determinate download progress when bytes are available, an honest current action, cancellation, and the on-device privacy guarantee.
 - Quran range and timing confidence are separate claims. Show the detected range prominently, identify the alignment method, and enumerate only the ayah transitions that need review.
 - A creator must explicitly confirm the Quran range before continuing. Manual surah/from/to controls remain editable whether recognition succeeds, is ambiguous, is cancelled, or fails.
+- A partial first or last ayah must be labelled as partial and display only the words recognised as recited. It must not be silently promoted to a complete-ayah Bulk draft.
 - Short or repeated ayahs must be retrieved both as whole-surah ranges and individual-verse candidates. Tied phrases stay low-confidence and are offered for creator review instead of being silently auto-applied.
 - Recognition releases require zero false automatic ranges and at least 97% expected-range recall in the maintained real-audio candidate set; boundary alignment remains a separate real-audio gate.
 - When text matching is ambiguous, show up to three distinct likely Quran ranges and preserve prepared cuts for the range the creator selects. Never collapse known alternatives into a generic error.

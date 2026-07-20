@@ -191,50 +191,92 @@ interface AppState {
   beginNewProject: () => void;
 }
 
+/**
+ * Per-clip settings a saved project may carry, at their FEATURE-OFF values.
+ * This is the single fallback source for `restoreProject`: any key a saved
+ * record does not carry (clips saved before the feature existed) restores to
+ * the value here, never to whatever the previously open clip left in the
+ * store. When adding a per-clip setting, add it here — the initial state
+ * spreads this object, so forgetting a key is a visible type/behavior gap
+ * rather than a silent cross-clip bleed.
+ *
+ * Returns fresh object instances each call so restored state never shares
+ * mutable references with the new-clip defaults.
+ */
+export function restoreSettingsDefaults() {
+  return {
+    reciterId: "alafasy",
+    videoFormat: "9:16" as VideoFormat,
+    arabicFontSize: 24,
+    arabicFont: "qcf",
+    arabicFontWeight: 400,
+    // Restore default 0: clips saved before ink thickness existed must not
+    // gain ink. New clips start at 0.75 (overridden in the initial state).
+    arabicInkThickness: 0,
+    arabicVerseNumber: false,
+    translationVerseNumber: true,
+    translationEnabled: true,
+    arabicEnabled: true,
+    translationFontSize: 12,
+    translationFont: "sans-serif",
+    translationFontWeight: 400,
+    translationLanguage: "en",
+    textColor: "#ffffff",
+    translationColor: "#d8d3c7",
+    lineHeight: 1,
+    translationLineHeight: 1,
+    arabicTranslationGap: 0.6,
+    textPosition: 50,
+    textLayout: "center" as const,
+    splitMask: { ...DEFAULT_SPLIT_MASK },
+    overlayOpacity: 50,
+    overlayColor: "#000000",
+    safeAreaTarget: "none" as SafeAreaTarget,
+    safePadding: 0,
+    background: backgroundPresets[0],
+    backgroundFit: "cover" as MediaFit,
+    mediaTransform: { scale: 1, x: 0, y: 0 } as MediaTransform,
+    mediaFrame: { ...DEFAULT_MEDIA_FRAME },
+    backgroundSequenceEnabled: false,
+    backgroundScenes: [] as BackgroundScene[],
+    activeBackgroundSceneId: null as string | null,
+    fitBackdrop: "blur" as FitBackdrop,
+    backgroundVideoSync: false,
+    videoLoopMode: "loop" as const,
+    textShadow: { enabled: true, color: "#000000", blur: 4, offsetX: 0, offsetY: 2 } as TextShadow,
+    // Restore default OFF: pre-outline clips must not gain an outline. New
+    // clips start with it on (overridden in the initial state).
+    textOutline: { enabled: false, color: "#050507", width: 1.25 } as TextOutline,
+    letterbox: { enabled: false, barColor: "#000000", barStyle: "solid" } as LetterboxConfig,
+    emphasis: {} as Record<string, VerseEmphasis>,
+    emphasisStyle: "color" as EmphasisStyle,
+    emphasisColor: "#c9a24b",
+    wordHighlight: false,
+    highlightEnabled: false,
+    highlightColor: "#1f2a44",
+    highlightOpacity: 1,
+    highlightRadius: 1,
+    highlightPadding: 0.25,
+    highlightHeight: 1,
+    verseIntro: "none" as VerseIntro,
+    verseIntroMs: 450,
+    // Restore default 0: clips saved before the clip-start fade existed must
+    // not gain one. New clips start at 400ms (overridden in the initial state).
+    clipFadeMs: 0,
+    audioFadeIn: false,
+  };
+}
+
 export const useAppStore = create<AppState>((set) => ({
   surah: null,
   verses: [],
   selectedVerseNumbers: [],
-  reciterId: "alafasy",
-  videoFormat: "9:16",
-  arabicFontSize: 30,
-  arabicFont: "qcf",
-  arabicFontWeight: 400,
+  ...restoreSettingsDefaults(),
+  // New-clip defaults that intentionally differ from the legacy-restore values
+  // (clipFadeMs's new-clip 400ms is set with its comment further below).
   arabicInkThickness: 0.75,
-  arabicVerseNumber: false,
-  translationVerseNumber: true,
-  translationEnabled: true,
-  arabicEnabled: true,
-  translationFontSize: 14,
-  translationFont: "sans-serif",
-  translationFontWeight: 400,
-  translationLanguage: "en",
-  textColor: "#ffffff",
-  translationColor: "#d8d3c7",
-  lineHeight: 1,
-  translationLineHeight: 1,
-  arabicTranslationGap: 0.6,
-  textPosition: 50,
-  textLayout: "center",
-  splitMask: { ...DEFAULT_SPLIT_MASK },
-  overlayOpacity: 50,
-  overlayColor: "#000000",
-  safeAreaTarget: "none",
-  safePadding: 0,
-  background: backgroundPresets[0],
-  backgroundFit: "cover",
-  mediaTransform: { scale: 1, x: 0, y: 0 },
-  mediaFrame: { ...DEFAULT_MEDIA_FRAME },
-  backgroundSequenceEnabled: false,
-  backgroundScenes: [],
-  activeBackgroundSceneId: null,
-  pendingTemplateMedia: null,
-  fitBackdrop: "blur",
-  backgroundVideoSync: false,
-  videoLoopMode: "loop",
-  textShadow: { enabled: true, color: "#000000", blur: 4, offsetX: 0, offsetY: 2 },
   textOutline: { enabled: true, color: "#050507", width: 1.25 },
-  letterbox: { enabled: false, barColor: "#000000", barStyle: "solid" },
+  pendingTemplateMedia: null,
   currentVerseIndex: 0,
   projectId: null,
   playbackSegmentArabic: null,
@@ -477,33 +519,34 @@ export const useAppStore = create<AppState>((set) => ({
         };
       });
     }
+    // Every per-clip setting starts from its feature-off default and is then
+    // overlaid with whatever the saved record actually carries. A record saved
+    // before a feature existed therefore restores that feature OFF instead of
+    // inheriting the previously open clip's value — reopening a clip must
+    // never show another clip's settings, captions, or decorations.
+    const defaults = restoreSettingsDefaults();
+    const provided = Object.fromEntries(
+      Object.entries(settings).filter(([, value]) => value !== undefined)
+    ) as Partial<typeof settings>;
     set({
       surah,
       verses,
       selectedVerseNumbers,
       currentVerseIndex: 0,
+      // Transient per-clip state a previous session may have left behind.
+      activePartIndex: 0,
+      activeWordIndex: null,
+      playbackSegmentArabic: null,
+      playbackSegmentTranslation: null,
+      playbackSegmentIsLast: true,
+      pendingTemplateMedia: null,
       projectId,
       verseParts: verseParts ?? {},
       audioSource: importedAudio && timings
         ? { mode: "imported", url: importedAudio.url, name: importedAudio.name, timings }
         : { mode: "reciter" },
-      ...settings,
-      // Clips saved before the clip-start fade existed have no value here; treat
-      // missing as "off" so reopening them never adds an unexpected fade. (The
-      // ...settings spread above would otherwise leave the store's new-clip
-      // default of 400ms in place.)
-      clipFadeMs: settings.clipFadeMs ?? 0,
-      audioFadeIn: settings.audioFadeIn ?? false,
-      textLayout: settings.textLayout ?? "center",
-      splitMask: settings.splitMask ?? { ...DEFAULT_SPLIT_MASK },
-      arabicEnabled: settings.arabicEnabled ?? true,
-      translationColor: settings.translationColor ?? "#d8d3c7",
-      arabicInkThickness: settings.arabicInkThickness ?? 0,
-      textOutline: settings.textOutline ?? { enabled: false, color: "#050507", width: 1.25 },
-      mediaTransform: settings.mediaTransform ?? { scale: 1, x: 0, y: 0 },
-      mediaFrame: settings.mediaFrame ?? { ...DEFAULT_MEDIA_FRAME },
-      backgroundSequenceEnabled: settings.backgroundSequenceEnabled ?? false,
-      backgroundScenes: settings.backgroundScenes ?? [],
+      ...defaults,
+      ...provided,
       activeBackgroundSceneId: settings.activeBackgroundSceneId ?? settings.backgroundScenes?.[0]?.id ?? null,
     });
   },

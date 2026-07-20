@@ -75,7 +75,7 @@ export function BackgroundEditor({
               type="button"
               onClick={() => chooseMode(mode)}
               aria-pressed={value.type === mode}
-              className={`min-h-9 rounded-md px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors ${
+                className={`min-h-11 rounded-md px-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] transition-colors sm:min-h-9 ${
                 value.type === mode
                   ? "bg-white/[0.09] text-parchment"
                   : "text-[var(--muted)] hover:text-parchment"
@@ -159,7 +159,7 @@ export function BackgroundEditor({
                 ...gradient,
                 stops: gradient.stops.map((stop) => ({ ...stop, offset: 1 - stop.offset })),
               })}
-              className="mt-5 min-h-10 rounded-lg border border-[var(--hairline-soft)] px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment"
+              className="mt-5 min-h-11 rounded-lg border border-[var(--hairline-soft)] px-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--muted)] hover:border-[var(--hairline)] hover:text-parchment sm:min-h-10"
             >
               Reverse
             </button>
@@ -168,7 +168,7 @@ export function BackgroundEditor({
             type="button"
             onClick={addStop}
             disabled={gradient.stops.length >= 5}
-            className="min-h-10 w-full rounded-lg border border-dashed border-[var(--hairline)] text-[10px] font-semibold uppercase tracking-[0.1em] text-gold-soft hover:bg-white/[0.025] disabled:cursor-not-allowed disabled:opacity-35"
+            className="min-h-11 w-full rounded-lg border border-dashed border-[var(--hairline)] text-[10px] font-semibold uppercase tracking-[0.1em] text-gold-soft hover:bg-white/[0.025] disabled:cursor-not-allowed disabled:opacity-35 sm:min-h-10"
           >
             Add color stop
           </button>

@@ -8,6 +8,11 @@ enum MobileEditorPageStatus: Equatable {
     case failed(String)
 }
 
+enum MobileEditorEntryPoint: Equatable {
+    case product
+    case editor
+}
+
 @MainActor
 @Observable
 final class MobileEditorPageState {
@@ -33,11 +38,14 @@ final class MobileEditorEnvironment {
     private let schemeHandler: NativeMediaSchemeHandler
     private let messageHandler: MobileEditorMessageHandler
     private let navigationDelegate: MobileEditorNavigationDelegate
+    private let bridgeMessageNames: [String]
     private var isClosed = false
 
     init(
         project: ClipProject,
         mediaURLs: [URL],
+        entryPoint: MobileEditorEntryPoint = .editor,
+        sourceReferenceURL: String? = nil,
         allowedMediaRoots: [URL]? = nil,
         onProjectChange: @escaping @MainActor (
             MobileBridgeEnvelope<MobileProjectSnapshotV1>,
@@ -73,20 +81,28 @@ final class MobileEditorEnvironment {
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        configuration.allowsInlineMediaPlayback = true
         configuration.setURLSchemeHandler(
             schemeHandler,
             forURLScheme: NativeMediaSchemeHandler.scheme
         )
-        configuration.userContentController.addScriptMessageHandler(
-            messageHandler,
-            contentWorld: .page,
-            name: MobileEditorMessageHandler.name
-        )
+        bridgeMessageNames = entryPoint == .product
+            ? [MobileEditorMessageHandler.exportName]
+            : [MobileEditorMessageHandler.name, MobileEditorMessageHandler.exportName]
+        for name in bridgeMessageNames {
+            configuration.userContentController.addScriptMessageHandler(
+                messageHandler,
+                contentWorld: .page,
+                name: name
+            )
+        }
         self.configuration = configuration
-        editorURL = MobileEditorBridgeContract.editorURL(
-            projectID: project.id,
-            requiresPassageSelection: project.surahID == nil
-        )
+        editorURL = entryPoint == .product
+            ? MobileEditorBridgeContract.productURL(sourceReferenceURL: sourceReferenceURL)
+            : MobileEditorBridgeContract.editorURL(
+                projectID: project.id,
+                requiresPassageSelection: project.surahID == nil
+            )
     }
 
     /// Creates the single runnable shared-editor web view. Presentation and
@@ -110,10 +126,12 @@ final class MobileEditorEnvironment {
     func close() {
         guard !isClosed else { return }
         isClosed = true
-        configuration.userContentController.removeScriptMessageHandler(
-            forName: MobileEditorMessageHandler.name,
-            contentWorld: .page
-        )
+        for name in bridgeMessageNames {
+            configuration.userContentController.removeScriptMessageHandler(
+                forName: name,
+                contentWorld: .page
+            )
+        }
         messageHandler.close()
         session.close()
     }

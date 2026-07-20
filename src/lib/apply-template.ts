@@ -1,20 +1,40 @@
 import { createBackgroundScene } from "./background-sequence";
 import { useAppStore } from "./store";
-import { stripBackgroundKeys } from "./style";
+import { stripBackgroundKeys, stripMediaKeys } from "./style";
 import type { TemplateDefinition } from "./template-model";
 
+export interface ApplyTemplateOptions {
+  /**
+   * Apply-time override of the template's media behaviour. Omitted → the
+   * template's stored policy decides (legacy behaviour: preserve-policy
+   * templates keep the current background but may still restructure scenes
+   * and request media for their slots). `true` forces the template's media
+   * composition. `false` is the strict "keep my media" mode: only non-media
+   * styling applies — no scene restructuring, no media-slot prompts.
+   */
+  replaceMedia?: boolean;
+}
+
+type MediaMode = "template" | "legacy-preserve" | "keep";
+
 /** Apply one reusable template without touching Quran/audio selection. */
-export function applyTemplate(template: TemplateDefinition): void {
+export function applyTemplate(template: TemplateDefinition, options?: ApplyTemplateOptions): void {
   const state = useAppStore.getState();
+  const mode: MediaMode =
+    options?.replaceMedia === undefined
+      ? template.mediaPolicy === "use-template-media" ? "template" : "legacy-preserve"
+      : options.replaceMedia ? "template" : "keep";
   const style =
-    template.mediaPolicy === "preserve-current-media"
-      ? stripBackgroundKeys(template.settings)
-      : template.settings;
+    mode === "template"
+      ? template.settings
+      : mode === "legacy-preserve"
+        ? stripBackgroundKeys(template.settings)
+        : stripMediaKeys(template.settings);
   state.applyStyle(style);
   const appliedState = useAppStore.getState();
 
   const sequence = template.extras.backgroundSequence;
-  if (sequence?.enabled) {
+  if (sequence?.enabled && mode !== "keep") {
     const existing = appliedState.backgroundSequenceEnabled
       ? appliedState.backgroundScenes
       : [];
@@ -49,11 +69,7 @@ export function applyTemplate(template: TemplateDefinition): void {
           }
         : {}),
     });
-  } else if (
-    sequence &&
-    !sequence.enabled &&
-    template.mediaPolicy === "use-template-media"
-  ) {
+  } else if (sequence && !sequence.enabled && mode === "template") {
     useAppStore.setState({
       backgroundSequenceEnabled: false,
       backgroundScenes: [],
@@ -77,8 +93,10 @@ export function applyTemplate(template: TemplateDefinition): void {
     state.setSafePadding(template.extras.safePadding);
   }
 
+  // Media slots prompt the user to drop the template's media in — meaningless
+  // when this apply was explicitly told to keep the current media.
   useAppStore.getState().setPendingTemplateMedia(
-    template.mediaSlots.length > 0
+    mode !== "keep" && template.mediaSlots.length > 0
       ? {
           templateName: template.name,
           slots: template.mediaSlots.map((slot) => ({ ...slot })),

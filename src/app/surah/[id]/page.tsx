@@ -26,6 +26,7 @@ export default function SurahPage() {
   const selectAllVerses = useAppStore((s) => s.selectAllVerses);
   const selectVerseRange = useAppStore((s) => s.selectVerseRange);
   const clearSelection = useAppStore((s) => s.clearSelection);
+  const beginNewProject = useAppStore((s) => s.beginNewProject);
   const setSurahStore = useAppStore((s) => s.setSurah);
   const setVersesStore = useAppStore((s) => s.setVerses);
   const reciterId = useAppStore((s) => s.reciterId);
@@ -33,8 +34,13 @@ export default function SurahPage() {
   const translationLanguage = useAppStore((s) => s.translationLanguage);
 
   useEffect(() => {
-    clearSelection();
-  }, [clearSelection, surahId]);
+    // The verse picker always composes a NEW clip (it already wiped the
+    // selection unconditionally). It must also drop the previous clip's
+    // project identity and per-clip state: a stale projectId here made the
+    // studio's autosave overwrite the previously opened saved clip with the
+    // new clip's audio and captions.
+    beginNewProject();
+  }, [beginNewProject, surahId]);
 
   useEffect(() => {
     let active = true;

@@ -61,6 +61,17 @@ describe("preview/export audio parity", () => {
     expect(hi).toBe(4);
   });
 
+  it("uses acoustic word onsets for a recognised mid-ayah trim", () => {
+    const tm: VerseTiming = {
+      verseNumber: 1,
+      start: 0,
+      end: 10,
+      wordRange: { from: 2, to: 4 },
+      alignedWordStarts: [0, 0, 0.35, 1.8, 3.2, 10],
+    };
+    expect(effectiveAudioBounds(tm, 6)).toEqual([0.35, 10]);
+  });
+
   it("no wordRange means the full span", () => {
     const tm: VerseTiming = { verseNumber: 1, start: 2, end: 10 };
     expect(effectiveAudioBounds(tm, verseWordCount(TEXT))).toEqual([2, 10]);

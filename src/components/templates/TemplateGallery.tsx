@@ -27,12 +27,13 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "mine", label: "My templates" },
 ];
 
-export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }) {
+export function TemplateGallery({ fromImport = false, initialFilter = "featured" }: { fromImport?: boolean; initialFilter?: "featured" | "mine" }) {
   const router = useRouter();
   const [saved, setSaved] = useState<SavedTemplate[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [filter, setFilter] = useState<Filter>("featured");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [deleteTarget, setDeleteTarget] = useState<TemplateDefinition | null>(null);
+  const [replaceMedia, setReplaceMedia] = useState(false);
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -50,7 +51,7 @@ export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }
   }, [filter, saved]);
 
   const handleUseTemplate = (template: TemplateDefinition) => {
-    applyTemplate(template);
+    applyTemplate(template, { replaceMedia });
     trackProductEvent("template_chosen");
     router.push("/studio");
   };
@@ -92,6 +93,19 @@ export function TemplateGallery({ fromImport = false }: { fromImport?: boolean }
             Create template
           </button>
         </div>
+
+        <label className="mt-6 flex w-fit cursor-pointer items-start gap-2.5 rounded-xl border border-[var(--hairline-soft)] bg-white/[0.02] px-4 py-3 text-xs leading-4 text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={replaceMedia}
+            onChange={(event) => setReplaceMedia(event.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-[var(--gold)]"
+          />
+          <span>
+            <span className="font-medium text-parchment">Replace my media with the template’s media</span>
+            <span className="mt-0.5 block text-xs text-[var(--muted-deep)]">Off: templates restyle text, layout, and effects while your current background stays.</span>
+          </span>
+        </label>
 
         <div className="mt-8 flex gap-2 overflow-x-auto pb-2" aria-label="Template filters">
           {FILTERS.map((item) => (

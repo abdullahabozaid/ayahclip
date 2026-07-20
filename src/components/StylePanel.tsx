@@ -30,6 +30,7 @@ export function StylePanel() {
   const [name, setName] = useState("");
   const [appliedId, setAppliedId] = useState<string | null>(null);
   const [nativeEditor, setNativeEditor] = useState(false);
+  const [replaceMedia, setReplaceMedia] = useState(false);
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -77,6 +78,15 @@ export function StylePanel() {
             <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">Each card changes layout, type treatment, and media behaviour. You can edit everything after.</p>
           </div>
         </div>
+        <label className="mb-3 flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--hairline-soft)] bg-white/[0.02] px-3 py-2.5 text-[11px] leading-4 text-[var(--muted)]">
+          <input
+            type="checkbox"
+            checked={replaceMedia}
+            onChange={(event) => setReplaceMedia(event.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-[var(--gold)]"
+          />
+          <span>Replace my media with the template’s media</span>
+        </label>
         <div className="grid grid-cols-2 gap-2">
           {TEMPLATES.map((template) => {
             const guidance = PRESET_GUIDANCE[template.id];
@@ -87,7 +97,7 @@ export function StylePanel() {
               type="button"
               aria-pressed={selected}
               onClick={() => {
-                applyTemplate(template);
+                applyTemplate(template, { replaceMedia });
                 setAppliedId(template.id);
               }}
               className={`group overflow-hidden rounded-xl border bg-[var(--ink-deep)] text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${selected ? "border-gold" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
@@ -175,7 +185,7 @@ export function StylePanel() {
                 className="group flex items-center gap-1 rounded-full border border-[var(--hairline-soft)] py-1 pl-3 pr-1 text-xs"
               >
                 <button
-                  onClick={() => applyTemplate(s)}
+                  onClick={() => applyTemplate(s, { replaceMedia })}
                   className="text-parchment transition-colors hover:text-gold"
                   title="Apply this style"
                 >

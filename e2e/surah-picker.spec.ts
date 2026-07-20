@@ -15,7 +15,9 @@ test("a long Surah starts with a passage range instead of an unbounded ayah wall
   const individualAyahs = page.getByRole("region", { name: "Individual ayahs" });
   await expect(individualAyahs).not.toBeVisible();
 
-  const preview = page.getByText("Ayah 1", { exact: true }).first();
+  // The compact preview follows the selected range, so a 2–4 passage starts
+  // with Ayah 2 rather than retaining the page's initial Ayah 1 placeholder.
+  const preview = page.getByText("Ayah 2", { exact: true }).first();
   const individualToggle = page.getByText("Pick individual ayahs", { exact: false });
   const previewBox = await preview.boundingBox();
   const toggleBox = await individualToggle.boundingBox();

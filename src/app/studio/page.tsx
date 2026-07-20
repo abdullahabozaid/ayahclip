@@ -19,7 +19,7 @@ import {
   snapshotFromWebProject,
 } from "@/lib/mobile-project-adapter";
 import { StudioPreview } from "@/components/StudioPreview";
-import { StudioSettings } from "@/components/StudioSettings";
+import { StudioSettings, type StudioSettingsSectionId } from "@/components/StudioSettings";
 import { VerseCardEditor } from "@/components/VerseCardEditor";
 import { ReciterVerseEditor } from "@/components/ReciterVerseEditor";
 import { TimelineEditor } from "@/components/TimelineEditor";
@@ -37,6 +37,9 @@ import {
   trackOncePerJourney,
   trackProductEvent,
 } from "@/lib/telemetry";
+import { openBulkCandidateInStudio, persistBulkCandidateLook, type BulkStudioNavigation } from "@/lib/bulk-studio";
+import { deleteBulkOutput, loadBulkJob, saveBulkJob } from "@/lib/bulk-jobs";
+import { captureStyleSnapshot } from "@/lib/style-snapshot";
 
 // Editor zoom bounds. CSS `zoom` reflows layout, so the page scrolls naturally
 // when zoomed past the viewport (and shrinks within it when zoomed out).
@@ -53,6 +56,7 @@ type SaveFailureReason = "invalid" | "media" | "project";
 type SaveResult =
   | { ok: true }
   | { ok: false; reason: SaveFailureReason };
+type StudioTool = "layouts" | "media" | "audio" | "text" | "captions" | "config";
 
 function saveFailureMessage(reason: SaveFailureReason): string {
   if (reason === "media") {
@@ -92,12 +96,98 @@ export default function StudioPage() {
   );
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<StudioTool>("layouts");
+  const [requestedInspectorSection, setRequestedInspectorSection] = useState<StudioSettingsSectionId | null>(null);
+  const [bulkNavigation, setBulkNavigation] = useState<BulkStudioNavigation | null>(null);
+  const [bulkNavigationBusy, setBulkNavigationBusy] = useState(false);
+  const [applyLookOpen, setApplyLookOpen] = useState(false);
+  const [applyLookMedia, setApplyLookMedia] = useState(false);
+  const [applyLookState, setApplyLookState] = useState<"idle" | "busy" | "done">("idle");
   const savedResetRef = useRef<ReturnType<typeof setTimeout>>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
   const savedAudioUrlRef = useRef<string | null>(null);
   const savedVideoUrlRef = useRef<string | null>(null);
   const savedBackgroundUrlsRef = useRef<Set<string>>(new Set());
+  // Which project id the three dedup refs above belong to — they are cleared
+  // whenever saveNow targets a different id (see the identity guard there).
+  const savedMediaProjectIdRef = useRef<string | null>(null);
   const nativeSnapshotRef = useRef<MobileProjectSnapshotV1 | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jobId = params.get("bulk");
+    const candidateId = params.get("clip");
+    if (!jobId || !candidateId) return;
+    let cancelled = false;
+    setBulkNavigationBusy(true);
+    openBulkCandidateInStudio(jobId, candidateId)
+      .then((navigation) => {
+        if (!cancelled) {
+          setBulkNavigation(navigation);
+          setEditorView("timeline");
+          setTimelineOpen(true);
+          setActiveTool("captions");
+        }
+      })
+      .catch((reason: unknown) => { if (!cancelled) setSaveError(reason instanceof Error ? reason.message : "The bulk clip could not be opened."); })
+      .finally(() => { if (!cancelled) setBulkNavigationBusy(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Safety net for every OTHER way of leaving a bulk clip (site nav, browser
+  // back): persist the clip's look on unmount. Fire-and-forget — IndexedDB
+  // writes complete even as the page tears down.
+  const bulkNavigationRef = useRef<BulkStudioNavigation | null>(null);
+  bulkNavigationRef.current = bulkNavigation;
+  useEffect(() => () => {
+    const navigation = bulkNavigationRef.current;
+    if (navigation) void persistBulkCandidateLook(navigation.jobId, navigation.candidateId).catch(() => {});
+  }, []);
+
+  const openBulkSibling = async (candidateId: string | undefined) => {
+    if (!bulkNavigation || !candidateId || bulkNavigationBusy) return;
+    setBulkNavigationBusy(true);
+    try {
+      // Keep this clip's edits (look + durable media) before the store is
+      // rebuilt for the sibling — otherwise they vanish on return.
+      await persistBulkCandidateLook(bulkNavigation.jobId, bulkNavigation.candidateId);
+      const navigation = await openBulkCandidateInStudio(bulkNavigation.jobId, candidateId);
+      setBulkNavigation(navigation);
+      setEditorView("timeline");
+      setTimelineOpen(true);
+      setActiveTool("captions");
+      router.replace(`/studio?bulk=${encodeURIComponent(navigation.jobId)}&clip=${encodeURIComponent(candidateId)}`);
+    } catch (reason) {
+      setSaveError(reason instanceof Error ? reason.message : "The next bulk clip could not be opened.");
+    } finally {
+      setBulkNavigationBusy(false);
+    }
+  };
+
+  const applyLookToAllClips = async () => {
+    if (!bulkNavigation || applyLookState === "busy") return;
+    setApplyLookState("busy");
+    try {
+      const job = await loadBulkJob(bulkNavigation.jobId);
+      if (!job) throw new Error("The bulk collection could not be loaded.");
+      const snapshot = captureStyleSnapshot(applyLookMedia);
+      await saveBulkJob({
+        ...job,
+        styleOverride: snapshot,
+        // "Apply to ALL clips" means all: individual clips' saved looks are
+        // superseded, or they would silently keep their old style.
+        candidates: job.candidates.map((candidate) => ({ ...candidate, styleOverride: null })),
+        // Every clip's look just changed — previous renders are stale.
+        renderTasks: job.renderTasks.map((task) => ({ candidateId: task.candidateId, status: "idle" as const, progress: 0 })),
+      });
+      await Promise.all(job.renderTasks.map((task) => deleteBulkOutput(job.id, task.candidateId))).catch(() => {});
+      setApplyLookState("done");
+      setTimeout(() => { setApplyLookState("idle"); setApplyLookOpen(false); }, 2000);
+    } catch (reason) {
+      setApplyLookState("idle");
+      setSaveError(reason instanceof Error ? reason.message : "The look could not be applied to the collection.");
+    }
+  };
 
   useEffect(() => {
     if (!isNativeMobileEditor(window.location.search)) return;
@@ -165,6 +255,16 @@ export default function StudioPage() {
   const openTimeline = (next: boolean) => {
     setTimelineOpen(next);
     if (next && !isDesktopWorkspace()) setSettingsOpen(false);
+  };
+  const openInspectorTool = (tool: StudioTool, sectionId: StudioSettingsSectionId) => {
+    setActiveTool(tool);
+    setRequestedInspectorSection(sectionId);
+    openSettings(true);
+  };
+  const openEditorTool = (tool: StudioTool, view: "words" | "timeline") => {
+    setActiveTool(tool);
+    setEditorView(view);
+    openTimeline(true);
   };
 
   const pendingTemplateName = store.pendingTemplateMedia?.templateName;
@@ -255,13 +355,30 @@ export default function StudioPage() {
     if (!state.surah || state.selectedVerseNumbers.length === 0) {
       return { ok: false, reason: "invalid" };
     }
-    const id = state.projectId ?? generateProjectId();
+    let id = state.projectId ?? generateProjectId();
     const src = state.audioSource;
     const sel = state.selectedVerseNumbers;
     // Preserve a user-chosen cover thumbnail across saves; otherwise grab a
     // default cover from the current preview frame (skipping black/mid-fade
     // frames) so the dashboard shows the real clip, not a placeholder.
-    const existing = await getProject(id);
+    let existing = await getProject(id);
+    // Identity guard: a stale projectId (opened clip A, then composed a clip
+    // for a different surah without passing through beginNewProject) must
+    // NEVER overwrite the saved record — that silently corrupts clip A with
+    // clip B's audio and captions. Mint a fresh identity instead.
+    if (existing && existing.surahId !== state.surah.id) {
+      id = generateProjectId();
+      existing = undefined;
+    }
+    // The media-dedup refs are only valid for the project they were saved
+    // under; reusing them across identities skips persisting blobs under the
+    // new id (the clip then reopens with missing media).
+    if (savedMediaProjectIdRef.current !== id) {
+      savedMediaProjectIdRef.current = id;
+      savedAudioUrlRef.current = null;
+      savedVideoUrlRef.current = null;
+      savedBackgroundUrlsRef.current.clear();
+    }
     const existingThumb = existing?.thumbnail ?? captureSceneThumbnail({ skipIfDark: true });
 
     // Persist uploaded media so the clip (and its editable verse timeline)
@@ -398,7 +515,9 @@ export default function StudioPage() {
       }
       nativeSnapshotRef.current = updatedSnapshot;
     }
-    if (!state.projectId) state.setProjectId(id);
+    // Also adopts the freshly minted id when the identity guard above refused
+    // to overwrite a different clip's record.
+    if (state.projectId !== id) state.setProjectId(id);
     return { ok: true };
   }, []);
 
@@ -492,17 +611,24 @@ export default function StudioPage() {
     <>
     <main data-testid="studio-shell" ref={stageRef} style={{ zoom }} className="studio-shell-layout flex h-dvh flex-col overflow-hidden bg-[var(--ink)] lg:grid lg:grid-cols-[56px_minmax(0,1fr)_304px] lg:grid-rows-[52px_minmax(0,1fr)_188px]">
       {/* Studio top bar — pad for the notch / status bar on mobile */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-3 pt-[env(safe-area-inset-top)] lg:col-span-3 lg:h-[52px] lg:px-4 lg:pt-0">
-        <div className="flex items-center gap-4">
+      <header className="relative z-40 flex min-h-[calc(48px+env(safe-area-inset-top))] min-w-0 shrink-0 items-end justify-between gap-2 border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-2 pb-1 pt-[env(safe-area-inset-top)] sm:px-3 lg:col-span-3 lg:h-[52px] lg:min-h-0 lg:items-center lg:px-4 lg:pb-0 lg:pt-0">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button
-            onClick={() => router.push(`/surah/${surah.id}`)}
+            onClick={async () => {
+              // Leaving a bulk clip: persist its edited look onto the
+              // candidate first, or the edits revert when the clip reopens.
+              if (bulkNavigation) {
+                await persistBulkCandidateLook(bulkNavigation.jobId, bulkNavigation.candidateId).catch(() => {});
+              }
+              router.push(bulkNavigation ? "/bulk" : `/surah/${surah.id}`);
+            }}
             className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment sm:w-auto sm:px-2 lg:h-8"
-            aria-label="Back to verses"
+            aria-label={bulkNavigation ? "Back to bulk collection" : "Back to verses"}
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m6 6-6-6 6-6" />
             </svg>
-            <span className="hidden sm:inline">Verses</span>
+            <span className="hidden sm:inline">{bulkNavigation ? "Batch" : "Verses"}</span>
           </button>
           <button
             onClick={() => router.push("/")}
@@ -518,10 +644,47 @@ export default function StudioPage() {
             <span className="truncate text-sm font-semibold text-parchment">{surah.name_simple}</span>
             <span className="truncate text-[10px] uppercase tracking-[0.12em] text-[var(--muted-deep)] sm:text-[11px] sm:normal-case sm:tracking-normal">{verseRange}</span>
           </div>
+          {bulkNavigation && (
+            <div className="flex shrink-0 items-center rounded-md border border-[var(--hairline-soft)]" aria-label="Bulk clip navigation">
+              <button type="button" onClick={() => void openBulkSibling(bulkNavigation.previousId)} disabled={!bulkNavigation.previousId || bulkNavigationBusy} className="flex h-11 w-11 items-center justify-center text-parchment disabled:opacity-25 lg:h-8 lg:w-8" aria-label="Previous bulk clip">←</button>
+              <span className="px-1 text-[10px] tabular-nums text-[var(--muted)] sm:px-2">{bulkNavigation.index + 1}/{bulkNavigation.total}</span>
+              <button type="button" onClick={() => void openBulkSibling(bulkNavigation.nextId)} disabled={!bulkNavigation.nextId || bulkNavigationBusy} className="flex h-11 w-11 items-center justify-center text-parchment disabled:opacity-25 lg:h-8 lg:w-8" aria-label="Next bulk clip">→</button>
+            </div>
+          )}
+          {bulkNavigation && (
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setApplyLookOpen((open) => !open)}
+                aria-expanded={applyLookOpen}
+                className="btn-ghost flex h-11 items-center rounded-md px-3 text-xs lg:h-8"
+              >
+                Apply to all
+              </button>
+              {applyLookOpen && (
+                <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-4 shadow-xl">
+                  <p className="text-xs font-medium text-parchment">Apply this clip’s look to all {bulkNavigation.total} clips</p>
+                  <p className="mt-1 text-[11px] leading-4 text-[var(--muted)]">Copies text position, typography, colours, and effects. Each clip keeps its own media.</p>
+                  <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-4 text-[var(--muted)]">
+                    <input type="checkbox" checked={applyLookMedia} onChange={(event) => setApplyLookMedia(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--gold)]" />
+                    <span>Also replace each clip’s media with this clip’s media</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void applyLookToAllClips()}
+                    disabled={applyLookState === "busy"}
+                    className="btn-gold mt-3 min-h-10 w-full rounded-lg px-3 text-xs disabled:opacity-50"
+                  >
+                    {applyLookState === "busy" ? "Applying…" : applyLookState === "done" ? "Applied ✓" : "Apply to all clips"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Preview-as frame selector */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <div className="hidden items-center gap-0.5 rounded-md border border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-0.5 md:flex">
             {FRAME_MODES.map((m) => {
               const disabled = m.id !== "studio" && !framesAllowed;
@@ -641,7 +804,7 @@ export default function StudioPage() {
           <button
             onClick={openMp4Preview}
             disabled={mp4Rendering}
-            className="btn-gold flex h-8 items-center gap-1.5 rounded-md px-3 text-xs disabled:opacity-70"
+            className="flex h-9 items-center gap-1.5 rounded-md bg-[var(--gold)] px-3 text-xs font-semibold text-[var(--ink-deep)] disabled:opacity-70 sm:h-8"
             aria-label="Preview the final MP4"
             title="Render and watch the exact MP4 that export produces"
           >
@@ -660,7 +823,7 @@ export default function StudioPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 9V5a1 1 0 011-1h4M4 15v4a1 1 0 001 1h4m6-16h4a1 1 0 011 1v4m0 6v4a1 1 0 01-1 1h-4" />
                   <path d="M10 9.5v5l4.5-2.5z" fill="currentColor" stroke="none" />
                 </svg>
-                <span>Export MP4</span>
+                <span>{mp4Rendering ? "" : "Export"}</span>
               </>
             )}
           </button>
@@ -689,14 +852,14 @@ export default function StudioPage() {
       </header>
 
       <aside aria-label="Studio tools" className="hidden border-r border-[var(--hairline-soft)] bg-[var(--ink)] lg:row-span-2 lg:row-start-2 lg:flex lg:flex-col">
-        {[
-          ["Layouts", "layout", () => openSettings(true)],
-          ["Media", "image", () => openSettings(true)],
-          ["Audio", "music", () => openTimeline(true)],
-          ["Text", "type", () => openSettings(true)],
-          ["Captions", "captions", () => openTimeline(true)],
-        ].map(([label, icon, action], index) => (
-          <button key={label as string} type="button" onClick={action as () => void} aria-label={`Open ${String(label).toLowerCase()} tool`} className={`flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors hover:bg-white/[0.03] hover:text-parchment ${index === 0 ? "bg-gold/[0.06] text-gold" : "text-[var(--muted)]"}`}>
+        {([
+          ["layouts", "Layouts", "layout", () => openInspectorTool("layouts", "studio-presets-section")],
+          ["media", "Media", "image", () => openInspectorTool("media", "studio-background-section")],
+          ["audio", "Audio", "music", () => openInspectorTool("audio", "studio-audio-section")],
+          ["text", "Text", "type", () => openInspectorTool("text", "studio-typography-section")],
+          ["captions", "Captions", "captions", () => openEditorTool("captions", "words")],
+        ] as const).map(([tool, label, icon, action]) => (
+          <button key={label} type="button" onClick={action} aria-label={`Open ${label.toLowerCase()} tool`} aria-current={activeTool === tool ? "page" : undefined} className={`flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors hover:bg-white/[0.03] hover:text-parchment ${activeTool === tool ? "bg-gold/[0.06] text-gold" : "text-[var(--muted)]"}`}>
             <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
               {icon === "layout" && <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M8 4v16M8 10h13" /></>}
               {icon === "image" && <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m3 17 5-4 4 3 3-2 6 5" /></>}
@@ -707,7 +870,7 @@ export default function StudioPage() {
             {label as string}
           </button>
         ))}
-        <button type="button" onClick={() => openSettings(true)} aria-label="Open configuration tool" className="mt-auto flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment">
+        <button type="button" onClick={() => openInspectorTool("config", "studio-format-section")} aria-label="Open configuration tool" aria-current={activeTool === "config" ? "page" : undefined} className={`mt-auto flex h-16 w-full flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors hover:bg-white/[0.03] hover:text-parchment ${activeTool === "config" ? "bg-gold/[0.06] text-gold" : "text-[var(--muted)]"}`}>
           <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 7h10M18 7h2M4 12h3M11 12h9M4 17h8M16 17h4" /><circle cx="16" cy="7" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="14" cy="17" r="2" /></svg>
           Config
         </button>
@@ -771,7 +934,7 @@ export default function StudioPage() {
               </button>
             </div>
           )}
-          <StudioSettings />
+          <StudioSettings requestedSectionId={requestedInspectorSection} />
         </aside>
       </div>
 
@@ -780,13 +943,14 @@ export default function StudioPage() {
           Height is bounded so the preview above is always visible; collapse
           shrinks it to just this bar. */}
       {(store.audioSource.mode === "imported" || selectedVerseNumbers.length > 0) && (
-        <div data-testid="studio-timeline" className={`studio-timeline-dock shrink-0 overflow-x-hidden overflow-y-auto border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-3 py-1.5 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[260px]" : "h-12"}`}>
-          <div className="flex items-center gap-2 lg:h-7">
+        <div data-testid="studio-timeline" className={`studio-timeline-dock relative z-20 flex shrink-0 flex-col overflow-hidden border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-2 py-1 sm:px-3 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[min(232px,36dvh)]" : "h-12"}`}>
+          <div className="flex shrink-0 items-center gap-1.5 lg:h-7">
             {/* Collapse / expand the dock */}
             <button
               onClick={() => openTimeline(!timelineOpen)}
               className="flex min-h-10 items-center gap-2 rounded pr-2 text-left lg:min-h-7"
               aria-expanded={timelineOpen}
+              aria-label="Verse Editor"
               title={timelineOpen ? "Minimize editor" : "Show editor"}
             >
               <svg
@@ -798,7 +962,7 @@ export default function StudioPage() {
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
               </svg>
-              <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-soft/80">
+              <span className="text-[11px] font-semibold text-gold-soft/90">
                 Verse Editor
               </span>
             </button>
@@ -829,11 +993,11 @@ export default function StudioPage() {
               </div>
             )}
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1">
               {timelineOpen && (
                 <button
                   onClick={() => setTimelineFullscreen(true)}
-                  className="flex min-h-10 items-center gap-1.5 rounded border border-[var(--hairline)] px-3 text-[11px] text-parchment transition-colors hover:border-gold lg:min-h-7"
+                  className="flex min-h-10 min-w-10 items-center justify-center rounded border border-[var(--hairline)] px-2 text-[11px] text-parchment transition-colors hover:border-gold lg:min-h-7"
                   aria-label="Expand editor"
                   title="Edit in a full-screen editor with more room"
                 >
@@ -843,12 +1007,6 @@ export default function StudioPage() {
                   <span className="hidden sm:inline">Expand</span>
                 </button>
               )}
-              <button
-                onClick={() => openTimeline(!timelineOpen)}
-                className="flex min-h-10 items-center gap-1.5 rounded border border-[var(--hairline-soft)] px-3 text-[11px] text-[var(--muted)] transition-colors hover:border-gold hover:text-parchment lg:min-h-7"
-              >
-                {timelineOpen ? "Minimize" : "Show"}
-              </button>
             </div>
           </div>
 
@@ -857,7 +1015,7 @@ export default function StudioPage() {
               the audio buffer two extra times. The dock is behind the overlay
               anyway; it remounts (fresh from the store) on close. */}
           {timelineOpen && !timelineFullscreen && (
-            <div className="mt-1 min-h-0 overflow-hidden">
+            <div className="mt-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
               {store.audioSource.mode === "imported" ? (
                 editorView === "words" ? <VerseCardEditor /> : <TimelineEditor compact />
               ) : (
@@ -868,16 +1026,16 @@ export default function StudioPage() {
         </div>
       )}
 
-      <nav data-testid="studio-mobile-tools" aria-label="Studio tools" className="flex h-14 shrink-0 items-center justify-around border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-1 pb-[env(safe-area-inset-bottom)] lg:hidden">
-        {[
-          ["Media", () => openSettings(true), false],
-          ["Audio", () => openTimeline(true), false],
-          ["Text", () => openSettings(true), false],
-          ["Captions", () => { setEditorView("timeline"); openTimeline(true); }, timelineOpen],
-          ["Format", () => openSettings(!settingsOpen), settingsOpen],
-        ].map(([label, action, active]) => (
-          <button key={label as string} type="button" onClick={action as () => void} aria-label={label === "Format" ? "Toggle settings" : undefined} aria-expanded={label === "Format" ? settingsOpen : undefined} className={`flex min-h-11 w-16 flex-col items-center justify-center gap-0.5 text-[10px] font-medium uppercase tracking-tight ${active ? "text-gold-soft" : "text-[var(--muted)]"}`}>
-            <span className="text-base leading-none" aria-hidden>{label === "Media" ? "▣" : label === "Audio" ? "♫" : label === "Text" ? "T" : label === "Captions" ? "▤" : "↔"}</span>
+      <nav data-testid="studio-mobile-tools" aria-label="Studio tools" className="relative z-20 grid h-[calc(58px+env(safe-area-inset-bottom))] shrink-0 grid-cols-5 items-start border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden">
+        {([
+          ["Media", () => openInspectorTool("media", "studio-background-section"), activeTool === "media", <path key="media" strokeLinecap="round" strokeLinejoin="round" d="M4 5h16v14H4zM4 15l4-4 4 4 2-2 6 6M15.5 9a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />],
+          ["Audio", () => openInspectorTool("audio", "studio-audio-section"), activeTool === "audio", <path key="audio" strokeLinecap="round" strokeLinejoin="round" d="M9 18V6l10-2v12M9 10l10-2M6.5 20A2.5 2.5 0 106.5 15a2.5 2.5 0 000 5zm10-2a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />],
+          ["Text", () => openInspectorTool("text", "studio-typography-section"), activeTool === "text", <path key="text" strokeLinecap="round" d="M5 5h14M12 5v14M8 19h8" />],
+          ["Captions", () => openEditorTool("captions", "words"), activeTool === "captions", <path key="captions" strokeLinecap="round" strokeLinejoin="round" d="M4 6h16v12H4zM7 11h4m2 0h4M7 14h3m2 0h5" />],
+          ["Format", () => openInspectorTool("config", "studio-format-section"), activeTool === "config", <path key="format" strokeLinecap="round" strokeLinejoin="round" d="M7 3H3v4m14-4h4v4M7 21H3v-4m14 4h4v-4" />],
+        ] as const).map(([label, action, active, icon]) => (
+          <button key={label as string} type="button" onClick={action as () => void} aria-label={label === "Format" ? "Toggle settings" : undefined} aria-expanded={label === "Format" ? settingsOpen : undefined} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[10px] font-medium uppercase tracking-tight ${active ? "bg-gold/[0.06] text-gold-soft" : "text-[var(--muted)]"}`}>
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>{icon}</svg>
             {label as string}
           </button>
         ))}

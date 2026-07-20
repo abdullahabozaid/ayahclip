@@ -1,6 +1,6 @@
 # AyahClip
 
-A browser-based tool that turns Quran recitation into short vertical videos for TikTok, Reels, and YouTube Shorts. Everything runs client-side: detection, editing, rendering, export.
+A browser-based tool that turns Quran recitation into short vertical videos for TikTok, Reels, and YouTube Shorts. Detection, editing, rendering, and export run client-side; the self-hosted resolver imports bounded sections from permitted public links.
 
 ## Register
 
@@ -12,7 +12,8 @@ Muslims creating recitation clips for social media. Mostly mobile-first (phone u
 
 Two modes:
 - **Reciter mode**: pick verses + an online reciter (EveryAyah / Quran.com). Fast path.
-- **Imported mode**: upload your own recitation, the tool auto-detects verses + timings on the timeline. Power path — needs the editing surface that this polish touches.
+- **Imported mode**: upload your own recitation or import a bounded permitted link. Quran recognition starts automatically for imported links and local clips of at least ten seconds, and can identify a source that begins or ends midway through an ayah; only the recited words are carried into the editable captions. Shorter files retain the one-tap manual recognition action rather than loading the full model for weak evidence.
+- **Bulk Create**: import up to 30 minutes and immediately begin a checkpointed analysis. Creators can balance complete ayahs around 30/45/60/90 seconds, require exactly one to four ayahs per clip, or keep each uninterrupted passage together (including all seven ayahs of Al-Fatihah). Partial edge ayahs and incomplete exact-count remainders are withheld instead of being presented as upload-ready drafts.
 
 ## Brand and tone
 
@@ -35,6 +36,14 @@ Tone: quiet, sacred, precise. No hype, no growth-hacking, no startup playfulness
 - Religious tools that look like 2010 forum software (clip-art gold, calligraphy backgrounds)
 - The mainstream "white background + emerald accent + Inter everywhere" Muslim-tech aesthetic
 
-## Surface in focus for this pass
+## Current production surfaces
 
-`src/components/TimelineEditor.tsx` (the imported-audio CapCut-style timeline) and `src/app/surah/[id]/page.tsx` (the verse picker). The recent additions (intra-verse split markers, Arabic segment preview labels) need to feel native, not bolted-on.
+`src/components/TimelineEditor.tsx` is the imported-audio CapCut-style timeline; `src/app/surah/[id]/page.tsx` is the verse picker; and `src/components/bulk/BulkCreateWorkspace.tsx` is the volume workflow. Bulk runs live as persistent square collection tiles. Opening one shows a focused clip-by-clip review with source-frame previews, Quran references and text, approval controls, per-clip render state, and individual or batch delivery. Studio preserves the originating collection and supplies previous/next clip navigation.
+
+When acoustic word onsets are available from alignment, Bulk Create may split an unusually long ayah into synchronized caption pages while preserving one continuous ayah audio interval. Arabic fit is authoritative: the creator chooses a two, three, or four-line ceiling and English follows the same time split. AyahClip does not invent word timing when the alignment model has not supplied it.
+
+Permitted YouTube sections default to a fast 480p/30fps mobile draft path; HD up to 720p is an explicit choice. Only the selected range is resolved. Bulk creators also choose whether to retain the source video or use the selected preset background before analysis begins.
+
+Sources, analysis checkpoints, candidates, decisions, presets, tasks, completed files, and multiple collections survive refresh in browser storage. The reciter picker starts with a researched twelve-voice popular set; search and the full long-tail catalog remain one deliberate tap away.
+
+Template Studio is an editor, not a preset showcase. Every exposed value must reach both the preview and export renderer. Saving a built-in look creates one device-local custom template, rewrites the editor URL to that saved record, and all later saves update the same record. My templates is a first-class destination, storage failures are explicit, and unsaved navigation is protected. Golden Line includes independent color, opacity, thickness, horizontal reach, and corner-roundness controls; the inspector also covers all reusable typography, glow, layout, media-frame, playback, letterbox, B-roll transition, and entrance settings supported by the template model.

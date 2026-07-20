@@ -2,7 +2,7 @@ import XCTest
 
 final class AyahClipUITests: XCTestCase {
     @MainActor
-    func testFirstRunJourney() throws {
+    func testFirstRunJourneyOpensFullProduct() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-ayahclip.onboarding.complete", "false"]
         app.launch()
@@ -13,61 +13,67 @@ final class AyahClipUITests: XCTestCase {
         app.buttons["Continue"].tap()
         XCTAssertTrue(app.staticTexts["Design once, publish anywhere"].waitForExistence(timeout: 2))
         app.buttons["Create my first clip"].tap()
-        XCTAssertTrue(app.buttons["New Quran clip"].waitForExistence(timeout: 3))
+
+        XCTAssertTrue(app.webViews["ayahclip-product-webview"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Craft luminous")
+        ).firstMatch.waitForExistence(timeout: 8))
     }
 
     @MainActor
-    func testSharedStudioReplacesLegacyEditor() throws {
+    func testQuranCreationJourneyReachesSurahPicker() throws {
         let app = launchReadyApp()
-        let newClip = app.buttons["New Quran clip"]
-        XCTAssertTrue(newClip.waitForExistence(timeout: 5))
-        newClip.tap()
+        XCTAssertTrue(app.webViews["ayahclip-product-webview"].waitForExistence(timeout: 12))
 
-        XCTAssertTrue(app.buttons["Close editor"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.webViews["shared-studio-webview"].exists)
-        XCTAssertFalse(app.buttons["Style"].exists, "The legacy prototype editor must not be mounted")
+        let begin = app.links["Begin a clip"]
+        XCTAssertTrue(begin.waitForExistence(timeout: 8))
+        begin.tap()
 
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Shared mobile Studio"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-
-        app.buttons["Close editor"].tap()
-        XCTAssertTrue(app.buttons["New Quran clip"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Choose a surah"].waitForExistence(timeout: 12))
+        XCTAssertTrue(app.textFields["Search surahs by name or number"].exists)
     }
 
     @MainActor
-    func testImportOffersOwnedMediaAndWatermarkCleanup() throws {
+    func testImportJourneyReachesRealMediaPicker() throws {
         let app = launchReadyApp()
-        app.tabBars.buttons["Import"].tap()
+        XCTAssertTrue(app.webViews["ayahclip-product-webview"].waitForExistence(timeout: 12))
 
-        XCTAssertTrue(app.buttons[
-            "Choose photos or videos, Select up to 8 original visuals or B-roll items"
-        ].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Browse Files, Recitation audio, photos, and videos"].exists)
-        let cleanup = app.buttons[
-            "Clean a watermark, For videos you own · processed on device"
-        ]
-        XCTAssertTrue(cleanup.exists)
+        let importAudio = app.links["Import audio"]
+        XCTAssertTrue(importAudio.waitForExistence(timeout: 8))
+        importAudio.tap()
+
+        XCTAssertTrue(app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "Upload permitted audio or video")
+        ).firstMatch.waitForExistence(timeout: 12))
+        let mediaPicker = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS %@", "Choose audio or video")
+        ).firstMatch
+        XCTAssertTrue(mediaPicker.exists)
+        mediaPicker.tap()
+        let photoLibrary = app.buttons["Photo Library"]
+        let chooseFile = app.buttons["Choose File"]
+        let photosNavigation = app.navigationBars["Photos"]
+        XCTAssertTrue(
+            photoLibrary.waitForExistence(timeout: 3)
+                || chooseFile.waitForExistence(timeout: 3)
+                || photosNavigation.waitForExistence(timeout: 3),
+            "The web import control must open an iOS media source picker."
+        )
+    }
+
+    @MainActor
+    func testWatermarkCleanupRequiresRightsConfirmation() throws {
+        let app = launchReadyApp()
+        let cleanup = app.buttons["Clean watermark"]
+        XCTAssertTrue(cleanup.waitForExistence(timeout: 12))
         cleanup.tap()
 
-        XCTAssertTrue(app.buttons["I own it or have permission"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts.matching(
-            NSPredicate(format: "label CONTAINS %@", "Only edit media you own")
-        ).firstMatch.exists)
-    }
-
-    @MainActor
-    func testSettingsLinksAreReachable() throws {
-        let app = launchReadyApp()
-        app.tabBars.buttons["Settings"].tap()
-
-        XCTAssertTrue(app.staticTexts[
-            "Private by design. Your imported media and projects stay on this device during the beta."
-        ].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.descendants(matching: .any)["settings-privacy-link"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["settings-terms-link"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["settings-support-link"].exists)
+        XCTAssertTrue(app.staticTexts["Clean an owned video"].waitForExistence(timeout: 3))
+        let chooser = app.buttons["Choose a video"]
+        XCTAssertTrue(chooser.exists)
+        XCTAssertFalse(chooser.isEnabled)
+        app.switches["I own this video or have permission to edit it"].tap()
+        XCTAssertTrue(chooser.isEnabled)
     }
 
     @MainActor

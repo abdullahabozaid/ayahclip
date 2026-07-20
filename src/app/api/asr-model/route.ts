@@ -7,7 +7,10 @@ const MODEL_BYTES = 131_652_337;
 export async function GET() {
   let upstream: Response;
   try {
-    upstream = await fetch(GITHUB_URL, { redirect: "follow" });
+    // This 131 MB binary is already cached by the browser/CDN. Do not ask the
+    // Next.js data cache to serialize it as one entry; that exceeds its item
+    // limit and previously produced a misleading recognition failure signal.
+    upstream = await fetch(GITHUB_URL, { redirect: "follow", cache: "no-store" });
   } catch {
     return new Response("Model temporarily unavailable", { status: 502 });
   }

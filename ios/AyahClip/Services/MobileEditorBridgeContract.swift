@@ -294,6 +294,19 @@ enum MobileEditorBridgeContract {
     static let protocolVersion = 1
     static let productionOrigin = URL(string: "https://ayahclip.com")!
 
+    static func productURL(sourceReferenceURL: String? = nil) -> URL {
+        var components = URLComponents(
+            url: sourceReferenceURL == nil ? productionOrigin : productionOrigin.appending(path: "import"),
+            resolvingAgainstBaseURL: false
+        )!
+        var items = [URLQueryItem(name: "app", value: "ios")]
+        if let sourceReferenceURL, !sourceReferenceURL.isEmpty {
+            items.append(URLQueryItem(name: "social", value: sourceReferenceURL))
+        }
+        components.queryItems = items
+        return components.url!
+    }
+
     static func editorURL(
         projectID: UUID? = nil,
         requiresPassageSelection: Bool = false
@@ -320,8 +333,9 @@ enum MobileEditorBridgeContract {
               url.host == "ayahclip.com" || url.host == "www.ayahclip.com" else {
             return false
         }
-        return url.path == "/studio"
-            || url.path.hasPrefix("/studio/")
-            || url.path == "/import"
+        // The iPhone app uses the same product routes as ayahclip.com. Keeping
+        // navigation same-origin preserves the security boundary without
+        // reducing mobile to a separate, incomplete editor shell.
+        return true
     }
 }

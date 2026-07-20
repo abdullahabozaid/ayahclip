@@ -12,10 +12,16 @@ struct MobileEditorHostView: View {
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var photoSelections: [PhotosPickerItem] = []
+    private let showsCloseButton: Bool
 
-    init(model: AppModel) {
+    init(
+        model: AppModel,
+        entryPoint: MobileEditorEntryPoint = .editor,
+        showsCloseButton: Bool = true
+    ) {
+        self.showsCloseButton = showsCloseButton
         do {
-            let session = try MobileEditorHostSession(model: model)
+            let session = try MobileEditorHostSession(model: model, entryPoint: entryPoint)
             _session = State(initialValue: session)
             _hostedWebView = State(initialValue: session.makeWebView())
             _startupError = State(initialValue: nil)
@@ -30,9 +36,18 @@ struct MobileEditorHostView: View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
             if let session, let hostedWebView {
-                SharedStudioWebView(webView: hostedWebView)
-                    .ignoresSafeArea(.container, edges: .bottom)
-                    .accessibilityIdentifier("shared-studio-webview")
+                if showsCloseButton {
+                    SharedStudioWebView(webView: hostedWebView)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                        .accessibilityIdentifier("shared-studio-webview")
+                } else {
+                    // The web product already consumes CSS safe-area insets.
+                    // Let it reach the screen edges so the status-bar inset is
+                    // applied exactly once rather than producing a blank band.
+                    SharedStudioWebView(webView: hostedWebView)
+                        .ignoresSafeArea()
+                        .accessibilityIdentifier("ayahclip-product-webview")
+                }
                 editorStateOverlay(session)
             } else {
                 failureView(
@@ -41,22 +56,24 @@ struct MobileEditorHostView: View {
                 )
             }
 
-            Button {
-                session?.close()
-                model.closeEditor()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(.black.opacity(0.72), in: Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.14), lineWidth: 1))
+            if showsCloseButton {
+                Button {
+                    session?.close()
+                    model.closeEditor()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.72), in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.14), lineWidth: 1))
+                }
+                .accessibilityLabel("Close editor")
+                .padding(.top, 8)
+                .padding(.leading, 12)
             }
-            .accessibilityLabel("Close editor")
-            .padding(.top, 8)
-            .padding(.leading, 12)
         }
-        .statusBarHidden(true)
+        .statusBarHidden(showsCloseButton)
         .onChange(of: session?.mediaImports.pendingRequest?.id) { _, requestID in
             if requestID != nil { showSourceChooser = true }
         }

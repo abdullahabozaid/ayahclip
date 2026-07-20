@@ -124,6 +124,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
         video.muted = true;
         video.loop = true;
         video.playsInline = true;
+        video.setAttribute("playsinline", "");
+        video.setAttribute("webkit-playsinline", "");
         video.crossOrigin = "anonymous";
         video.addEventListener("loadeddata", () => {
           video.play().catch(() => {});
@@ -185,6 +187,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     // Loop unless synced or the user wants the last frame held when it ends.
     video.loop = !synced && store.videoLoopMode !== "freeze";
     video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
     video.crossOrigin = "anonymous";
     videoRef.current = video;
 
@@ -402,9 +406,28 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     if (!ctx) return;
     const s = useAppStore.getState();
     const sz = FORMAT_SIZES[s.videoFormat];
-    // The preview canvas IS the export frame: same resolution, same renderer.
-    if (canvas.width !== sz.w) canvas.width = sz.w;
-    if (canvas.height !== sz.h) canvas.height = sz.h;
+    // Same renderer and coordinate space as export (drawScene composes in
+    // FORMAT_SIZES coordinates via the transform below), but the backing store
+    // matches the on-screen size × devicePixelRatio, capped at the export
+    // resolution. Rasterizing at display density is what keeps text crisp: a
+    // full 1080-px backing squeezed into a ~292-px box leaves the compositor
+    // to minify a huge bitmap in one bilinear pass, which blurs Arabic
+    // diacritics and translation text on every screen.
+    // Before layout settles clientWidth is 0; fall back to the full export
+    // width (the redraw effect keyed on the measured stage repaints once the
+    // real box exists, so this only affects the very first frame).
+    const cssWidth = canvas.clientWidth || sz.w;
+    const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    const backingW = Math.max(1, Math.min(sz.w, Math.round(cssWidth * dpr)));
+    const drawScale = backingW / sz.w;
+    const backingH = Math.max(1, Math.round(sz.h * drawScale));
+    if (canvas.width !== backingW) canvas.width = backingW;
+    if (canvas.height !== backingH) canvas.height = backingH;
+    ctx.setTransform(drawScale, 0, 0, drawScale, 0, 0);
+    // High-quality resampling for the scaled background photo/video. Text is
+    // drawn as vectors in the scaled coordinate space, so it stays crisp
+    // regardless; this only sharpens raster media.
+    ctx.imageSmoothingQuality = "high";
 
     // Same row model as export: cv and seg MUST come from one row, or a
     // duplicated verse shows the wrong text against the duplicate's audio.
@@ -742,7 +765,8 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
 
   const framed = frameMode !== "studio";
   const canReframe = store.background.type === "image" || store.background.type === "video";
-  const preferredWidth = framed ? 292 : size.w >= size.h ? 520 : 292;
+  const phoneStage = stageSize.width > 0 && stageSize.width < 768;
+  const preferredWidth = phoneStage ? 220 : framed ? 292 : size.w >= size.h ? 520 : 292;
   const chromeWidthRatio = framed ? 1.09 : 1;
   const chromeHeightRatio = framed ? 16 / 9 + 0.09 : size.h / size.w;
   const controlsHeight = (canReframe && framed ? 64 : 0) + (rows.length > 0 ? 64 : 0);
@@ -767,6 +791,14 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     observer.observe(parent);
     return () => observer.disconnect();
   }, []);
+
+  // The backing store follows the on-screen canvas size (see drawRef), so a
+  // stage resize while paused must repaint at the new density — the animation
+  // loop only covers playback.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => drawRef.current());
+    return () => cancelAnimationFrame(frame);
+  }, [displayWidth, stageSize.width, stageSize.height]);
 
   const startReframe = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!canReframe) return;

@@ -95,9 +95,11 @@ test("deployed AyahClip completes a real MP4 journey in Google Chrome", async ({
   expect(errors).toEqual([]);
 });
 
-test("deployed recognition bundle targets the reviewed same-origin model route", async ({ page }) => {
+test("deployed recognition bundle targets the reviewed same-origin model asset", async ({ page }) => {
   await page.route("**/api/telemetry", (route) => route.fulfill({ status: 204, body: "" }));
-  await page.route("**/api/asr-model", (route) => route.fulfill({ status: 503, body: "test stop" }));
+  await page.route("**/models/fastconformer_ar_ctc_q8.onnx", (route) =>
+    route.fulfill({ status: 503, body: "test stop" })
+  );
   await page.goto("/import");
   await page.locator('input[type="file"]').setInputFiles({
     name: "recognition-route.wav",
@@ -107,7 +109,7 @@ test("deployed recognition bundle targets the reviewed same-origin model route",
   await expect(page.getByRole("button", { name: /recognition-route\.wav/ })).toContainText("Loaded");
 
   const modelRequest = page.waitForRequest((request) =>
-    new URL(request.url()).pathname === "/api/asr-model"
+    new URL(request.url()).pathname === "/models/fastconformer_ar_ctc_q8.onnx"
   );
   await page.getByRole("button", { name: "Recognise verses" }).click();
   expect(new URL((await modelRequest).url()).origin).toBe(new URL(page.url()).origin);

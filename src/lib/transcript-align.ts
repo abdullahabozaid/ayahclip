@@ -11,6 +11,11 @@ export interface TranscriptAlignInput {
 
 export interface TranscriptAlignment {
   timings: VerseTiming[];
+  /** Model-derived onset of each normalized Quran word, grouped by ayah. */
+  wordStartsByVerse: number[][];
+  /** Exact Quran words actually covered by the transcript. A partial first or
+   * last ayah uses this to display only what the reciter said. */
+  recitedWordRangesByVerse: ({ from: number; to: number } | null)[];
   /** Normalized reference similarity: 1 is exact, 0 is unusable. */
   similarity: number;
 }
@@ -44,7 +49,8 @@ export function alignTranscriptVerses(input: TranscriptAlignInput): TranscriptAl
     trace[j] = 2;
   }
   for (let i = 0; i <= n; i++) {
-    scores[i * cols] = -i;
+    // Free reference prefix: a source may begin halfway through an ayah.
+    scores[i * cols] = 0;
     trace[i * cols] = 1;
   }
   trace[0] = 0;
@@ -68,8 +74,15 @@ export function alignTranscriptVerses(input: TranscriptAlignInput): TranscriptAl
   }
 
   const referenceToHypothesis = new Int32Array(n).fill(-1);
-  let i = n;
+  // Free reference suffix: a source may also end halfway through an ayah. The
+  // whole recognised hypothesis must still be consumed, so choose the best
+  // endpoint from the final hypothesis column.
+  let i = 0;
   let j = m;
+  for (let candidate = 1; candidate <= n; candidate++) {
+    if (scores[candidate * cols + m] > scores[i * cols + m]) i = candidate;
+  }
+  const alignmentEnd = i;
   while (i > 0 && j > 0) {
     const direction = trace[i * cols + j];
     if (direction === 0) {
@@ -121,10 +134,40 @@ export function alignTranscriptVerses(input: TranscriptAlignInput): TranscriptAl
       ? Math.max(starts[index] + 0.12, starts[index + 1])
       : end,
   }));
-  const rawScore = scores[n * cols + m];
-  const maxScore = Math.max(1, 2 * Math.max(n, m));
+  const rawScore = scores[alignmentEnd * cols + m];
+  // +2 for a match and -1 for a mismatch/gap gives [-m, 2m] when every
+  // hypothesis character is consumed. Normalise that range without charging
+  // the unrecited Quran prefix/suffix.
+  const maxScore = Math.max(1, m);
+  const recitedWordRangesByVerse = reference.ranges.map((range) => {
+    const verseText = reference.text.slice(range.start, range.end);
+    const wordOffsets = [...verseText.matchAll(/\S+/g)].map((match) => ({
+      start: range.start + (match.index ?? 0),
+      end: range.start + (match.index ?? 0) + match[0].length,
+    }));
+    const covered = wordOffsets.flatMap((word, index) => {
+      for (let offset = word.start; offset < word.end; offset++) {
+        if (referenceToHypothesis[offset] >= 0) return [index];
+      }
+      return [];
+    });
+    return covered.length
+      ? { from: covered[0], to: covered[covered.length - 1] }
+      : null;
+  });
+  const wordStartsByVerse = reference.ranges.map((range) => {
+    const verseText = reference.text.slice(range.start, range.end);
+    const starts: number[] = [];
+    for (const match of verseText.matchAll(/\S+/g)) {
+      const offset = match.index ?? 0;
+      starts.push(times[range.start + offset] ?? timings[0]?.start ?? 0);
+    }
+    return starts;
+  });
   return {
     timings,
-    similarity: Math.max(0, Math.min(1, (rawScore + maxScore / 2) / (maxScore * 1.5))),
+    wordStartsByVerse,
+    recitedWordRangesByVerse,
+    similarity: Math.max(0, Math.min(1, (rawScore + maxScore) / (maxScore * 3))),
   };
 }

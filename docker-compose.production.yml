@@ -13,7 +13,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://ayahclip.com}
-        NEXT_PUBLIC_ASR_MODEL_URL: ${NEXT_PUBLIC_ASR_MODEL_URL:-}
+        NEXT_PUBLIC_ASR_MODEL_URL: ${NEXT_PUBLIC_ASR_MODEL_URL:-/models/fastconformer_ar_ctc_q8.onnx}
         DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
     env_file:
       - .env

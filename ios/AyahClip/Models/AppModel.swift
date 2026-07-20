@@ -34,6 +34,9 @@ final class AppModel {
     var importedMediaURLs: [URL] = []
     var importedMediaURL: URL? { importedMediaURLs.first }
     var pendingLink = ""
+    /// One-shot URL delivered by the system Share Sheet. Unlike `pendingLink`,
+    /// this is not restored on every launch, so an old post never re-downloads.
+    var sharedLinkToImport: String?
     var notice: String?
     var quranChapters: [QuranChapter] = []
     var quranVerses: [QuranCatalogVerse] = []
@@ -231,6 +234,7 @@ final class AppModel {
     }
 
     func makeMobileEditorEnvironment(
+        entryPoint: MobileEditorEntryPoint = .editor,
         mediaImporter: @escaping NativeMediaImporter = { _ in
             throw MobileEditorSession.SessionError.unsupportedMessage
         }
@@ -241,6 +245,8 @@ final class AppModel {
         return try MobileEditorEnvironment(
             project: project,
             mediaURLs: importedMediaURLs,
+            entryPoint: entryPoint,
+            sourceReferenceURL: sharedLinkToImport,
             allowedMediaRoots: [try mediaDirectory()],
             onProjectChange: { [weak self] envelope, session in
                 guard let self else { throw CancellationError() }
@@ -434,7 +440,7 @@ final class AppModel {
         }
         pendingLink = url.absoluteString
         UserDefaults.standard.set(pendingLink, forKey: referenceKey)
-        notice = "Reference saved on this iPhone. Import the original file you own from Photos or Files to edit it."
+        notice = "Link ready. AyahClip will resolve the source video when the import screen opens."
         return true
     }
 
@@ -455,6 +461,7 @@ final class AppModel {
             Task { await importMedia(from: url) }
         } else {
             pendingLink = url.absoluteString
+            sharedLinkToImport = url.absoluteString
             referenceLink()
         }
     }
@@ -492,6 +499,7 @@ final class AppModel {
 
         if let link = defaults.string(forKey: "pendingSharedLink") {
             pendingLink = link
+            sharedLinkToImport = link
             selectedTab = .import
             // The App Group key is a delivery inbox, not permanent storage.
             // Once delivered, keep valid references in standard defaults and

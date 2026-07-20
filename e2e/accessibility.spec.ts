@@ -5,6 +5,7 @@ const criticalRoutes = [
   "/",
   "/browse",
   "/import",
+  "/bulk",
   "/styles",
   "/library",
   "/support",

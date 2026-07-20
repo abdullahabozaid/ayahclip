@@ -19,10 +19,17 @@ describe("template application media handoff", () => {
     });
   });
 
-  it("ships the split preset with a real bold Naskh face fitted to its reading panel", () => {
+  it("ships the split preset with a real bold Naskh face and compact upload-ready scale", () => {
     expect(split.settings.arabicFont).toBe("scheherazade-new");
     expect(split.settings.arabicFontWeight).toBe(700);
-    expect(split.settings.arabicFontSize).toBe(30);
+    expect(split.settings.arabicFontSize).toBe(24);
+  });
+
+  it("starts every built-in preset at 24px Arabic and 12px English", () => {
+    for (const template of TEMPLATES) {
+      expect(template.settings.arabicFontSize, template.name).toBe(24);
+      expect(template.settings.translationFontSize, template.name).toBe(12);
+    }
   });
 
   it("creates an ordered media request for every reusable slot", () => {
@@ -144,5 +151,48 @@ describe("template application media handoff", () => {
     expect(state.mediaTransform).toEqual({ scale: 1.35, x: 0.3, y: -0.1 });
     expect(state.mediaFrame).toEqual({ shape: "square", x: 62, y: 48, width: 74, height: 44, radius: 0 });
     expect(state.videoLoopMode).toBe("loop");
+  });
+});
+
+describe("apply-time media override", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      background: { type: "video", value: "blob:my-clip", label: "My clip" },
+      backgroundFit: "cover",
+      backgroundSequenceEnabled: false,
+      backgroundScenes: [],
+      activeBackgroundSceneId: null,
+      pendingTemplateMedia: null,
+    });
+  });
+
+  it("strict keep mode never touches media, scenes, or slot prompts", () => {
+    applyTemplate(broll, { replaceMedia: false });
+    const state = useAppStore.getState();
+    expect(state.background).toEqual({ type: "video", value: "blob:my-clip", label: "My clip" });
+    expect(state.backgroundSequenceEnabled).toBe(false);
+    expect(state.backgroundScenes).toEqual([]);
+    expect(state.pendingTemplateMedia).toBeNull();
+  });
+
+  it("strict keep mode still applies the non-media styling", () => {
+    applyTemplate(split, { replaceMedia: false });
+    const state = useAppStore.getState();
+    expect(state.arabicFont).toBe(split.settings.arabicFont);
+    expect(state.textPosition).toBe(split.settings.textPosition);
+    expect(state.background.value).toBe("blob:my-clip");
+  });
+
+  it("replaceMedia: true forces the template's media composition on a preserve-policy template", () => {
+    applyTemplate(broll, { replaceMedia: true });
+    const state = useAppStore.getState();
+    expect(state.backgroundSequenceEnabled).toBe(true);
+    expect(state.backgroundScenes.length).toBeGreaterThan(1);
+    expect(state.pendingTemplateMedia?.templateName).toBe("B-roll Rotation");
+  });
+
+  it("omitting the option keeps the template's own legacy behaviour", () => {
+    applyTemplate(broll);
+    expect(useAppStore.getState().pendingTemplateMedia?.slots.length).toBe(3);
   });
 });

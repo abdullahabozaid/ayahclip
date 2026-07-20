@@ -470,6 +470,9 @@ async function main() {
       transcriptSimilarity: alignment.transcriptSimilarity === null
         ? null
         : Number(alignment.transcriptSimilarity.toFixed(3)),
+      partialWordRanges: aligned.flatMap((timing) => timing.wordRange
+        ? [{ verse: timing.verseNumber, from: timing.wordRange.from, to: timing.wordRange.to }]
+        : []),
       methodAgreementSeconds: alignment.methodAgreementSeconds === null
         ? null
         : Number(alignment.methodAgreementSeconds.toFixed(3)),

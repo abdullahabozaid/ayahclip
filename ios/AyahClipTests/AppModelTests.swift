@@ -85,6 +85,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(draft.segments.isEmpty)
         XCTAssertTrue(draft.arabic.isEmpty)
         XCTAssertTrue(draft.translation.isEmpty)
+        XCTAssertEqual(draft.arabicSize, 24)
+        XCTAssertEqual(draft.translationSize, 12)
         let snapshot = MobileProjectSnapshotV1(project: draft, media: [])
         XCTAssertTrue(snapshot.isValid)
         XCTAssertNil(snapshot.quran)
@@ -408,9 +410,30 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(MobileEditorBridgeContract.allowsNavigation(
             to: try XCTUnwrap(URL(string: "http://ayahclip.com/studio"))
         ))
-        XCTAssertFalse(MobileEditorBridgeContract.allowsNavigation(
+        XCTAssertTrue(MobileEditorBridgeContract.allowsNavigation(
             to: try XCTUnwrap(URL(string: "https://ayahclip.com/privacy"))
         ))
+        XCTAssertEqual(MobileEditorBridgeContract.productURL().path, "")
+        XCTAssertEqual(
+            URLComponents(
+                url: MobileEditorBridgeContract.productURL(),
+                resolvingAgainstBaseURL: false
+            )?.queryItems?.first(where: { $0.name == "app" })?.value,
+            "ios"
+        )
+        let socialSource = "https://www.tiktok.com/@ayahclip/video/123"
+        let socialProductURL = MobileEditorBridgeContract.productURL(
+            sourceReferenceURL: socialSource
+        )
+        let socialComponents = try XCTUnwrap(URLComponents(
+            url: socialProductURL,
+            resolvingAgainstBaseURL: false
+        ))
+        XCTAssertEqual(socialProductURL.path, "/import")
+        XCTAssertEqual(
+            socialComponents.queryItems?.first(where: { $0.name == "social" })?.value,
+            socialSource
+        )
     }
 
     func testMobileDetectionEnvelopeRoundTripsWithoutLosingReviewState() throws {
@@ -778,7 +801,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(environment.hydrateEnvelope.payload.id, model.activeProject?.id.uuidString)
     }
 
-    func testMobileEditorNavigationPolicyConfinesTopLevelStudio() {
+    func testMobileEditorNavigationPolicyConfinesTopLevelProductToAyahClip() {
         XCTAssertTrue(MobileEditorNavigationPolicy.allows(
             url: URL(string: "https://ayahclip.com/studio?native=ios&bridge=1"),
             isMainFrame: true
@@ -791,7 +814,7 @@ final class AppModelTests: XCTestCase {
             url: URL(string: "https://ayahclip.com/import"),
             isMainFrame: true
         ))
-        XCTAssertFalse(MobileEditorNavigationPolicy.allows(
+        XCTAssertTrue(MobileEditorNavigationPolicy.allows(
             url: URL(string: "https://ayahclip.com/styles"),
             isMainFrame: true
         ))
@@ -1328,9 +1351,10 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.selectedTab, .import)
         XCTAssertEqual(model.pendingLink, "https://www.tiktok.com/@ayahclip/video/123")
+        XCTAssertEqual(model.sharedLinkToImport, "https://www.tiktok.com/@ayahclip/video/123")
         XCTAssertEqual(
             model.notice,
-            "Reference saved on this iPhone. Import the original file you own from Photos or Files to edit it."
+            "Link ready. AyahClip will resolve the source video when the import screen opens."
         )
         XCTAssertNil(defaults.string(forKey: "pendingSharedLink"))
         XCTAssertEqual(
