@@ -10,6 +10,7 @@ import {
   BULK_CLIP_COUNTS,
   BULK_IDEAL_CLIP_SECONDS,
   buildVerseCompleteCandidates,
+  groupCandidatesBySurah,
   type BulkArabicLineLimit,
   type BulkAyahsPerClip,
   type BulkClipCandidate,
@@ -1060,6 +1061,22 @@ export function BulkCreateWorkspace() {
               }
             }} />}
 
+            {rendering && (
+              <p className="mt-5 flex items-center gap-2 rounded-xl border border-[var(--gold)]/25 bg-[rgba(201,162,75,0.08)] px-4 py-2.5 text-xs leading-5 text-gold-soft" role="note">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 4.3 1.8 19a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z" /></svg>
+                <span>Rendering runs in your browser — keep this tab open until it finishes. Clips that are already done are saved to the collection.</span>
+              </p>
+            )}
+
+            {candidates.length > 0 && (
+              <BulkSurahSegments
+                candidates={candidates}
+                surahs={surahs}
+                activeCandidateId={activeCandidate?.id ?? null}
+                onSelect={setActiveCandidateId}
+              />
+            )}
+
             {candidates.length > 0 && (
               <BulkTimelineOverview
                 candidates={candidates}
@@ -1151,6 +1168,62 @@ export function BulkCreateWorkspace() {
   );
 }
 
+function BulkSurahSegments({
+  candidates,
+  surahs,
+  activeCandidateId,
+  onSelect,
+}: {
+  candidates: BulkClipCandidate[];
+  surahs: Surah[];
+  activeCandidateId: string | null;
+  onSelect: (candidateId: string) => void;
+}) {
+  const sections = groupCandidatesBySurah(candidates);
+  // A single surah needs no "which surah is this" breakdown; the clip cards
+  // already carry the name. The value here is a multi-surah recitation.
+  if (sections.length < 2) return null;
+
+  return (
+    <section className="mt-6 rounded-2xl border border-[var(--hairline-soft)] bg-[rgba(16,17,21,0.62)] p-4" aria-labelledby="bulk-surah-heading">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 id="bulk-surah-heading" className="text-sm font-medium text-parchment">Recognised surahs</h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">This recitation moves through {sections.length} surahs. Select one to jump to its first clip.</p>
+        </div>
+        <span className="text-[10px] tabular-nums text-[var(--muted-deep)]">{candidates.length} clips</span>
+      </div>
+      <ol className="mt-4 flex flex-wrap gap-2">
+        {sections.map((section, index) => {
+          const surah = surahs.find((item) => item.id === section.surah);
+          const active = section.candidateIds.includes(activeCandidateId ?? "");
+          const ayahLabel = section.ayahStart === section.ayahEnd
+            ? `Ayah ${section.ayahStart}`
+            : `Ayahs ${section.ayahStart}–${section.ayahEnd}`;
+          return (
+            <li key={`${section.surah}-${index}`}>
+              <button
+                type="button"
+                onClick={() => onSelect(section.firstCandidateId)}
+                aria-current={active ? "true" : undefined}
+                aria-label={`${surah?.name_simple ?? `Surah ${section.surah}`}, ${ayahLabel}, ${section.clipCount} clip${section.clipCount === 1 ? "" : "s"}, from ${fmt(section.start)}`}
+                className={`flex min-h-11 flex-col items-start rounded-xl border px-3 py-2 text-left transition-colors ${active ? "border-[var(--gold)] bg-[rgba(201,162,75,0.12)]" : "border-[var(--hairline-soft)] hover:border-[var(--hairline)]"}`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-[9px] tabular-nums text-[var(--muted-deep)]">{index + 1}</span>
+                  <span className="text-sm font-medium text-parchment">{surah?.name_simple ?? `Surah ${section.surah}`}</span>
+                  {surah && <span dir="rtl" lang="ar" className="font-arabic text-sm text-gold-soft/80">{surah.name_arabic}</span>}
+                </span>
+                <span className="mt-0.5 text-[11px] text-[var(--muted)]">{ayahLabel} · {section.clipCount} clip{section.clipCount === 1 ? "" : "s"} · {fmt(section.start)}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 function BulkTimelineOverview({
   candidates,
   duration,
@@ -1238,6 +1311,11 @@ function AnalysisView({ progress, overallProgress, thumbnailProgress, inspiratio
         <div className="h-full rounded-full bg-gold transition-[width] duration-500" style={{ width: `${thumbnailProgress === null ? Math.max(2, overallProgress) : thumbnailProgress}%` }} />
       </div>
       <p className="mt-2 text-xs tabular-nums text-[var(--muted)]">{thumbnailProgress ?? overallProgress}% · cuts are placed only after complete ayahs</p>
+
+      <p className="mx-auto mt-5 flex max-w-xl items-center justify-center gap-2 rounded-xl border border-[var(--gold)]/25 bg-[rgba(201,162,75,0.08)] px-4 py-2.5 text-xs leading-5 text-gold-soft" role="note">
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 4.3 1.8 19a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z" /></svg>
+        <span>Keep this tab open — recognition runs in your browser and pauses if you leave. Your progress is saved after every window, so you can safely resume later.</span>
+      </p>
 
       {inspiration && (
         <div key={inspiration.kind === "hadith" ? inspiration.reference : inspiration.reference} className="bulk-inspiration mx-auto mt-10 max-w-2xl border-y border-[var(--hairline-soft)] px-4 py-7">

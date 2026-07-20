@@ -42,6 +42,57 @@ export interface BulkClipCandidate {
   styleOverride?: StyleSnapshot | null;
 }
 
+/**
+ * A contiguous run of clips from one surah, for the multi-surah segmentation
+ * overview. A 30-minute recitation that moves through several surahs becomes
+ * one section per surah (Al-Fatihah, then Al-Baqarah, …), each spanning its
+ * clips' combined ayah range and source-time span.
+ */
+export interface BulkSurahSection {
+  surah: number;
+  ayahStart: number;
+  ayahEnd: number;
+  clipCount: number;
+  start: number;
+  end: number;
+  candidateIds: string[];
+  firstCandidateId: string;
+}
+
+/**
+ * Group time-ordered candidates into per-surah sections. Candidates never cross
+ * a surah (see buildVerseCompleteCandidates), and a surah's ayahs are recited
+ * contiguously, so consecutive same-surah candidates form one section. A surah
+ * that recurs after a different surah (e.g. a reader returns to it) yields a
+ * separate later section, which is the honest reflection of the recitation.
+ */
+export function groupCandidatesBySurah(candidates: readonly BulkClipCandidate[]): BulkSurahSection[] {
+  const sections: BulkSurahSection[] = [];
+  for (const candidate of candidates) {
+    const current = sections.at(-1);
+    if (current && current.surah === candidate.surah) {
+      current.ayahStart = Math.min(current.ayahStart, candidate.ayahStart);
+      current.ayahEnd = Math.max(current.ayahEnd, candidate.ayahEnd);
+      current.clipCount += 1;
+      current.start = Math.min(current.start, candidate.start);
+      current.end = Math.max(current.end, candidate.end);
+      current.candidateIds.push(candidate.id);
+    } else {
+      sections.push({
+        surah: candidate.surah,
+        ayahStart: candidate.ayahStart,
+        ayahEnd: candidate.ayahEnd,
+        clipCount: 1,
+        start: candidate.start,
+        end: candidate.end,
+        candidateIds: [candidate.id],
+        firstCandidateId: candidate.id,
+      });
+    }
+  }
+  return sections;
+}
+
 const confidenceRank = { selected: 0, medium: 1, high: 2 } as const;
 
 export function isCompleteDetectedAyah(ayah: BulkDetectedAyah): boolean {

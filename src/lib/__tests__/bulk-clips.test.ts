@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVerseCompleteCandidates,
+  groupCandidatesBySurah,
   mergeBulkAyahs,
+  type BulkClipCandidate,
   type BulkDetectedAyah,
 } from "../bulk-clips";
 
@@ -116,5 +118,40 @@ describe("buildVerseCompleteCandidates", () => {
     expect(result).toHaveLength(1);
     expect(result[0].wordRange).toBeUndefined();
     expect(result[0]).toMatchObject({ start: 21, end: 31 });
+  });
+});
+
+describe("groupCandidatesBySurah", () => {
+  const clip = (id: string, surah: number, ayahStart: number, ayahEnd: number, start: number, end: number): BulkClipCandidate => ({
+    id, order: Number(id), surah, ayahStart, ayahEnd, start, end, duration: end - start,
+    timings: [], confidence: "high", templateId: "clean-ink", approved: true,
+  });
+
+  it("segments a multi-surah recitation into one section per surah", () => {
+    const sections = groupCandidatesBySurah([
+      clip("1", 1, 1, 4, 0, 40),
+      clip("2", 1, 5, 7, 40, 70),
+      clip("3", 2, 1, 5, 70, 140),
+      clip("4", 2, 6, 12, 140, 210),
+      clip("5", 112, 1, 4, 210, 230),
+    ]);
+    expect(sections.map((s) => s.surah)).toEqual([1, 2, 112]);
+    expect(sections[0]).toMatchObject({ surah: 1, ayahStart: 1, ayahEnd: 7, clipCount: 2, start: 0, end: 70, firstCandidateId: "1" });
+    expect(sections[1]).toMatchObject({ surah: 2, ayahStart: 1, ayahEnd: 12, clipCount: 2, firstCandidateId: "3" });
+    expect(sections[2]).toMatchObject({ surah: 112, clipCount: 1, firstCandidateId: "5" });
+  });
+
+  it("keeps a surah that recurs after another as its own later section", () => {
+    const sections = groupCandidatesBySurah([
+      clip("1", 1, 1, 7, 0, 60),
+      clip("2", 2, 1, 5, 60, 120),
+      clip("3", 1, 1, 7, 120, 180),
+    ]);
+    expect(sections.map((s) => s.surah)).toEqual([1, 2, 1]);
+    expect(sections[2].firstCandidateId).toBe("3");
+  });
+
+  it("returns an empty list for no candidates", () => {
+    expect(groupCandidatesBySurah([])).toEqual([]);
   });
 });
