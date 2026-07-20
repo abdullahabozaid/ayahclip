@@ -68,6 +68,12 @@ export async function openBulkCandidateInStudio(jobId: string, candidateId: stri
       : { replaceMedia: job.templateReplacesMedia === true });
   }
   if (job.styleOverride) applyStyleSnapshot(job.styleOverride);
+  // "Keep original" caption mode: no AyahClip text overlay, so a source clip
+  // that already has burned-in captions is not double-captioned.
+  if (job.captionMode === "original") {
+    store.setArabicEnabled(false);
+    store.setTranslationEnabled(false);
+  }
   // The clip's OWN saved look wins last: an individual clip edited in Studio
   // must reopen exactly as the creator left it, not as the batch default.
   if (candidate.styleOverride) applyStyleSnapshot(candidate.styleOverride);

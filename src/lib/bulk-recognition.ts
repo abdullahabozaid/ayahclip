@@ -87,20 +87,33 @@ export async function recognizeQuranInWindows({
         recognition,
       }),
     });
-    if (outcome.kind !== "matched") {
-      unresolvedWindows.push({ start: window.start, end: window.end, reason: outcome.message });
+    // A "none" outcome truly found no Quran and is withheld. An "ambiguous"
+    // outcome, however, already carries fully-built, corpus-aligned candidate
+    // ranges — discarding them was why real recitations produced ZERO drafts.
+    // Surface the top candidate as a LOW-confidence draft the creator must
+    // verify (built unapproved, flagged for review) rather than silently
+    // dropping it. The Arabic shown is still the verified corpus text for that
+    // range; only the range attribution is uncertain, hence the review gate.
+    const emitted = outcome.kind === "matched"
+      ? { result: outcome.result, confidence: outcome.result.confidence }
+      : outcome.kind === "ambiguous" && outcome.candidates[0]
+        ? { result: outcome.candidates[0], confidence: "low" as const }
+        : null;
+    if (!emitted) {
+      const reason = outcome.kind === "matched" ? "" : outcome.message;
+      unresolvedWindows.push({ start: window.start, end: window.end, reason });
       await onWindowComplete?.({ ayahs, unresolvedWindows, nextWindowIndex: index + 1 });
       continue;
     }
-    for (const timing of outcome.result.timings) {
+    for (const timing of emitted.result.timings) {
       ayahs.push({
         ...timing,
         start: timing.start + window.start,
         end: timing.end + window.start,
         splits: timing.splits?.map((split) => split + window.start),
         alignedWordStarts: timing.alignedWordStarts?.map((time) => time + window.start),
-        surah: outcome.result.surah,
-        confidence: outcome.result.confidence,
+        surah: emitted.result.surah,
+        confidence: emitted.confidence,
         sourceWindow: index,
       });
     }

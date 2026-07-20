@@ -1,0 +1,69 @@
+# Plan 008: Bulk recognition & clipping — the road from "40%" to reliable
+
+> Research-grounded roadmap. The two quick wins (review drafts, caption on/off)
+> shipped 2026-07-20. This plan captures the larger improvements, ordered by
+> leverage. Each is independently plannable; several are model/architecture
+> changes needing owner sign-off on cost.
+
+## Status
+
+- **Priority**: P1 (bulk is the flagship workflow and is unreliable on real content)
+- **Effort**: mixed (S → XL, per item)
+- **Category**: direction / recognition quality
+- **Planned at**: commit (post-review-drafts), 2026-07-20
+
+## Context: why bulk produced "0 drafts, 8 ambiguous withheld"
+
+Root cause (confirmed): `bulk-recognition.ts` discarded the fully-built, corpus-aligned candidate ranges that "ambiguous" windows already carry. Fixed 2026-07-20 by surfacing the top candidate as a LOW-confidence review draft (unapproved, "review range" badge). But the deeper reason so many windows land "ambiguous" remains, and is the real work:
+
+1. **`hasCompetingRecognitionWindow` misfires** (`verse-match.ts:612-627`): it flags any pause-window candidate that is a *non-overlapping same-surah* range (`ayahStart > primary.ayahEnd`) as "competing", even though that's normal inside a 4-min continuous recitation. This forces confident single-surah windows into "ambiguous".
+2. **4-min windows** force a single contiguous range over 5-15 ayahs; accumulated greedy-CTC errors drop `match.score` below the strict `0.84/0.9` floors → "low" → withheld.
+3. **Generic Arabic ASR** (`asr.ts`, FastConformer greedy CTC, no LM/beam) degrades on melodic tajweed/elongation.
+4. **No cross-window merge** — the plan (`docs/2026-07-19-bulk-quran-clips-plan.md:122`) specifies merging a continuous surah/ayah sequence across windows; it doesn't exist.
+
+## Research findings (2026-07-20) that shape the fix
+
+- **Closed-vocabulary forced alignment beats open ASR.** The winning pattern (quran-align ~73ms boundary error; Tadabur/WhisperX): identify the passage, then align the *known* ayah text to the audio with a dictionary filtered to that passage. Recognition becomes a closed problem. Refs: github.com/cpfair/quran-align, github.com/m-bain/whisperx.
+- **Quran-tuned models exist**: `tarteel-ai/whisper-base-ar-quran`, phonetic `wav2vec2-quran-phonetics` (robust to elongation). RecitID proves audio→surah/ayah fuzzy-match is feasible (~18s/snippet).
+- **Opus Clip UX**: transcribe → cut on sentence/silence/scene → **rank by a virality score** → present a scored review grid; word-by-word "karaoke" burned captions are the biggest "feels finished" signal.
+- **Already-captioned sources**: mainstream clippers double-caption (a known flaw). Detect burned-in text via OCR on the lower third (PaddleOCR-WASM, Arabic-capable) or an edge-density heuristic across sampled frames; then crop-away / keep-original / cover-and-replace. Never trust a stranger's burned-in Arabic (text-integrity risk) — prefer cover-and-replace with verified corpus text.
+
+## Roadmap (by leverage)
+
+### A. Fix the competing-window false trigger — S, HIGH leverage
+`hasCompetingRecognitionWindow`: treat non-overlapping *same-surah* pause windows as expected (not competing); only flag a genuinely different surah, or a materially higher-scoring disagreement. This alone should move many windows from "ambiguous" back to confidently "matched".
+- **RISK**: it's shared with the single-clip editor auto-apply. MUST gate on the recognition benchmark (`npm run test:recognition`, `test:detection`) proving zero new false auto-applies before/after. Do not ship without that evidence.
+
+### B. Cross-window merge into a continuous sequence — M
+Merge adjacent windows' ayahs into one continuous surah/ayah timeline (the plan's step 3), so a long recitation is reconstructed rather than each 4-min window self-classifying. Reduces boundary loss and lets confidence accrue over the whole passage.
+
+### C. Smaller/adaptive windows + silence-aware cuts — M
+Cut windows at silence gaps (reciters pause between ayat) instead of fixed 4-min slices; combine textual ayah boundary + acoustic silence for clean "complete-thought" clips. Smaller windows raise per-window match confidence.
+
+### D. Closed-vocabulary alignment pass — L
+Once a window's surah is identified (even at low confidence), re-align using a dictionary filtered to that passage's words (quran-align style). Turns "guess the range" into "align known text", sharply improving both recall and boundary accuracy — even with the current ASR.
+
+### E. Quran-tuned recognition model — L/XL (owner: model hosting cost)
+Swap/augment `asr-model-v1` with `tarteel-ai/whisper-base-ar-quran` or a phonetic wav2vec2. Benchmark WER on melodic recitation first (the repo has no such benchmark yet — `docs/recognition-model-review.md`). Bundle-size and in-browser latency are the constraints.
+
+### F. Clip ranking / review grid — M
+Score each draft (complete-ayah, clean silence padding at cuts, 20-60s duration, confidence) and present a ranked grid à la Opus Clip, so review is skim-and-approve, not scrub. Complements the review-draft work already shipped.
+
+### G. Burned-in caption detection → smart caption strategy — L
+Detect burned-in captions (sampled-frame edge-density heuristic first; PaddleOCR-WASM if needed) and auto-suggest the caption mode (the on/off toggle shipped 2026-07-20 is the manual version). Offer crop-away / keep-original / cover-and-replace; default cover-and-replace with verified text.
+
+### H. Word-highlight (karaoke) captions in EXPORT — M
+`wordHighlight` renders in preview but NOT in the exported MP4 (see plans/README.md addendum). The forced-alignment word timestamps already exist; drive per-word highlight through `drawScene` in the export frame loop, and add `wordHighlight` to the render-cache key. Biggest muted-autoplay "feels finished" win.
+
+## Recommended order
+
+A (quick, high leverage, benchmark-gated) → B → C → F, then the larger D/E/G/H as owner-approved model/infra work. A+B+C together should take bulk from "0 drafts on hard content" to "mostly confident drafts + a few to review".
+
+## Done criteria (per item)
+
+Each item ships behind: `npm run test:recognition` + `test:detection` green (no new false auto-applies), unit tests for new pure logic, and a live multi-window bulk run on a real recitation showing improved confident-draft yield. Quran integrity is the hard gate — never present an unverified range as confident/approved.
+
+## Maintenance notes
+
+- The review-draft surfacing (shipped) is the safety net: even as recognition improves, ambiguous windows must always become reviewable drafts, never silent 0-output.
+- A/B/D touch `verse-match.ts`/`quran-recognition.ts` — the Quran-integrity core. Every change there is benchmark-gated.

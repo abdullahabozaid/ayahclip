@@ -13,7 +13,9 @@ export type BulkGroupingMode = "duration" | "exact" | "whole-passage";
 
 export interface BulkDetectedAyah extends VerseTiming {
   surah: number;
-  confidence: "high" | "medium" | "selected";
+  // "low" = recovered from an ambiguous window; a reviewable draft, never
+  // auto-approved. "selected" = a user-chosen range.
+  confidence: "high" | "medium" | "low" | "selected";
   sourceWindow: number;
 }
 
@@ -93,7 +95,14 @@ export function groupCandidatesBySurah(candidates: readonly BulkClipCandidate[])
   return sections;
 }
 
-const confidenceRank = { selected: 0, medium: 1, high: 2 } as const;
+const confidenceRank = { low: -1, selected: 0, medium: 1, high: 2 } as const;
+
+/** A clip is auto-approved only when every ayah in it was a confident match.
+ * Anything recovered from an ambiguous window ("low") stays unapproved so the
+ * creator verifies the range before it renders. */
+function isConfidentCandidate(timings: readonly BulkDetectedAyah[]): boolean {
+  return timings.every((timing) => timing.confidence === "high" || timing.confidence === "medium");
+}
 
 export function isCompleteDetectedAyah(ayah: BulkDetectedAyah): boolean {
   if (!ayah.wordRange) return true;
@@ -248,7 +257,7 @@ export function buildVerseCompleteCandidates({
         timings: timings.map((timing) => ({ ...timing })),
         confidence: weakestConfidence(timings),
         templateId,
-        approved: true,
+        approved: isConfidentCandidate(timings),
       };
     });
 }

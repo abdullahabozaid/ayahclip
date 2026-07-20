@@ -169,6 +169,7 @@ export function BulkCreateWorkspace() {
   const [maxArabicLines, setMaxArabicLines] = useState<BulkArabicLineLimit>(2);
   const [sourceQuality, setSourceQuality] = useState<"fast" | "hd">("fast");
   const [visualMode, setVisualMode] = useState<"source" | "template">("source");
+  const [captionMode, setCaptionMode] = useState<"captions" | "original">("captions");
   const [templateId, setTemplateId] = useState(FEATURED_TEMPLATES[0]?.id ?? "clean-ink");
   const [templateReplacesMedia, setTemplateReplacesMedia] = useState(false);
   const [progress, setProgress] = useState<BulkRecognitionProgress | null>(null);
@@ -292,6 +293,7 @@ export function BulkCreateWorkspace() {
       setMaxArabicLines(normalized.maxArabicLines);
       setSourceQuality(normalized.sourceQuality);
       setVisualMode(normalized.visualMode);
+      setCaptionMode(normalized.captionMode);
       setTemplateId(normalized.templateId);
       setTemplateReplacesMedia(normalized.templateReplacesMedia === true);
       setCandidates(normalized.candidates);
@@ -379,6 +381,7 @@ export function BulkCreateWorkspace() {
         maxArabicLines,
         sourceQuality,
         visualMode,
+        captionMode,
       });
       jobRef.current = nextJob;
       setJob(nextJob);
@@ -433,6 +436,7 @@ export function BulkCreateWorkspace() {
       maxArabicLines,
       sourceQuality,
       visualMode,
+      captionMode,
     });
     let workingJob: BulkJob = {
       ...existing,
@@ -446,6 +450,7 @@ export function BulkCreateWorkspace() {
       maxArabicLines,
       sourceQuality,
       visualMode,
+      captionMode,
       candidates: [],
       verses: [],
       renderTasks: [],
@@ -633,6 +638,12 @@ export function BulkCreateWorkspace() {
     }
     const override = jobRef.current?.styleOverride;
     if (override) applyStyleSnapshot(override);
+    // "Keep original" caption mode: render the source video with no AyahClip
+    // text overlay (the source already carries its own captions).
+    if (jobRef.current?.captionMode === "original") {
+      store.setArabicEnabled(false);
+      store.setTranslationEnabled(false);
+    }
     // The clip's own saved look wins last — renders must match what the
     // creator saw when they edited this clip in Studio.
     if (candidate.styleOverride) applyStyleSnapshot(candidate.styleOverride);
@@ -810,6 +821,7 @@ export function BulkCreateWorkspace() {
     ? Math.round(((progress.window - 1 + STAGE_ORDER[progress.recognition.stage]) / progress.windowCount) * 100)
     : 1;
   const approvedCount = candidates.filter((candidate) => candidate.approved).length;
+  const reviewCount = candidates.filter((candidate) => candidate.confidence === "low").length;
   const readyCount = job?.renderTasks.filter((task) => task.status === "ready").length ?? 0;
   const failedCount = job?.renderTasks.filter((task) => task.status === "failed").length ?? 0;
   const renderTaskById = Object.fromEntries((job?.renderTasks ?? []).map((task) => [task.candidateId, task]));
@@ -994,6 +1006,22 @@ export function BulkCreateWorkspace() {
                   ))}
                 </div>
               </fieldset>
+              <fieldset className="mt-6">
+                <legend className="text-sm font-medium text-parchment">Captions</legend>
+                <div className="mt-3 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Bulk clip captions">
+                  {([
+                    ["captions", "Add AyahClip captions"],
+                    ["original", "Keep original (no captions)"],
+                  ] as const).map(([value, label]) => (
+                    <button key={value} type="button" role="radio" aria-checked={captionMode === value} onClick={() => setCaptionMode(value)} className={`min-h-11 rounded-xl border px-3 text-xs ${captionMode === value ? "border-[var(--gold)] bg-[rgba(201,162,75,0.1)] text-parchment" : "border-[var(--hairline-soft)] text-[var(--muted)]"}`}>{label}</button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
+                  {captionMode === "original"
+                    ? "No text overlay — for source clips that already have burned-in captions. Verified Arabic + translation stay off."
+                    : "Overlay AyahClip's verified Arabic and translation on every clip."}
+                </p>
+              </fieldset>
               <div className="mt-6 rounded-xl border border-[var(--hairline-soft)] p-4">
                 <label className="flex cursor-pointer items-start justify-between gap-4 text-sm text-parchment">
                   <span><span className="block font-medium">Keep Arabic captions compact</span><span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Use model-aligned word timing to page long ayahs without cutting their audio.</span></span>
@@ -1025,8 +1053,15 @@ export function BulkCreateWorkspace() {
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold-soft/70">Review</p>
                 <h2 className="mt-2 text-2xl font-medium text-parchment">{candidates.length} verse-complete drafts</h2>
-                <p className="mt-2 text-sm text-[var(--muted)]">{approvedCount} approved · {readyCount} rendered{failedCount ? ` · ${failedCount} need attention` : ""}</p>
-                <p className="mt-1 text-xs leading-5 text-[var(--muted-deep)]">{unresolvedCount ? `${unresolvedCount} ambiguous source window${unresolvedCount === 1 ? " was" : "s were"} withheld instead of guessed.` : "Every analysed window produced a confident Quran match."}</p>
+                <p className="mt-2 text-sm text-[var(--muted)]">{approvedCount} approved{reviewCount ? ` · ${reviewCount} to review` : ""} · {readyCount} rendered{failedCount ? ` · ${failedCount} need attention` : ""}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--muted-deep)]">
+                  {reviewCount
+                    ? `${reviewCount} draft${reviewCount === 1 ? "" : "s"} came from a less-certain match — check the range by ear, then approve. `
+                    : ""}
+                  {unresolvedCount
+                    ? `${unresolvedCount} source window${unresolvedCount === 1 ? "" : "s"} had no confident Quran match and ${unresolvedCount === 1 ? "was" : "were"} left out.`
+                    : (reviewCount ? "" : "Every analysed window produced a confident Quran match.")}
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={() => setStage("library")} className="btn-ghost min-h-11 rounded-xl px-4 text-sm">Collections</button>
@@ -1113,7 +1148,7 @@ export function BulkCreateWorkspace() {
                         <div className="min-w-0 p-4 sm:p-5">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-medium text-parchment">{surah?.name_simple ?? `Surah ${candidate.surah}`} · {candidate.ayahStart}{candidate.ayahEnd === candidate.ayahStart ? "" : `–${candidate.ayahEnd}`}</p>
-                            <span className={`rounded-full px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] ${candidate.confidence === "high" ? "bg-emerald-400/10 text-emerald-200" : "bg-amber-400/10 text-amber-100"}`}>{candidate.confidence}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] ${candidate.confidence === "high" ? "bg-emerald-400/10 text-emerald-200" : candidate.confidence === "low" ? "bg-rose-400/10 text-rose-100" : "bg-amber-400/10 text-amber-100"}`}>{candidate.confidence === "low" ? "review range" : candidate.confidence}</span>
                             <span className="text-xs tabular-nums text-[var(--muted-deep)]">{fmt(candidate.start)}–{fmt(candidate.end)}</span>
                             {candidate.timings.some((timing) => timing.splits?.length) && <span className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-sky-100">Model-timed caption pages</span>}
                           </div>

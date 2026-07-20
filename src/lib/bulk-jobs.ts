@@ -56,6 +56,10 @@ export interface BulkJob {
   maxArabicLines: BulkArabicLineLimit;
   sourceQuality: "fast" | "hd";
   visualMode: "source" | "template";
+  // "captions" overlays AyahClip's verified Arabic + translation. "original"
+  // keeps the source video as-is with NO text overlay — for clips whose source
+  // already has burned-in captions, so they aren't double-captioned.
+  captionMode: "captions" | "original";
   templateId: string;
   /** Whether applying a template to the batch may also replace clip media. */
   templateReplacesMedia?: boolean;
@@ -81,6 +85,7 @@ export function createBulkJob({
   maxArabicLines = 2,
   sourceQuality = "fast",
   visualMode = "source",
+  captionMode = "captions",
 }: {
   source: File;
   duration: number;
@@ -93,6 +98,7 @@ export function createBulkJob({
   maxArabicLines?: BulkArabicLineLimit;
   sourceQuality?: "fast" | "hd";
   visualMode?: "source" | "template";
+  captionMode?: "captions" | "original";
 }): BulkJob {
   const now = Date.now();
   return {
@@ -112,6 +118,7 @@ export function createBulkJob({
     maxArabicLines,
     sourceQuality,
     visualMode,
+    captionMode,
     templateId,
     nextWindowIndex: 0,
     detectedAyahs: [],
@@ -145,6 +152,7 @@ function parseBulkJob(value: unknown): BulkJob | null {
     maxArabicLines: item.maxArabicLines ?? 2,
     sourceQuality: item.sourceQuality ?? "fast",
     visualMode: item.visualMode ?? "source",
+    captionMode: item.captionMode ?? "captions",
   } as BulkJob;
 }
 

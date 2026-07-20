@@ -121,6 +121,54 @@ describe("buildVerseCompleteCandidates", () => {
   });
 });
 
+describe("review drafts from ambiguous windows", () => {
+  const lowAyah = (verseNumber: number, start: number, end: number): BulkDetectedAyah =>
+    ayah(verseNumber, start, end, { confidence: "low" });
+
+  it("builds low-confidence clips UNAPPROVED so the creator verifies the range", () => {
+    const result = buildVerseCompleteCandidates({
+      ayahs: [lowAyah(1, 0, 12), lowAyah(2, 12, 30)],
+      requestedCount: 5,
+      templateId: "clean-ink",
+      groupingMode: "whole-passage",
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].confidence).toBe("low");
+    expect(result[0].approved).toBe(false);
+  });
+
+  it("keeps confident clips auto-approved", () => {
+    const result = buildVerseCompleteCandidates({
+      ayahs: [ayah(1, 0, 12), ayah(2, 12, 30)],
+      requestedCount: 5,
+      templateId: "clean-ink",
+      groupingMode: "whole-passage",
+    });
+    expect(result[0].confidence).toBe("high");
+    expect(result[0].approved).toBe(true);
+  });
+
+  it("a mixed clip stays unapproved (weakest confidence wins)", () => {
+    const result = buildVerseCompleteCandidates({
+      ayahs: [ayah(1, 0, 12), lowAyah(2, 12, 30)],
+      requestedCount: 5,
+      templateId: "clean-ink",
+      groupingMode: "whole-passage",
+    });
+    expect(result[0].confidence).toBe("low");
+    expect(result[0].approved).toBe(false);
+  });
+
+  it("a confident match overrides an overlapping low-confidence one on merge", () => {
+    const merged = mergeBulkAyahs([
+      lowAyah(5, 20, 30),
+      ayah(5, 21, 31, { confidence: "high", sourceWindow: 1 }),
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ confidence: "high", start: 21, end: 31 });
+  });
+});
+
 describe("groupCandidatesBySurah", () => {
   const clip = (id: string, surah: number, ayahStart: number, ayahEnd: number, start: number, end: number): BulkClipCandidate => ({
     id, order: Number(id), surah, ayahStart, ayahEnd, start, end, duration: end - start,
