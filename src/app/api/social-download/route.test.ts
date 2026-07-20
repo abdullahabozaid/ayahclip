@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildSourceDownloadArgs,
   chooseYoutubeStrategy,
+  downloadErrorMessage,
   parseFfmpegProgressSeconds,
   parseProgressLine,
+  SOURCE_TOO_LARGE,
 } from "@/lib/social-download-jobs";
 
 describe("source resolver command", () => {
@@ -22,13 +24,16 @@ describe("source resolver command", () => {
     expect(args).toContain("--remux-video");
     expect(args).toContain("--concurrent-fragments");
     expect(args).not.toContain("--max-filesize");
-    expect(args.join(" ")).toContain("height<=480");
-    expect(args.join(" ")).toContain("fps<=30");
+    // Cap by shorter side (res sort), never [height<=N] — a pixel-height filter
+    // silently downgrades portrait videos to a lower rung. See YOUTUBE_FORMAT_SORT.
+    expect(args).toContain("--format-sort");
+    expect(args.join(" ")).toContain("res:480");
+    expect(args.join(" ")).not.toContain("height<=");
     expect(args.join(" ")).toContain("vcodec^=avc1");
     expect(args.at(-1)).toBe("https://youtube.com/watch?v=owned-video");
   });
 
-  it("offers an explicit HD section without returning to full-source downloads", () => {
+  it("offers an explicit HD section that caps the shorter side at 720", () => {
     const args = buildSourceDownloadArgs({
       platform: "youtube",
       url: "https://youtube.com/watch?v=owned-video",
@@ -38,8 +43,11 @@ describe("source resolver command", () => {
       quality: "hd",
     });
     expect(args).toContain("*60-180");
-    expect(args.join(" ")).toContain("height<=720");
-    expect(args.join(" ")).not.toContain("height<=1080");
+    expect(args).toContain("--format-sort");
+    expect(args.join(" ")).toContain("res:720");
+    // No pixel-height cap: it would reject a portrait 720p (720x1280) rendition.
+    expect(args.join(" ")).not.toContain("height<=");
+    expect(args.join(" ")).not.toContain("res:1080");
   });
 
   it("preserves the existing clean social-source preference", () => {
@@ -118,7 +126,7 @@ describe("youtube download strategy", () => {
     expect(args).not.toContain("--download-sections");
     expect(args).not.toContain("--downloader-args");
     expect(args).toContain("--concurrent-fragments");
-    expect(args.join(" ")).toContain("height<=480");
+    expect(args.join(" ")).toContain("res:480");
   });
 });
 
@@ -157,5 +165,28 @@ describe("progress line parsing", () => {
     expect(parseProgressLine("[download] Destination: video.mp4")).toBeNull();
     expect(parseProgressLine("AC|NA|NA|NA|NA")).toBeNull();
     expect(parseProgressLine("")).toBeNull();
+  });
+});
+
+describe("download error message", () => {
+  it("surfaces an actionable reason when the source is too large", () => {
+    const msg = downloadErrorMessage(`some noise\n${SOURCE_TOO_LARGE}: resolved source exceeded the import limit`, "youtube");
+    expect(msg).toContain("too large");
+    expect(msg.toLowerCase()).toContain("fast");
+  });
+
+  it("explains a YouTube bot-check instead of blaming the times", () => {
+    const msg = downloadErrorMessage("ERROR: Sign in to confirm you're not a bot", "youtube");
+    expect(msg.toLowerCase()).toContain("blocking automated");
+  });
+
+  it("still reports private/unavailable videos", () => {
+    expect(downloadErrorMessage("ERROR: Video unavailable. This video is private", "youtube"))
+      .toContain("private, restricted, or unavailable");
+  });
+
+  it("falls back to the generic message for unknown failures", () => {
+    expect(downloadErrorMessage("ERROR: some transient network hiccup", "youtube"))
+      .toContain("could not import that public segment");
   });
 });

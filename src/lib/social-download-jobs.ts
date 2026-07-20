@@ -31,13 +31,35 @@ const PROGRESS_TEMPLATE = `download:${PROGRESS_PREFIX}%(progress.downloaded_byte
 // speed. Its 480p H.264 stream is commonly delivered at ordinary download
 // speed and remains sufficient for split-screen/mobile compositions. Keep HD
 // as an explicit creator choice rather than making every draft wait for it.
-const YOUTUBE_FORMATS: Record<SourceImportQuality, string> = {
-  fast: "bv*[height<=480][fps<=30][vcodec^=avc1]+ba[ext=m4a]/b[height<=480][fps<=30][ext=mp4]",
-  hd: "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/b[height<=720][ext=mp4]",
+//
+// The resolution cap MUST use yt-dlp's `res` sort field, not a `[height<=N]`
+// format filter. A filter on pixel height silently downgrades PORTRAIT/vertical
+// videos: a "720p" vertical clip is 720 WIDE (e.g. 720x1280), so its height is
+// >720 and `[height<=720]` rejects it, falling back to the 480p rung with no
+// error — the HD toggle produced no quality gain. `res` is min(width, height),
+// i.e. the shorter side, exactly what YouTube's "p" label denotes, and yt-dlp
+// caps at (never exceeds) the requested value in both orientations.
+const YOUTUBE_FORMAT_SELECTOR = "bv*[vcodec^=avc1]+ba[ext=m4a]/bv*+ba/b";
+const YOUTUBE_FORMAT_SORT: Record<SourceImportQuality, string> = {
+  fast: "res:480,vcodec:h264",
+  hd: "res:720,vcodec:h264",
 };
+
+// Sentinel thrown when the resolved source is larger than MAX_FILE_BYTES, so
+// the user gets an actionable message (pick Fast, or a shorter section) instead
+// of the generic "could not import" copy.
+export const SOURCE_TOO_LARGE = "AYAHCLIP_SOURCE_TOO_LARGE";
 
 export function downloadErrorMessage(stderr: string, platform: SourcePlatform): string {
   const lower = stderr.toLowerCase();
+  if (lower.includes(SOURCE_TOO_LARGE.toLowerCase()) || lower.includes("import limit")) {
+    return "That import is too large. Choose Fast (480p) instead of HD, or import a shorter section.";
+  }
+  // YouTube's datacenter bot-check: the video is public but the server IP is
+  // being challenged. Tell the operator plainly rather than blaming the times.
+  if (lower.includes("confirm you") || lower.includes("not a bot") || lower.includes("sign in to")) {
+    return "YouTube is temporarily blocking automated downloads from this server. Please try again shortly.";
+  }
   if (lower.includes("login") || lower.includes("private") || lower.includes("not available")) {
     return platform === "youtube"
       ? "That YouTube video is private, restricted, or unavailable. Public videos and your permitted uploads are supported."
@@ -94,7 +116,8 @@ export function buildSourceDownloadArgs({
     args.push(
       "--merge-output-format", "mp4",
       "--remux-video", "mp4",
-      "--format", YOUTUBE_FORMATS[quality],
+      "--format", YOUTUBE_FORMAT_SELECTOR,
+      "--format-sort", YOUTUBE_FORMAT_SORT[quality],
     );
   } else {
     // Prefer an iPhone-compatible, non-watermarked platform source. TikTok's
@@ -401,7 +424,7 @@ async function finalizeJobFile(job: SocialDownloadJob): Promise<void> {
   const filePath = join(job.workDirectory, filename);
   const fileInfo = await stat(filePath);
   if (!fileInfo.isFile() || fileInfo.size <= 0 || fileInfo.size > MAX_FILE_BYTES) {
-    throw new Error("Resolved source exceeded the import limit");
+    throw new Error(`${SOURCE_TOO_LARGE}: resolved source exceeded the import limit`);
   }
   job.filePath = filePath;
   job.fileName = filename;
@@ -495,8 +518,14 @@ async function orchestrateJob(job: SocialDownloadJob, {
       await copyFile(cachedPath, join(job.workDirectory, "cached-source.mp4"));
     }
     await finalizeJobFile(job);
-  } catch {
-    if (job.phase !== "error") failJob(job, downloadErrorMessage(job.stderrTail, job.platform));
+  } catch (err) {
+    // Fold any thrown reason (e.g. the source-too-large sentinel) into the text
+    // downloadErrorMessage inspects, so internal failures surface a specific,
+    // actionable message instead of the generic fallback.
+    const detail = err instanceof Error ? err.message : "";
+    if (job.phase !== "error") {
+      failJob(job, downloadErrorMessage(`${job.stderrTail}\n${detail}`, job.platform));
+    }
   }
 }
 
