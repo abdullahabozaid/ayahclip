@@ -74,10 +74,18 @@ async function expectPreviewAndExactMp4(
 ) {
   const preview = page.getByLabel(/(?:Clip|Media|Frame) preview/);
   await expect(preview).toBeVisible();
-  await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement) => ({
-    width: canvas.width,
-    height: canvas.height,
-  }))).toEqual(expected);
+  // The preview backing store tracks on-screen size × devicePixelRatio (capped
+  // at the export resolution) so text rasterizes crisply; composition still
+  // happens in export coordinates via drawScene. Parity here means the same
+  // aspect ratio as the exact MP4 and a backing store at display density.
+  await expect.poll(() => preview.evaluate((canvas: HTMLCanvasElement, exact) => {
+    const dpr = window.devicePixelRatio || 1;
+    const expectedW = Math.max(1, Math.min(exact.width, Math.round(canvas.clientWidth * dpr)));
+    return {
+      aspectOk: Math.abs(canvas.width / canvas.height - exact.width / exact.height) < 0.01,
+      densityOk: Math.abs(canvas.width - expectedW) <= 1,
+    };
+  }, expected)).toEqual({ aspectOk: true, densityOk: true });
 
   await page.getByRole("button", { name: "Preview the final MP4" }).click();
   const dialog = page.getByRole("dialog", { name: "Final MP4 preview" });
