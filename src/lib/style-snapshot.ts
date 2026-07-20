@@ -16,6 +16,21 @@ export interface StyleSnapshot {
   capturedAt: number;
 }
 
+/**
+ * Capture the current look with media included only when the media can
+ * actually survive persistence: preset/stock backgrounds are stable URLs,
+ * while blob: URLs (uploaded files, the bulk source video) die with the
+ * session — persisting them would restore a dead background. Blob-backed
+ * media falls back to a style-only snapshot; the rebuild path re-derives
+ * such media from its own durable source.
+ */
+export function captureDurableStyleSnapshot(): StyleSnapshot {
+  const state = useAppStore.getState();
+  const mediaIsDurable = !state.background.value.startsWith("blob:")
+    && !state.backgroundSequenceEnabled;
+  return captureStyleSnapshot(mediaIsDurable);
+}
+
 export function captureStyleSnapshot(includeMedia: boolean): StyleSnapshot {
   const state = useAppStore.getState();
   const firstScene = state.backgroundScenes[0];

@@ -1,4 +1,5 @@
 import type { VerseTiming } from "./audio-import";
+import type { StyleSnapshot } from "./style-snapshot";
 
 export const BULK_CLIP_COUNTS = [15, 20, 30, 40] as const;
 export type BulkClipCount = (typeof BULK_CLIP_COUNTS)[number];
@@ -31,6 +32,14 @@ export interface BulkClipCandidate {
   approved: boolean;
   /** Compact review frame persisted with the batch. Audio-only sources omit it. */
   thumbnail?: string;
+  /**
+   * This clip's own look, captured when the creator edits it in Studio.
+   * Re-applied LAST when the clip is rebuilt (after the template and the
+   * batch-wide styleOverride) so an individual clip's edits survive leaving
+   * and reopening the collection. Media is included only when it is durable
+   * (preset/stock URLs — blob: URLs cannot outlive the session).
+   */
+  styleOverride?: StyleSnapshot | null;
 }
 
 const confidenceRank = { selected: 0, medium: 1, high: 2 } as const;

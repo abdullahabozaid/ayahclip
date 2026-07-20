@@ -1,9 +1,9 @@
 import { fetchSurahs, fetchVerses } from "./api";
 import { applyTemplate } from "./apply-template";
-import { loadBulkJob, loadBulkSource } from "./bulk-jobs";
+import { deleteBulkOutput, loadBulkJob, loadBulkSource, saveBulkJob } from "./bulk-jobs";
 import { isSupportedVideoFile } from "./media-file";
 import { getSavedTemplates } from "./saved-templates";
-import { applyStyleSnapshot } from "./style-snapshot";
+import { applyStyleSnapshot, captureDurableStyleSnapshot } from "./style-snapshot";
 import { useAppStore } from "./store";
 import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "./templates";
 
@@ -68,6 +68,9 @@ export async function openBulkCandidateInStudio(jobId: string, candidateId: stri
       : { replaceMedia: job.templateReplacesMedia === true });
   }
   if (job.styleOverride) applyStyleSnapshot(job.styleOverride);
+  // The clip's OWN saved look wins last: an individual clip edited in Studio
+  // must reopen exactly as the creator left it, not as the batch default.
+  if (candidate.styleOverride) applyStyleSnapshot(candidate.styleOverride);
   return {
     jobId,
     candidateId,
@@ -76,4 +79,29 @@ export async function openBulkCandidateInStudio(jobId: string, candidateId: stri
     previousId: job.candidates[index - 1]?.id,
     nextId: job.candidates[index + 1]?.id,
   };
+}
+
+/**
+ * Persist the studio's current look onto ONE bulk candidate so it survives
+ * leaving and reopening the collection. Called when the creator navigates
+ * away from a bulk clip (back to the collection, or to a sibling clip).
+ * The clip's render (if any) is now stale, so its render task resets and the
+ * cached output is dropped — mirroring the batch-wide "apply look" behaviour.
+ */
+export async function persistBulkCandidateLook(jobId: string, candidateId: string): Promise<void> {
+  const job = await loadBulkJob(jobId);
+  if (!job) return;
+  const index = job.candidates.findIndex((candidate) => candidate.id === candidateId);
+  if (index === -1) return;
+  const snapshot = captureDurableStyleSnapshot();
+  const candidates = job.candidates.map((candidate) =>
+    candidate.id === candidateId ? { ...candidate, styleOverride: snapshot } : candidate,
+  );
+  const renderTasks = job.renderTasks.map((task) =>
+    task.candidateId === candidateId
+      ? { candidateId: task.candidateId, status: "idle" as const, progress: 0 }
+      : task,
+  );
+  await saveBulkJob({ ...job, candidates, renderTasks });
+  await deleteBulkOutput(jobId, candidateId).catch(() => {});
 }

@@ -632,6 +632,9 @@ export function BulkCreateWorkspace() {
     }
     const override = jobRef.current?.styleOverride;
     if (override) applyStyleSnapshot(override);
+    // The clip's own saved look wins last — renders must match what the
+    // creator saw when they edited this clip in Studio.
+    if (candidate.styleOverride) applyStyleSnapshot(candidate.styleOverride);
     return true;
   };
 

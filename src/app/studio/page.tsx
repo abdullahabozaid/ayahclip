@@ -37,7 +37,7 @@ import {
   trackOncePerJourney,
   trackProductEvent,
 } from "@/lib/telemetry";
-import { openBulkCandidateInStudio, type BulkStudioNavigation } from "@/lib/bulk-studio";
+import { openBulkCandidateInStudio, persistBulkCandidateLook, type BulkStudioNavigation } from "@/lib/bulk-studio";
 import { deleteBulkOutput, loadBulkJob, saveBulkJob } from "@/lib/bulk-jobs";
 import { captureStyleSnapshot } from "@/lib/style-snapshot";
 
@@ -108,6 +108,9 @@ export default function StudioPage() {
   const savedAudioUrlRef = useRef<string | null>(null);
   const savedVideoUrlRef = useRef<string | null>(null);
   const savedBackgroundUrlsRef = useRef<Set<string>>(new Set());
+  // Which project id the three dedup refs above belong to — they are cleared
+  // whenever saveNow targets a different id (see the identity guard there).
+  const savedMediaProjectIdRef = useRef<string | null>(null);
   const nativeSnapshotRef = useRef<MobileProjectSnapshotV1 | null>(null);
 
   useEffect(() => {
@@ -131,10 +134,23 @@ export default function StudioPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Safety net for every OTHER way of leaving a bulk clip (site nav, browser
+  // back): persist the clip's look on unmount. Fire-and-forget — IndexedDB
+  // writes complete even as the page tears down.
+  const bulkNavigationRef = useRef<BulkStudioNavigation | null>(null);
+  bulkNavigationRef.current = bulkNavigation;
+  useEffect(() => () => {
+    const navigation = bulkNavigationRef.current;
+    if (navigation) void persistBulkCandidateLook(navigation.jobId, navigation.candidateId).catch(() => {});
+  }, []);
+
   const openBulkSibling = async (candidateId: string | undefined) => {
     if (!bulkNavigation || !candidateId || bulkNavigationBusy) return;
     setBulkNavigationBusy(true);
     try {
+      // Keep this clip's edits (look + durable media) before the store is
+      // rebuilt for the sibling — otherwise they vanish on return.
+      await persistBulkCandidateLook(bulkNavigation.jobId, bulkNavigation.candidateId);
       const navigation = await openBulkCandidateInStudio(bulkNavigation.jobId, candidateId);
       setBulkNavigation(navigation);
       setEditorView("timeline");
@@ -158,6 +174,9 @@ export default function StudioPage() {
       await saveBulkJob({
         ...job,
         styleOverride: snapshot,
+        // "Apply to ALL clips" means all: individual clips' saved looks are
+        // superseded, or they would silently keep their old style.
+        candidates: job.candidates.map((candidate) => ({ ...candidate, styleOverride: null })),
         // Every clip's look just changed — previous renders are stale.
         renderTasks: job.renderTasks.map((task) => ({ candidateId: task.candidateId, status: "idle" as const, progress: 0 })),
       });
@@ -336,13 +355,30 @@ export default function StudioPage() {
     if (!state.surah || state.selectedVerseNumbers.length === 0) {
       return { ok: false, reason: "invalid" };
     }
-    const id = state.projectId ?? generateProjectId();
+    let id = state.projectId ?? generateProjectId();
     const src = state.audioSource;
     const sel = state.selectedVerseNumbers;
     // Preserve a user-chosen cover thumbnail across saves; otherwise grab a
     // default cover from the current preview frame (skipping black/mid-fade
     // frames) so the dashboard shows the real clip, not a placeholder.
-    const existing = await getProject(id);
+    let existing = await getProject(id);
+    // Identity guard: a stale projectId (opened clip A, then composed a clip
+    // for a different surah without passing through beginNewProject) must
+    // NEVER overwrite the saved record — that silently corrupts clip A with
+    // clip B's audio and captions. Mint a fresh identity instead.
+    if (existing && existing.surahId !== state.surah.id) {
+      id = generateProjectId();
+      existing = undefined;
+    }
+    // The media-dedup refs are only valid for the project they were saved
+    // under; reusing them across identities skips persisting blobs under the
+    // new id (the clip then reopens with missing media).
+    if (savedMediaProjectIdRef.current !== id) {
+      savedMediaProjectIdRef.current = id;
+      savedAudioUrlRef.current = null;
+      savedVideoUrlRef.current = null;
+      savedBackgroundUrlsRef.current.clear();
+    }
     const existingThumb = existing?.thumbnail ?? captureSceneThumbnail({ skipIfDark: true });
 
     // Persist uploaded media so the clip (and its editable verse timeline)
@@ -479,7 +515,9 @@ export default function StudioPage() {
       }
       nativeSnapshotRef.current = updatedSnapshot;
     }
-    if (!state.projectId) state.setProjectId(id);
+    // Also adopts the freshly minted id when the identity guard above refused
+    // to overwrite a different clip's record.
+    if (state.projectId !== id) state.setProjectId(id);
     return { ok: true };
   }, []);
 
@@ -576,7 +614,14 @@ export default function StudioPage() {
       <header className="relative z-40 flex min-h-[calc(48px+env(safe-area-inset-top))] min-w-0 shrink-0 items-end justify-between gap-2 border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-2 pb-1 pt-[env(safe-area-inset-top)] sm:px-3 lg:col-span-3 lg:h-[52px] lg:min-h-0 lg:items-center lg:px-4 lg:pb-0 lg:pt-0">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
           <button
-            onClick={() => router.push(bulkNavigation ? "/bulk" : `/surah/${surah.id}`)}
+            onClick={async () => {
+              // Leaving a bulk clip: persist its edited look onto the
+              // candidate first, or the edits revert when the clip reopens.
+              if (bulkNavigation) {
+                await persistBulkCandidateLook(bulkNavigation.jobId, bulkNavigation.candidateId).catch(() => {});
+              }
+              router.push(bulkNavigation ? "/bulk" : `/surah/${surah.id}`);
+            }}
             className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--muted)] transition-colors hover:bg-white/[0.03] hover:text-parchment sm:w-auto sm:px-2 lg:h-8"
             aria-label={bulkNavigation ? "Back to bulk collection" : "Back to verses"}
           >
