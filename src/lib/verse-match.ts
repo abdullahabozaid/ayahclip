@@ -606,6 +606,10 @@ export function recoverRecognitionWindowCandidates(
     .slice(0, Math.max(1, limit));
 }
 
+/** The score at which a whole-clip match is considered decisive on its own —
+ *  the same bar assessVerseMatch uses to call a match "high" confidence. */
+const DECISIVE_PRIMARY_SCORE = 0.9;
+
 /** A medium whole-clip match is not safe to auto-apply when a strong
  * pause-bounded window points to a different passage. Same-surah windows —
  * whether overlapping around an ordinary ayah pause, or non-overlapping
@@ -625,6 +629,13 @@ export function hasCompetingRecognitionWindow(
   ) && strongest.score >= primary.score + 0.02);
   return strongestDisagrees || windows.some((candidate) =>
     candidate.surah !== primary.surah
+    // Quranic phrasing recurs across surahs (the closing of Ibrahim 22, for
+    // one), so a short pause-bounded fragment can score well against a short
+    // verse in another surah while the whole clip is actually unambiguous.
+    // A decisive whole-clip read — scoring at the same bar assessVerseMatch
+    // calls "high" — may dismiss such an echo. Anything less certain still
+    // defers to the user, so a genuinely mixed clip is never auto-applied.
+    && (candidate.score >= primary.score || primary.score < DECISIVE_PRIMARY_SCORE)
   );
 }
 

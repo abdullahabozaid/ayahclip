@@ -83,6 +83,25 @@ describe("pause-bounded recognition conflicts", () => {
       { surah: 12, ayahStart: 1, ayahEnd: 3, score: 0.7 },
     ])).toBe(true);
   });
+
+  it("does not interrupt a decisive whole-clip read for a weaker different-surah echo", () => {
+    // Ibrahim 22 closes on phrasing that recurs elsewhere in the Quran, so a
+    // trailing pause window can match a short verse in another surah. When the
+    // whole clip reads decisively (>= 0.9, the "high" bar), that echo must not
+    // force the manual range chooser.
+    const decisive = { surah: 14, ayahStart: 22, ayahEnd: 22, score: 0.95 };
+    expect(hasCompetingRecognitionWindow(decisive, [
+      { surah: 5, ayahStart: 36, ayahEnd: 36, score: 0.87 },
+      { surah: 3, ayahStart: 176, ayahEnd: 177, score: 0.85 },
+    ])).toBe(false);
+  });
+
+  it("still defers to the user when a different-surah window matches a decisive read", () => {
+    const decisive = { surah: 14, ayahStart: 22, ayahEnd: 22, score: 0.95 };
+    expect(hasCompetingRecognitionWindow(decisive, [
+      { surah: 5, ayahStart: 36, ayahEnd: 36, score: 0.96 },
+    ])).toBe(true);
+  });
 });
 
 describe("assessVerseMatch", () => {

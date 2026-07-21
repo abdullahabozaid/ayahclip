@@ -17,9 +17,24 @@ import {
 } from "./ctc-vocab";
 import { ctcForcedAlign } from "./ctc-align";
 import type { Emissions } from "./asr";
-import { alignTranscriptVerses } from "./transcript-align";
+import { alignTranscriptVerses, type TranscriptAlignment } from "./transcript-align";
 
 const MIN_DUR = 0.12;
+/** Below this reference similarity the character alignment is too unreliable to
+ *  decide which Quranic words went unrecited, so the whole ayah is shown. */
+const CTC_TRIM_MIN_SIMILARITY = 0.5;
+
+/** The words of an ayah the transcript alignment actually found in the audio.
+ *  `undefined` means "all of it", so a complete recitation is never trimmed. */
+function recitedWordRange(
+  alternative: TranscriptAlignment,
+  index: number,
+): { from: number; to: number } | undefined {
+  const range = alternative.recitedWordRangesByVerse[index];
+  const total = alternative.wordStartsByVerse[index]?.length ?? 0;
+  if (!range || total === 0 || (range.from === 0 && range.to === total - 1)) return undefined;
+  return { ...range };
+}
 // A forced-aligned boundary snaps to a detected pause center within this window.
 const SNAP_WINDOW = 0.4;
 const FUSION_DISAGREEMENT_SECONDS = 0.45;
@@ -295,6 +310,21 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
           confidence: classifyBoundaryConfidence(alternative.similarity, boundaryAgreement),
         };
       });
+      // Even when the transcript is too rough to drive boundaries, the words it
+      // DID match still tell us how much of each ayah was actually recited. A
+      // reciter starting or stopping mid-ayah is common for long verses (Ibrahim
+      // 22, Al-Baqarah 282), and showing the untouched remainder is wrong. Only
+      // a clean prefix/suffix trim is trusted here: a run touching one end of
+      // the verse is what a partial recitation produces, whereas a mid-verse
+      // island is far more likely to be alignment noise.
+      const ctcWordRanges = ctcTimings.map((_timing, index) => {
+        const range = recitedWordRange(alternative, index);
+        if (!range || alternative.similarity < CTC_TRIM_MIN_SIMILARITY) return undefined;
+        const total = alternative.wordStartsByVerse[index]?.length ?? 0;
+        const touchesAnEnd = range.from === 0 || range.to === total - 1;
+        return touchesAnEnd ? range : undefined;
+      });
+
       if (alternative.similarity >= 0.65) {
         const transcriptTimings = refineTranscriptCuts({
           timings: alternative.timings,
@@ -312,12 +342,7 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
             alignedWordStarts: alternative.wordStartsByVerse[index]?.map(
               (time) => Math.max(timing.start, Math.min(timing.end, time)),
             ),
-            wordRange: (() => {
-              const range = alternative.recitedWordRangesByVerse[index];
-              const total = alternative.wordStartsByVerse[index]?.length ?? 0;
-              if (!range || total === 0 || (range.from === 0 && range.to === total - 1)) return undefined;
-              return { ...range };
-            })(),
+            wordRange: recitedWordRange(alternative, index),
           })),
           method: fused.usedCtcBoundaries.length ? "hybrid" : "transcript",
           transcriptSimilarity: alternative.similarity,
@@ -326,7 +351,21 @@ export function forceAlignVersesDetailed(input: ForceAlignInput): AlignmentDiagn
         };
       }
       return {
-        timings: ctcTimings,
+        // A wordRange is only meaningful alongside real per-word onsets:
+        // effectiveAudioBounds falls back to proportional mapping without them,
+        // which would chop the audio of a partial recitation that actually
+        // starts at the first recited word. Attach both, or neither.
+        timings: ctcTimings.map((timing, index) => (
+          ctcWordRanges[index]
+            ? {
+              ...timing,
+              wordRange: ctcWordRanges[index],
+              alignedWordStarts: alternative.wordStartsByVerse[index]?.map(
+                (time) => Math.max(timing.start, Math.min(timing.end, time)),
+              ),
+            }
+            : timing
+        )),
         method: "ctc",
         transcriptSimilarity: alternative.similarity,
         methodAgreementSeconds: disagreement,
