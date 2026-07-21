@@ -7,6 +7,7 @@ import {
   autoSegment,
   mapSplitBoundariesToWords,
   snapToSentenceBoundary,
+  wordRangeForText,
   type VerseTiming,
 } from "@/lib/audio-import";
 import { isMarkOnlyToken } from "@/lib/canvas-utils";
@@ -210,6 +211,40 @@ export function VerseCardEditor() {
         splitWords: combined.map((c) => c.w),
         splitWordTotal: total,
       };
+      commit(next);
+    },
+    [commit]
+  );
+
+  // Keep only words [from..to] of a verse on screen. Used when the reciter only
+  // recited part of a long ayah: the audio is already just that part, so this
+  // trims the displayed text and leaves the recitation untouched. Passing
+  // `null` restores the whole verse.
+  const setWordTrim = useCallback(
+    (verseIdx: number, range: { from: number; to: number } | null) => {
+      const cur = useAppStore.getState().audioSource;
+      if (cur.mode !== "imported") return;
+      const state = useAppStore.getState();
+      const seg = cur.timings[verseIdx];
+      if (!seg) return;
+      const verse = state.verses.find((v) => v.verse_number === seg.verseNumber);
+      if (!verse) return;
+      const total = verse.text_uthmani.split(/\s+/).filter(Boolean).length;
+      const next = cur.timings.map((x) => ({ ...x }));
+      if (!range) {
+        next[verseIdx] = { ...next[verseIdx], wordRange: undefined, wordRangeTextOnly: undefined };
+        commit(next);
+        return;
+      }
+      const from = Math.max(0, Math.min(total - 1, range.from));
+      const to = Math.max(from, Math.min(total - 1, range.to));
+      // A trim covering everything is the same as no trim — keep it unset so
+      // the timing stays clean and nothing downstream has to special-case it.
+      if (from === 0 && to === total - 1) {
+        next[verseIdx] = { ...next[verseIdx], wordRange: undefined, wordRangeTextOnly: undefined };
+      } else {
+        next[verseIdx] = { ...next[verseIdx], wordRange: { from, to }, wordRangeTextOnly: true };
+      }
       commit(next);
     },
     [commit]
@@ -583,6 +618,7 @@ export function VerseCardEditor() {
             onSetEnd={() => setBoundary(i, "end")}
             onSplitWord={(absBoundary) => addWordSplit(i, absBoundary)}
             onRemoveSplit={(si) => removeSplit(i, si)}
+            onTrim={(range) => setWordTrim(i, range)}
             onDuplicate={() => duplicateVerse(i)}
             onDelete={() => deleteVerse(i)}
             canDelete={timings.length > 1}
@@ -617,6 +653,7 @@ interface VerseCardProps {
   onSetEnd: () => void;
   onSplitWord: (absBoundary: number) => void;
   onRemoveSplit: (splitIdx: number) => void;
+  onTrim: (range: { from: number; to: number } | null) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   canDelete: boolean;
@@ -635,12 +672,14 @@ function VerseCard({
   onSetEnd,
   onSplitWord,
   onRemoveSplit,
+  onTrim,
   onDuplicate,
   onDelete,
   canDelete,
   onSeek,
 }: VerseCardProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [trimOpen, setTrimOpen] = useState(false);
   const verse = useAppStore((s) =>
     s.verses.find((v) => v.verse_number === timing.verseNumber)
   );
@@ -656,6 +695,9 @@ function VerseCard({
 
   // Which part is currently under the playhead (for highlight).
   const playheadInside = headTime >= timing.start && headTime <= timing.end;
+
+  const arabicTrim = wordRangeForText(timing, totalWords);
+  const translationTrim = transTotal > 0 ? wordRangeForText(timing, transTotal) : undefined;
 
   // Build parts: each is [wordLo, wordHi) + matching translation slice +
   // [timeFrom, timeTo] + the split index that opens it (null for the first part).
@@ -683,8 +725,25 @@ function VerseCard({
       tLo = Math.max(0, Math.floor(fLo * transTotal));
       tHi = Math.min(transTotal, Math.max(tLo, Math.floor(fHi * transTotal)));
     }
-    const translation = transTotal > 0 ? transWords.slice(tLo, tHi).join(" ") : "";
-    return { from, to, wLo, wHi, translation, openingSplit: i === 0 ? null : i - 1 };
+    // Honour a word trim exactly the way verseTextAt draws it, so this editor
+    // never shows words the preview and export have dropped.
+    if (arabicTrim) {
+      wLo = Math.max(wLo, arabicTrim.from);
+      wHi = Math.min(wHi, arabicTrim.to + 1);
+    }
+    if (translationTrim) {
+      tLo = Math.max(tLo, translationTrim.from);
+      tHi = Math.min(tHi, translationTrim.to + 1);
+    }
+    const translation = transTotal > 0 && tHi > tLo ? transWords.slice(tLo, tHi).join(" ") : "";
+    return {
+      from,
+      to,
+      wLo,
+      wHi: Math.max(wLo, wHi),
+      translation,
+      openingSplit: i === 0 ? null : i - 1,
+    };
   });
   const multiPart = parts.length > 1;
   const activePartIdx = playheadInside
@@ -834,6 +893,73 @@ function VerseCard({
         </div>
       </div>
 
+      {/* Word trim — for when the reciter only recited part of a long ayah.
+          Trims the on-screen text only; the recitation audio is untouched. */}
+      <div className="mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setTrimOpen((o) => !o);
+            }}
+            aria-expanded={trimOpen}
+            className={`min-h-11 rounded-full border px-2.5 text-[11px] transition-colors sm:min-h-7 ${
+              trimOpen || arabicTrim
+                ? "border-gold/60 text-gold-soft"
+                : "border-[var(--hairline)] text-parchment hover:border-gold hover:text-gold-soft"
+            }`}
+            title="Show only the words that were actually recited"
+          >
+            Trim words
+          </button>
+          {arabicTrim && (
+            <>
+              <span className="text-[11px] tabular-nums text-[var(--muted)]">
+                Showing words {arabicTrim.from + 1}–{arabicTrim.to + 1} of {totalWords}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTrim(null);
+                }}
+                className="min-h-11 rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold sm:min-h-7"
+              >
+                Show full verse
+              </button>
+            </>
+          )}
+        </div>
+
+        {trimOpen && (
+          <div onClick={(e) => e.stopPropagation()} className="mt-2">
+            <p className="mb-2 text-[11px] text-[var(--muted)]">
+              Tap the first word he recites, then the last. The audio is not changed.
+            </p>
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => onTrim({ from: Math.floor(totalWords / 2), to: totalWords - 1 })}
+                className="min-h-11 rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold hover:text-gold-soft sm:min-h-7"
+                title="Keep the second half of the verse"
+              >
+                Keep 2nd half
+              </button>
+              <button
+                onClick={() => onTrim({ from: 0, to: Math.floor(totalWords / 2) - 1 })}
+                className="min-h-11 rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-gold hover:text-gold-soft sm:min-h-7"
+                title="Keep the first half of the verse"
+              >
+                Keep 1st half
+              </button>
+            </div>
+            <TrimWordPicker
+              words={allWords}
+              range={arabicTrim ?? { from: 0, to: totalWords - 1 }}
+              onChange={(range) => onTrim(range)}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Parts — each its own labeled block, stacked in order. */}
       <div className="flex flex-col gap-2.5">
         {parts.map((p, pi) => {
@@ -861,6 +987,74 @@ function VerseCard({
         })}
       </div>
     </section>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Pick which words of an ayah stay on screen. Tap the first recited word, then
+// the last. Words outside the range are dimmed so the kept span reads at a
+// glance. Indices are absolute in the verse's uthmani word list.
+// ────────────────────────────────────────────────────────────────────────────
+
+function TrimWordPicker({
+  words,
+  range,
+  onChange,
+}: {
+  words: string[];
+  range: { from: number; to: number };
+  onChange: (range: { from: number; to: number }) => void;
+}) {
+  // After picking a start we wait for the end; until then show the pending start.
+  const [pendingFrom, setPendingFrom] = useState<number | null>(null);
+
+  const tap = (index: number) => {
+    if (pendingFrom == null) {
+      setPendingFrom(index);
+      return;
+    }
+    const from = Math.min(pendingFrom, index);
+    const to = Math.max(pendingFrom, index);
+    setPendingFrom(null);
+    onChange({ from, to });
+  };
+
+  return (
+    <div dir="rtl" lang="ar" className="font-arabic text-[22px] leading-loose">
+      {words.map((word, index) => {
+        const kept = pendingFrom != null
+          ? index === pendingFrom
+          : index >= range.from && index <= range.to;
+        return (
+          <span key={index} className="inline">
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={`${pendingFrom == null ? "Start" : "End"} at word ${index + 1}: ${word}`}
+              aria-pressed={kept}
+              onClick={() => tap(index)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  tap(index);
+                }
+              }}
+              className={`cursor-pointer rounded px-0.5 transition-colors hover:bg-white/5 ${
+                kept ? "text-parchment" : "text-[var(--muted-deep)] opacity-50"
+              }`}
+            >
+              {word}
+            </span>
+            {index < words.length - 1 ? " " : ""}
+          </span>
+        );
+      })}
+      {pendingFrom != null && (
+        <p dir="ltr" className="mt-2 font-sans text-[11px] text-gold-soft/90">
+          Start set at word {pendingFrom + 1}. Now tap the last recited word.
+        </p>
+      )}
+    </div>
   );
 }
 

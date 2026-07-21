@@ -39,6 +39,14 @@ export interface VerseTiming {
    * uthmani text. When unset (default), the whole verse plays.
    */
   wordRange?: { from: number; to: number };
+  /**
+   * Keep the ayah's audio exactly as-is and apply `wordRange` to the on-screen
+   * text only. This is the "the reciter only recited part of this ayah" case:
+   * the audio already contains nothing but the recited words, so mapping the
+   * range onto the timeline would wrongly cut into the recitation. Unset means
+   * the range trims audio too (clipping a portion out of a full recitation).
+   */
+  wordRangeTextOnly?: boolean;
   /** Recognition provenance for the boundary at this ayah's start. Persisted in
    * saved projects so review markers survive a reload. */
   alignmentMethod?: "transcript" | "ctc" | "hybrid" | "pause";
@@ -60,6 +68,9 @@ export function effectiveAudioBounds(
   wordCount: number
 ): [number, number] {
   if (!timing.wordRange || wordCount <= 0) return [timing.start, timing.end];
+  // A text-only trim never moves the audio: the recitation already contains
+  // just the recited words, so mapping the range onto time would clip it.
+  if (timing.wordRangeTextOnly) return [timing.start, timing.end];
   const { from, to } = timing.wordRange;
   const aligned = timing.alignedWordStarts;
   if (aligned && aligned.length > 0) {
@@ -95,7 +106,10 @@ function applyWordRange(words: string[], wordRange?: { from: number; to: number 
   return words.slice(lo, hi + 1);
 }
 
-function wordRangeForText(
+/** The word range to keep for a given text, scaled from the Arabic word space
+ *  into that text's own word count (a translation has a different count).
+ *  Exported so editors clip exactly the way verseTextAt draws. */
+export function wordRangeForText(
   timing: VerseTiming,
   targetWordCount: number,
 ): { from: number; to: number } | undefined {

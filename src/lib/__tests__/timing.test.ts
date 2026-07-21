@@ -307,3 +307,49 @@ describe("sliceQcfForDisplay", () => {
     expect(sliceQcfForDisplay(verse, "w1 w2 w3 w4 w5 w6 w7 w8", false)).toBeUndefined();
   });
 });
+
+describe("text-only word trim (partial recitation)", () => {
+  // The reciter only recited the second half of a long ayah. The audio already
+  // contains nothing but those words, so the trim must shape the TEXT only --
+  // mapping it onto the timeline would cut into the recitation itself.
+  const fullVerse = "w1 w2 w3 w4 w5 w6 w7 w8";
+  const halfRecited: VerseTiming = {
+    verseNumber: 22,
+    start: 10,
+    end: 20,
+    wordRange: { from: 4, to: 7 },
+    wordRangeTextOnly: true,
+  };
+
+  it("shows only the recited words", () => {
+    expect(verseTextAt(halfRecited, fullVerse, 12)).toBe("w5 w6 w7 w8");
+  });
+
+  it("leaves the ayah's audio bounds completely untouched", () => {
+    expect(effectiveAudioBounds(halfRecited, 8)).toEqual([10, 20]);
+  });
+
+  it("still trims audio for an ordinary (non text-only) range", () => {
+    const clipped: VerseTiming = {
+      verseNumber: 22,
+      start: 10,
+      end: 20,
+      wordRange: { from: 4, to: 7 },
+    };
+    expect(effectiveAudioBounds(clipped, 8)).toEqual([15, 20]);
+    expect(verseTextAt(clipped, fullVerse, 12)).toBe("w5 w6 w7 w8");
+  });
+
+  it("keeps a trimmed verse's split parts inside the recited words", () => {
+    const trimmedAndSplit: VerseTiming = {
+      ...halfRecited,
+      splits: [15],
+      splitWords: [6],
+      splitWordTotal: 8,
+    };
+    // Part 1 covers words 0..5 intersected with the trim (4..7) -> w5 w6.
+    expect(verseTextAt(trimmedAndSplit, fullVerse, 12)).toBe("w5 w6");
+    // Part 2 covers words 6..7, all inside the trim.
+    expect(verseTextAt(trimmedAndSplit, fullVerse, 17)).toBe("w7 w8");
+  });
+});
