@@ -35,11 +35,13 @@ Root cause (confirmed): `bulk-recognition.ts` discarded the fully-built, corpus-
 - **RISK**: it's shared with the single-clip editor auto-apply. MUST gate on the recognition benchmark (`npm run test:recognition`, `test:detection`) proving zero new false auto-applies before/after. Do not ship without that evidence.
 - **Shipped**: removed the over-broad `.some()` clause in `verse-match.ts` that flagged any non-overlapping same-surah window (`ayahEnd < primary.ayahStart` / `ayahStart > primary.ayahEnd`) as competing — the normal case inside a 4-min continuous recitation. Now only a different surah in any window, or the strongest window materially out-scoring the whole-clip match while disagreeing (`strongestDisagrees`), competes. Added unit tests (non-overlapping later same-surah allowed; different surah still flags). **Benchmark evidence** (before == after): `test:recognition` 43 safe auto-applies, 1.000 precision, 1.000 candidate recall; `test:detection` 18/18; `test:alignment` 14/14; `test:mixed-speech` no false auto-apply. Zero new false auto-applies.
 
-### B. Cross-window merge into a continuous sequence — M
+### B. Cross-window merge into a continuous sequence — M — ✅ DONE 2026-07-21
 Merge adjacent windows' ayahs into one continuous surah/ayah timeline (the plan's step 3), so a long recitation is reconstructed rather than each 4-min window self-classifying. Reduces boundary loss and lets confidence accrue over the whole passage.
+- **Shipped**: the dedup + continuous-run reconstruction already existed (`mergeBulkAyahs` + run-building in `buildVerseCompleteCandidates`). Added the missing confidence-accrual step: `corroborateBulkAyahs` promotes a `low` ayah to `medium` only when deductively pinned — bracketed both sides by high/medium same-surah ayahs at exactly verseNumber∓1 with a small gap — so a continuous passage auto-approves as one clip. Conservative negative cases (single neighbour, unverified neighbour, non-consecutive, surah change, large gap) never promote. Unit-tested. Recommend a live multi-window run to confirm yield before relying on it in production.
 
-### C. Smaller/adaptive windows + silence-aware cuts — M
+### C. Smaller/adaptive windows + silence-aware cuts — M — ✅ DONE 2026-07-21 (silence-aware cuts)
 Cut windows at silence gaps (reciters pause between ayat) instead of fixed 4-min slices; combine textual ayah boundary + acoustic silence for clean "complete-thought" clips. Smaller windows raise per-window match confidence.
+- **Shipped**: `silenceAwareWindows` snaps each window boundary to the longest pause within tolerance of the target (tie-broken by closeness), falling back to the fixed target for pause-less sources, with a small overlap guarding straddling ayat. `recognizeQuranInWindows` derives silences once (`findSilenceCenters`) and uses pause-aligned windows. Deterministic → checkpoint resume stays stable. Unit-tested without audio. (Adaptive/smaller target sizes left as a follow-up knob.)
 
 ### D. Closed-vocabulary alignment pass — L
 Once a window's surah is identified (even at low confidence), re-align using a dictionary filtered to that passage's words (quran-align style). Turns "guess the range" into "align known text", sharply improving both recall and boundary accuracy — even with the current ASR.
@@ -47,8 +49,9 @@ Once a window's surah is identified (even at low confidence), re-align using a d
 ### E. Quran-tuned recognition model — L/XL (owner: model hosting cost)
 Swap/augment `asr-model-v1` with `tarteel-ai/whisper-base-ar-quran` or a phonetic wav2vec2. Benchmark WER on melodic recitation first (the repo has no such benchmark yet — `docs/recognition-model-review.md`). Bundle-size and in-browser latency are the constraints.
 
-### F. Clip ranking / review grid — M
+### F. Clip ranking / review grid — M — ✅ DONE 2026-07-21 (scoring; UI wiring pending)
 Score each draft (complete-ayah, clean silence padding at cuts, 20-60s duration, confidence) and present a ranked grid à la Opus Clip, so review is skim-and-approve, not scrub. Complements the review-draft work already shipped.
+- **Shipped**: `scoreBulkCandidate` (0-1, confidence × duration-fit to the muted-autoplay sweet spot) + `rankBulkCandidates` (stable best-first). Advisory ordering only — never approves or changes a range, so outside the integrity gate. Unit-tested. **Remaining**: wire `rankBulkCandidates` into `BulkCreateWorkspace` to present the review grid best-first.
 
 ### G. Burned-in caption detection → smart caption strategy — L
 Detect burned-in captions (sampled-frame edge-density heuristic first; PaddleOCR-WASM if needed) and auto-suggest the caption mode (the on/off toggle shipped 2026-07-20 is the manual version). Offer crop-away / keep-original / cover-and-replace; default cover-and-replace with verified text.
