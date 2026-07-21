@@ -81,6 +81,9 @@ interface ExportOptions {
   emphasis: Record<string, VerseEmphasis>;
   emphasisStyle: "color" | "underline";
   emphasisColor: string;
+  /** Word-by-word karaoke highlight (imported audio). Lights each Arabic word as
+   *  it is recited. Mirrors the live preview; see activeHighlightWord. */
+  wordHighlight?: boolean;
   /** Continuous rounded bar behind each Arabic line. */
   highlightEnabled?: boolean;
   highlightColor?: string;
@@ -124,6 +127,25 @@ async function buildReciterSegments(
     }
   }
   return map;
+}
+
+/**
+ * The Arabic word index lit at `localSeconds` into a verse that lasts
+ * `verseSeconds` — the karaoke word highlight (plan 008 item H). Words light in
+ * even proportion to progress through the verse, EXACTLY as the live preview
+ * computes it (imported-player.ts), so the exported MP4 matches what the creator
+ * saw. Returns null when highlighting cannot apply (no words, non-positive
+ * duration). Pure, so it is unit-tested without a canvas.
+ */
+export function activeHighlightWord(
+  text: string,
+  localSeconds: number,
+  verseSeconds: number,
+): number | null {
+  const count = text.split(/\s+/).filter(Boolean).length;
+  if (count <= 0 || !(verseSeconds > 0)) return null;
+  const prog = Math.min(0.999, Math.max(0, localSeconds / verseSeconds));
+  return Math.min(count - 1, Math.floor(prog * count));
 }
 
 // Pick the on-screen text for a reciter verse at `elapsedSec` into its audio,
@@ -486,6 +508,9 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
 
     let segStart = performance.now();
     let prevSegAr = "";
+    // Verse audio duration for the karaoke word highlight (imported audio only);
+    // set once the slice bounds are known below.
+    let highlightVerseDur = 0;
     const seg0 = vSegs
       ? reciterTextAt(verse, vSegs, 0)
       : segmentFor(verse, tm, sourceStart);
@@ -501,7 +526,8 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
       // The clip-start fade animates during the first verse, so keep drawing
       // frames through verse 0 even when nothing else would require it.
       let renderWhilePlaying =
-        !!bgVideo || hasIntro || !!tm?.splits?.length || !!vSegs || (clipFadeMs > 0 && i === 0);
+        !!bgVideo || hasIntro || !!tm?.splits?.length || !!vSegs || (clipFadeMs > 0 && i === 0)
+        || (!!options.wordHighlight && !!options.importedAudio);
 
       if (importedBuffer && options.importedAudio) {
         // Word-trimmed verses must play only their kept span — the same span
@@ -512,6 +538,7 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
           : [0, importedBuffer.duration];
         const start = lo;
         const dur = Math.max(0.05, hi - lo);
+        highlightVerseDur = dur;
         source.buffer = importedBuffer;
         source.connect(master);
         source.start(0, start, dur);
@@ -555,10 +582,15 @@ async function exportRealtime(options: ExportOptions): Promise<Blob> {
               prevSegAr = seg.ar;
               segStart = performance.now();
             }
+            const activeWord =
+              options.wordHighlight && options.importedAudio && seg.ar === verse.text_uthmani
+                ? activeHighlightWord(verse.text_uthmani, elapsed, highlightVerseDur)
+                : null;
             drawFrame(
               ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
               introAt(segStart), seg.ar, seg.tr, seg.isLast, clipFadeAt(),
-              sequenceLoaded ? sequenceMediaAt(sequenceScenes, (performance.now() - clipStartMs) / 1000, sequenceLoaded, true) : undefined
+              sequenceLoaded ? sequenceMediaAt(sequenceScenes, (performance.now() - clipStartMs) / 1000, sequenceLoaded, true) : undefined,
+              activeWord
             );
             frameId = requestAnimationFrame(renderLoop);
           };
@@ -824,6 +856,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
     isLast: boolean;
     introProgress: number;
     clipFade: number;
+    activeWord: number | null;
     key: string;
   }
   // Fade-in lead: show the next verse `introLead` before its recitation so its
@@ -869,6 +902,12 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       const introProgress = introMs > 0 ? Math.min(1, ((t - segStartT) * 1000) / introMs) : 1;
       // Clip-start fade: clip begins at t=0 on the output timeline.
       const clipFade = clipFadeProgress(t * 1000, clipFadeMsFast);
+      // Karaoke word highlight: only while the audio verse is the one on screen
+      // (never during the intro lead) and the full verse is shown, matching the
+      // preview. Part of the dedupe key so each new lit word gets its own frame.
+      const activeWord = options.wordHighlight && audioVi === vi && segFast.ar === verse.text_uthmani
+        ? activeHighlightWord(verse.text_uthmani, localT, (cum[vi + 1] ?? cum[vi]) - cum[vi])
+        : null;
       plan[f] = {
         t, vi, audioVi,
         ar: segFast.ar,
@@ -876,9 +915,11 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
         isLast: segFast.isLast,
         introProgress,
         clipFade,
-        // clipFade is part of the dedupe key so each distinct fade frame is
-        // encoded (run-length encoding must not collapse the fade animation).
-        key: `${segKey}|${introProgress}|${clipFade}|${segFast.isLast}|${(() => {
+        activeWord,
+        // clipFade and activeWord are part of the dedupe key so each distinct
+        // fade frame and each newly-lit word is encoded (run-length encoding
+        // must not collapse the fade animation or the karaoke highlight).
+        key: `${segKey}|${introProgress}|${clipFade}|${segFast.isLast}|w${activeWord}|${(() => {
           const scene = sequenceScenesFast.length ? resolveBackgroundScene(sequenceScenesFast, t) : undefined;
           return scene ? `${scene.index}:${scene.transitionProgress.toFixed(3)}` : "single";
         })()}`,
@@ -908,7 +949,7 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
 
     drawFrame(
       ctx, size.w, size.h, verse, options, scale, bgImage, bgVideo,
-      p.introProgress, p.ar, p.tr, p.isLast, p.clipFade, sequenceMedia
+      p.introProgress, p.ar, p.tr, p.isLast, p.clipFade, sequenceMedia, p.activeWord
     );
 
     // Length of the static run starting here (1 when a bg video animates,
@@ -1006,13 +1047,19 @@ function drawFrame(
   isLastPart = true,
   /** Clip-start fade progress (1 = fully shown, 0 = black). */
   clipFade = 1,
-  sequenceMedia?: SceneMedia
+  sequenceMedia?: SceneMedia,
+  /** Karaoke word highlight index for this frame (null/undefined = none). Only
+   *  applied on the full verse, where the index maps to the shown words. */
+  activeWordIndex?: number | null,
 ) {
   // When showing a mid-verse segment, manual word emphasis indices wouldn't
   // line up with the partial text — so emphasis only applies on the full verse.
   const showingFullVerse =
     displayArabic == null || displayArabic === verse.text_uthmani;
   const ve = showingFullVerse ? options.emphasis[verse.verse_key] : undefined;
+  // Live word highlight overrides manual emphasis, exactly as the preview does
+  // (StudioPreview). Guarded to the full verse so the index is valid.
+  const wordHi = showingFullVerse && activeWordIndex != null ? activeWordIndex : null;
   const arText = displayArabic ?? verse.text_uthmani;
   const trText =
     displayTranslation === undefined ? verse.translation : displayTranslation ?? undefined;
@@ -1023,8 +1070,10 @@ function drawFrame(
     translation: trText ?? undefined,
     isLastPart,
     qcfWords: sliceQcfForDisplay(verse, arText, isLastPart),
-    arabicEmphasis: ve?.arabic,
+    arabicEmphasis: wordHi != null ? [wordHi] : ve?.arabic,
     translationEmphasis: ve?.translation,
+    emphasisStyleOverride: wordHi != null ? "color" : undefined,
+    emphasisColorOverride: wordHi != null ? options.emphasisColor || "#c9a24b" : undefined,
     introProgress,
     clipFadeProgress: clipFade,
   };
