@@ -290,4 +290,20 @@ describe("sliceQcfForDisplay", () => {
     const r = sliceQcfForDisplay(apiVerse, "w4 w5", true)!;
     expect(r.map((w) => w.text_uthmani)).toEqual(["w4", "w5", "۝"]);
   });
+
+  // Integrity guard: a displayed part whose tokens are NOT a contiguous run of
+  // the verse must NEVER silently map to glyphs from the start of the verse
+  // (that renders the WRONG Quranic words). Returning undefined makes the
+  // renderer fall back to the exact Unicode text of the part instead.
+  it("returns undefined when the part cannot be located in the verse", () => {
+    expect(sliceQcfForDisplay(verse, "wX wY", false)).toBeUndefined();
+  });
+
+  it("returns undefined for a reordered part rather than the wrong words", () => {
+    expect(sliceQcfForDisplay(verse, "w5 w4", true)).toBeUndefined();
+  });
+
+  it("returns undefined when the part is longer than the whole verse", () => {
+    expect(sliceQcfForDisplay(verse, "w1 w2 w3 w4 w5 w6 w7 w8", false)).toBeUndefined();
+  });
 });

@@ -139,13 +139,19 @@ export function sliceQcfForDisplay(
   // glyph, otherwise every partial verse after a waqf can shift by one word.
   const allTokens = verse.text_uthmani.split(/\s+/).filter(Boolean);
   const partTokens = displayArabic.split(/\s+/).filter(Boolean);
-  let tokenOffset = 0;
+  let tokenOffset = -1;
   for (let i = 0; i <= allTokens.length - partTokens.length; i++) {
     if (allTokens.slice(i, i + partTokens.length).every((word, j) => word === partTokens[j])) {
       tokenOffset = i;
       break;
     }
   }
+  // The displayed part could not be located as a contiguous run of the verse's
+  // tokens. NEVER fall through to slicing from index 0 — that silently renders
+  // the WRONG Quranic words. Returning undefined makes the renderer draw the
+  // exact Unicode text of `displayArabic` instead (correct words, non-QCF
+  // font), which is a safe visual fallback rather than a textual error.
+  if (tokenOffset < 0) return undefined;
   const tokenEnd = tokenOffset + partTokens.length;
   let coveredTokens = 0;
   const sliced = fullQcf
