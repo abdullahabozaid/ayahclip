@@ -679,6 +679,10 @@ export function BulkCreateWorkspace() {
     ));
   };
 
+  const setAllApproved = (value: boolean) => {
+    updateCandidates(candidates.map((candidate) => ({ ...candidate, approved: value })));
+  };
+
   const updateRenderTask = async (candidateId: string, patch: Partial<BulkRenderTask>, persist = true) => {
     const current = jobRef.current;
     if (!current) return null;
@@ -821,6 +825,7 @@ export function BulkCreateWorkspace() {
     ? Math.round(((progress.window - 1 + STAGE_ORDER[progress.recognition.stage]) / progress.windowCount) * 100)
     : 1;
   const approvedCount = candidates.filter((candidate) => candidate.approved).length;
+  const allApproved = candidates.length > 0 && approvedCount === candidates.length;
   const reviewCount = candidates.filter((candidate) => candidate.confidence === "low").length;
   const readyCount = job?.renderTasks.filter((task) => task.status === "ready").length ?? 0;
   const failedCount = job?.renderTasks.filter((task) => task.status === "failed").length ?? 0;
@@ -828,11 +833,6 @@ export function BulkCreateWorkspace() {
   const activeCandidateIndex = Math.max(0, candidates.findIndex((candidate) => candidate.id === activeCandidateId));
   const activeCandidate = candidates[activeCandidateIndex];
   const sourceDuration = buffer?.duration ?? job?.duration ?? candidates.at(-1)?.end ?? 0;
-  const selectRelativeCandidate = (offset: number) => {
-    if (!candidates.length) return;
-    const index = Math.max(0, Math.min(candidates.length - 1, activeCandidateIndex + offset));
-    setActiveCandidateId(candidates[index].id);
-  };
 
   return (
     <main className="bg-mihrab min-h-[calc(100dvh-65px)] px-4 pb-24 pt-8 sm:px-5 sm:pt-12">
@@ -1049,45 +1049,80 @@ export function BulkCreateWorkspace() {
 
         {stage === "results" && (
           <section className="mt-9">
-            <div className="flex flex-col gap-5 border-b border-[var(--hairline-soft)] pb-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-gold-soft/70">Review</p>
-                <h2 className="mt-2 text-2xl font-medium text-parchment">{candidates.length} verse-complete drafts</h2>
-                <p className="mt-2 text-sm text-[var(--muted)]">{approvedCount} approved{reviewCount ? ` · ${reviewCount} to review` : ""} · {readyCount} rendered{failedCount ? ` · ${failedCount} need attention` : ""}</p>
-                <p className="mt-1 text-xs leading-5 text-[var(--muted-deep)]">
-                  {reviewCount
-                    ? `${reviewCount} draft${reviewCount === 1 ? "" : "s"} came from a less-certain match — check the range by ear, then approve. `
-                    : ""}
-                  {unresolvedCount
-                    ? `${unresolvedCount} source window${unresolvedCount === 1 ? "" : "s"} had no confident Quran match and ${unresolvedCount === 1 ? "was" : "were"} left out.`
-                    : (reviewCount ? "" : "Every analysed window produced a confident Quran match.")}
+                <h2 className="mt-2 text-2xl font-medium text-parchment">{candidates.length} verse-complete clips</h2>
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  <span className="text-parchment">{approvedCount} approved</span>
+                  {reviewCount ? ` · ${reviewCount} to review` : ""}
+                  {readyCount ? ` · ${readyCount} rendered` : ""}
+                  {failedCount ? ` · ${failedCount} need attention` : ""}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <button type="button" onClick={() => setStage("library")} className="btn-ghost min-h-11 rounded-xl px-4 text-sm">Collections</button>
-                <div className="flex items-center rounded-xl border border-[var(--hairline-soft)]" aria-label="Clip navigation">
-                  <button type="button" onClick={() => selectRelativeCandidate(-1)} disabled={activeCandidateIndex === 0} className="min-h-11 min-w-11 rounded-l-xl text-lg text-parchment disabled:opacity-30" aria-label="Previous clip">←</button>
-                  <span className="px-2 text-xs tabular-nums text-[var(--muted)]">{candidates.length ? activeCandidateIndex + 1 : 0} / {candidates.length}</span>
-                  <button type="button" onClick={() => selectRelativeCandidate(1)} disabled={activeCandidateIndex >= candidates.length - 1} className="min-h-11 min-w-11 rounded-r-xl text-lg text-parchment disabled:opacity-30" aria-label="Next clip">→</button>
-                </div>
-                <select value={templateId} onChange={(event) => applyTemplateToAll(event.target.value)} className="field min-h-11 px-3 text-sm" aria-label="Apply preset to all clips">
-                  {availableTemplates.map((template) => <option key={template.id} value={template.id}>All clips · {template.name}</option>)}
-                </select>
-                <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)]" title="When off, presets restyle text and layout but every clip keeps its current media.">
-                  <input
-                    type="checkbox"
-                    checked={templateReplacesMedia}
-                    onChange={(event) => setTemplateMediaPolicyForJob(event.target.checked)}
-                    className="h-4 w-4 accent-[var(--gold)]"
-                  />
-                  <span>Preset replaces media</span>
-                </label>
-                <button type="button" onClick={() => void runRenderQueue()} disabled={rendering || approvedCount === 0} className="btn-gold min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">{rendering ? "Rendering queue…" : `Render approved (${approvedCount})`}</button>
-                {readyCount > 0 && <button type="button" onClick={() => void deliverReadyBatch()} disabled={deliveryBusy} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">{deliveryBusy ? "Preparing…" : `Download ready (${readyCount})`}</button>}
-                {rendering && <button type="button" onClick={() => { stopRenderingRef.current = true; }} className="btn-ghost min-h-11 rounded-xl px-4 text-sm">Stop after current</button>}
                 <button type="button" onClick={() => void startNewBatch()} disabled={rendering} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">New batch</button>
               </div>
             </div>
+
+            {(reviewCount || unresolvedCount) ? (
+              <p className="mt-3 max-w-2xl text-xs leading-5 text-[var(--muted-deep)]">
+                {reviewCount
+                  ? `${reviewCount} clip${reviewCount === 1 ? "" : "s"} came from a less-certain match — check the range by ear, then approve. `
+                  : ""}
+                {unresolvedCount
+                  ? `${unresolvedCount} source window${unresolvedCount === 1 ? "" : "s"} had no confident Quran match and ${unresolvedCount === 1 ? "was" : "were"} left out.`
+                  : ""}
+              </p>
+            ) : null}
+
+            {/* Sticky batch action bar. Stays reachable while the creator scrolls
+                a long grid of clips. */}
+            {candidates.length > 0 && (
+              <div className="sticky top-0 z-30 -mx-4 mt-5 border-y border-[var(--hairline-soft)] bg-[color-mix(in_oklab,var(--ink)_88%,transparent)] px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAllApproved(!allApproved)}
+                    className="btn-ghost min-h-11 rounded-xl px-4 text-sm"
+                  >
+                    {allApproved ? "Clear all" : "Approve all"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void runRenderQueue()}
+                    disabled={rendering || approvedCount === 0}
+                    className="btn-gold min-h-11 rounded-xl px-4 text-sm disabled:opacity-45"
+                  >
+                    {rendering ? "Rendering…" : `Render approved${approvedCount ? ` (${approvedCount})` : ""}`}
+                  </button>
+                  {readyCount > 0 && (
+                    <button type="button" onClick={() => void deliverReadyBatch()} disabled={deliveryBusy} className="btn-ghost min-h-11 rounded-xl px-4 text-sm disabled:opacity-45">
+                      {deliveryBusy ? "Preparing…" : `Download ready (${readyCount})`}
+                    </button>
+                  )}
+                  {rendering && (
+                    <button type="button" onClick={() => { stopRenderingRef.current = true; }} className="btn-ghost min-h-11 rounded-xl px-4 text-sm">Stop after current</button>
+                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    <select value={templateId} onChange={(event) => applyTemplateToAll(event.target.value)} className="field min-h-11 max-w-[13rem] px-3 text-sm" aria-label="Apply preset to all clips">
+                      {availableTemplates.map((template) => <option key={template.id} value={template.id}>All clips · {template.name}</option>)}
+                    </select>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-[var(--hairline-soft)] px-3 text-xs text-[var(--muted)]" title="When off, presets restyle text and layout but every clip keeps its current media.">
+                      <input
+                        type="checkbox"
+                        checked={templateReplacesMedia}
+                        onChange={(event) => setTemplateMediaPolicyForJob(event.target.checked)}
+                        className="h-4 w-4 accent-[var(--gold)]"
+                      />
+                      <span className="hidden sm:inline">Preset replaces media</span>
+                      <span className="sm:hidden">Replace media</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {sourceUrl && <video ref={previewRef} src={sourceUrl} className="sr-only" playsInline onTimeUpdate={(event) => {
               if (previewEndRef.current !== null && event.currentTarget.currentTime >= previewEndRef.current) {
@@ -1112,16 +1147,6 @@ export function BulkCreateWorkspace() {
               />
             )}
 
-            {candidates.length > 0 && (
-              <BulkTimelineOverview
-                candidates={candidates}
-                duration={sourceDuration}
-                activeCandidateId={activeCandidate?.id ?? null}
-                renderTaskById={renderTaskById}
-                onSelect={setActiveCandidateId}
-              />
-            )}
-
             {candidates.length === 0 ? (
               <div className="mt-8 rounded-2xl border border-dashed border-[var(--hairline)] px-6 py-16 text-center">
                 <h3 className="text-lg font-medium text-parchment">No trustworthy clip ranges yet</h3>
@@ -1129,77 +1154,159 @@ export function BulkCreateWorkspace() {
                 <button type="button" onClick={() => setStage("source")} className="btn-gold mt-5 min-h-11 rounded-xl px-5 text-sm">Try another section</button>
               </div>
             ) : (
-              <div className="mt-6 space-y-3">
-                {candidates.filter((candidate) => candidate.id === activeCandidate?.id).map((candidate) => {
-                  const firstVerse = verseLookup[`${candidate.surah}:${candidate.ayahStart}`];
-                  const surah = surahs.find((item) => item.id === candidate.surah);
-                  const template = availableTemplates.find((item) => item.id === candidate.templateId);
-                  const task = renderTaskById[candidate.id];
-                  return (
-                    <article key={candidate.id} className={`overflow-hidden rounded-2xl border bg-[rgba(16,17,21,0.78)] transition-colors ${candidate.approved ? "border-[var(--hairline)]" : "border-white/[0.06] opacity-65"}`}>
-                      <div className="grid gap-0 sm:grid-cols-[2.5rem_7rem_minmax(0,1fr)] lg:grid-cols-[2.5rem_7rem_minmax(0,1fr)_13rem]">
-                        <label className="flex min-h-12 cursor-pointer items-center justify-center border-b border-[var(--hairline-soft)] sm:border-b-0 sm:border-r">
-                          <input type="checkbox" checked={candidate.approved} onChange={() => toggleApproved(candidate.id)} aria-label={`Approve clip ${candidate.order}`} className="h-5 w-5 accent-[var(--gold)]" />
-                        </label>
-                        <div className="relative aspect-video overflow-hidden bg-black sm:aspect-[9/16]">
-                          {candidate.thumbnail ? <div role="img" aria-label={`Source frame for clip ${candidate.order}`} className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${candidate.thumbnail})` }} /> : <div className="flex h-full items-center justify-center px-2 text-center text-[10px] text-[var(--muted-deep)]">Audio source</div>}
-                          <span className="absolute bottom-2 left-2 rounded-md bg-black/75 px-1.5 py-1 text-[10px] tabular-nums text-white">{fmt(candidate.duration)}</span>
-                        </div>
-                        <div className="min-w-0 p-4 sm:p-5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-medium text-parchment">{surah?.name_simple ?? `Surah ${candidate.surah}`} · {candidate.ayahStart}{candidate.ayahEnd === candidate.ayahStart ? "" : `–${candidate.ayahEnd}`}</p>
-                            <span className={`rounded-full px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] ${candidate.confidence === "high" ? "bg-emerald-400/10 text-emerald-200" : candidate.confidence === "low" ? "bg-rose-400/10 text-rose-100" : "bg-amber-400/10 text-amber-100"}`}>{candidate.confidence === "low" ? "review range" : candidate.confidence}</span>
-                            <span className="text-xs tabular-nums text-[var(--muted-deep)]">{fmt(candidate.start)}–{fmt(candidate.end)}</span>
-                            {candidate.timings.some((timing) => timing.splits?.length) && <span className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-sky-100">Model-timed caption pages</span>}
-                          </div>
-                          <p dir="rtl" lang="ar" className="font-arabic mt-3 line-clamp-2 text-right text-xl font-normal leading-9 text-parchment">{firstVerse?.text_uthmani ?? "Quran text loading"}</p>
-                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--muted)]">{firstVerse?.translation ?? "Translation loading"}</p>
-                          <div className="mt-3 flex min-w-0 items-center gap-2">
-                            <span className="h-6 w-6 shrink-0 rounded-md border border-white/10" style={{ background: template?.swatch }} />
-                            <span className="truncate text-xs text-[var(--muted)]">{template?.name}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap content-center gap-2 border-t border-[var(--hairline-soft)] p-4 sm:col-start-2 sm:col-end-4 lg:col-start-auto lg:col-end-auto lg:border-l lg:border-t-0">
-                          {task?.status === "rendering" || task?.status === "queued" ? (
-                            <div className="w-full" role="status">
-                              <div className="flex justify-between text-xs text-[var(--muted)]"><span>{task.status === "queued" ? "Queued" : "Rendering"}</span><span>{task.progress}%</span></div>
-                              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full bg-gold transition-[width]" style={{ width: `${task.progress}%` }} /></div>
-                            </div>
-                          ) : task?.status === "ready" ? (
-                            <button type="button" onClick={() => void deliverCandidate(candidate.id)} className="btn-gold min-h-11 flex-1 rounded-xl px-3 text-xs">Download</button>
-                          ) : (
-                            <button type="button" onClick={() => void runRenderQueue([candidate.id])} disabled={rendering} className="btn-gold min-h-11 flex-1 rounded-xl px-3 text-xs disabled:opacity-45">{task?.status === "failed" ? "Retry render" : "Render"}</button>
-                          )}
-                          <button type="button" onClick={() => void togglePreview(candidate)} className="btn-ghost min-h-11 flex-1 rounded-xl px-3 text-xs">{activePreview === candidate.id ? "Pause" : "Listen"}</button>
-                          <button type="button" onClick={() => void openCandidate(candidate)} className="btn-ghost min-h-11 w-full rounded-xl px-3 text-xs">Open in Studio</button>
-                          {task?.status === "failed" && <p className="w-full text-xs leading-5 text-red-200">{task.error}</p>}
-                          {task?.status === "ready" && task.librarySaved === false && <p className="w-full text-[10px] leading-4 text-amber-100">Rendered, but local Library storage was full.</p>}
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-                <nav className="flex gap-2 overflow-x-auto pb-2 pt-2" aria-label="Batch clips">
-                  {candidates.map((candidate, index) => {
-                    const surah = surahs.find((item) => item.id === candidate.surah);
-                    const task = renderTaskById[candidate.id];
-                    return (
-                      <button key={candidate.id} type="button" onClick={() => setActiveCandidateId(candidate.id)} aria-current={candidate.id === activeCandidate?.id ? "true" : undefined} className={`relative min-h-24 w-24 shrink-0 overflow-hidden rounded-xl border text-left ${candidate.id === activeCandidate?.id ? "border-[var(--gold)]" : "border-[var(--hairline-soft)]"}`}>
-                        {candidate.thumbnail && <span className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${candidate.thumbnail})` }} />}
-                        <span className="absolute inset-0 bg-gradient-to-t from-black via-black/45 to-transparent" />
-                        <span className="absolute left-2 top-2 rounded bg-black/65 px-1.5 py-0.5 text-[10px] text-white">{index + 1}</span>
-                        <span className="absolute bottom-2 left-2 right-2 truncate text-[10px] font-medium text-white">{surah?.name_simple ?? `Surah ${candidate.surah}`} {candidate.ayahStart}–{candidate.ayahEnd}</span>
-                        {task?.status === "ready" && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-emerald-300" aria-label="Rendered" />}
-                      </button>
-                    );
-                  })}
-                </nav>
+              <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+                {candidates.map((candidate, index) => (
+                  <BulkClipCard
+                    key={candidate.id}
+                    candidate={candidate}
+                    index={index}
+                    surahName={surahs.find((item) => item.id === candidate.surah)?.name_simple ?? `Surah ${candidate.surah}`}
+                    template={availableTemplates.find((item) => item.id === candidate.templateId)}
+                    task={renderTaskById[candidate.id]}
+                    rendering={rendering}
+                    isPreviewing={activePreview === candidate.id}
+                    onToggleApprove={() => toggleApproved(candidate.id)}
+                    onPreview={() => void togglePreview(candidate)}
+                    onOpenStudio={() => void openCandidate(candidate)}
+                    onRender={() => void runRenderQueue([candidate.id])}
+                    onDownload={() => void deliverCandidate(candidate.id)}
+                  />
+                ))}
               </div>
+            )}
+
+            {candidates.length > 0 && (
+              <details className="mt-6 overflow-hidden rounded-2xl border border-[var(--hairline-soft)] bg-[rgba(16,17,21,0.62)]">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-parchment [&::-webkit-details-marker]:hidden">
+                  <span>Source timeline</span>
+                  <span className="text-xs text-[var(--muted)]">{fmt(sourceDuration)}</span>
+                </summary>
+                <BulkTimelineOverview
+                  candidates={candidates}
+                  duration={sourceDuration}
+                  activeCandidateId={activeCandidate?.id ?? null}
+                  renderTaskById={renderTaskById}
+                  onSelect={setActiveCandidateId}
+                />
+              </details>
             )}
           </section>
         )}
       </div>
     </main>
+  );
+}
+
+function BulkClipCard({
+  candidate,
+  index,
+  surahName,
+  template,
+  task,
+  rendering,
+  isPreviewing,
+  onToggleApprove,
+  onPreview,
+  onOpenStudio,
+  onRender,
+  onDownload,
+}: {
+  candidate: BulkClipCandidate;
+  index: number;
+  surahName: string;
+  template: TemplateDefinition | undefined;
+  task: BulkRenderTask | undefined;
+  rendering: boolean;
+  isPreviewing: boolean;
+  onToggleApprove: () => void;
+  onPreview: () => void;
+  onOpenStudio: () => void;
+  onRender: () => void;
+  onDownload: () => void;
+}) {
+  const approved = candidate.approved;
+  const busy = task?.status === "queued" || task?.status === "rendering";
+  const ready = task?.status === "ready";
+  const failed = task?.status === "failed";
+  const hasPages = candidate.timings.some((timing) => timing.splits?.length);
+  const ayahRange = candidate.ayahEnd === candidate.ayahStart
+    ? `${candidate.ayahStart}`
+    : `${candidate.ayahStart}–${candidate.ayahEnd}`;
+
+  return (
+    <article className={`group flex flex-col overflow-hidden rounded-2xl border bg-[rgba(16,17,21,0.78)] transition-[border-color,opacity] ${approved ? "border-[var(--hairline)]" : "border-white/[0.06] opacity-70 hover:opacity-100"}`}>
+      <div className="relative aspect-[9/16] overflow-hidden bg-black">
+        <button
+          type="button"
+          onClick={onPreview}
+          aria-label={isPreviewing ? `Pause clip ${index + 1}` : `Listen to clip ${index + 1}, ${surahName} ${ayahRange}`}
+          className="absolute inset-0 block h-full w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold/70"
+        >
+          {candidate.thumbnail ? (
+            <span className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-[1.03]" style={{ backgroundImage: `url(${candidate.thumbnail})` }} />
+          ) : (
+            <span className="absolute inset-0" style={{ background: template?.swatch ?? "linear-gradient(160deg,#111319,#050507)" }} />
+          )}
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/40" />
+          <span className="pointer-events-none absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white opacity-70 backdrop-blur-sm transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+            {isPreviewing ? (
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden><path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l10.29-6.86a1 1 0 0 0 0-1.68L9.54 4.3A1 1 0 0 0 8 5.14Z" /></svg>
+            )}
+          </span>
+          {!ready && <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white/90 backdrop-blur">{index + 1}</span>}
+          <span className="absolute inset-x-0 bottom-0 flex flex-col gap-1 p-2.5">
+            <span className="truncate text-[13px] font-medium leading-tight text-white">{surahName} {ayahRange}</span>
+            <span className="flex flex-wrap items-center gap-1.5 text-[10px] text-white/75">
+              <span className="tabular-nums">{fmt(candidate.duration)}</span>
+              {candidate.confidence === "low" && <span className="rounded-full bg-rose-400/25 px-1.5 py-0.5 uppercase tracking-[0.1em] text-rose-50">review</span>}
+              {candidate.confidence === "medium" && <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 uppercase tracking-[0.1em] text-amber-50">check</span>}
+              {hasPages && <span className="rounded-full bg-sky-400/20 px-1.5 py-0.5 uppercase tracking-[0.1em] text-sky-50">pages</span>}
+            </span>
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleApprove}
+          aria-pressed={approved}
+          aria-label={approved ? `Unapprove clip ${index + 1}` : `Approve clip ${index + 1}`}
+          className="absolute right-1 top-1 z-10 flex h-11 w-11 items-center justify-center"
+        >
+          <span className={`flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${approved ? "border-gold bg-gold text-[var(--ink-deep)]" : "border-white/60 bg-black/40 text-transparent"}`}>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+          </span>
+        </button>
+
+        {busy && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/55" role="status">
+            <span className="flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-[11px] font-medium text-white backdrop-blur">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden><path strokeLinecap="round" d="M12 3a9 9 0 1 0 9 9" /></svg>
+              {task?.status === "queued" ? "Queued" : `Rendering ${task?.progress ?? 0}%`}
+            </span>
+            <span className="h-1 w-2/3 overflow-hidden rounded-full bg-white/20"><span className="block h-full bg-gold transition-[width]" style={{ width: `${task?.progress ?? 0}%` }} /></span>
+          </div>
+        )}
+        {ready && (
+          <span className="absolute left-2 top-2 z-10 flex items-center gap-1 rounded-full bg-emerald-400/90 px-2 py-0.5 text-[10px] font-medium text-[var(--ink-deep)]">
+            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+            Ready
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1.5 p-2">
+        <button type="button" onClick={onOpenStudio} className="btn-ghost flex min-h-10 flex-1 items-center justify-center rounded-lg px-2 text-xs">Edit</button>
+        {ready ? (
+          <button type="button" onClick={onDownload} className="btn-gold flex min-h-10 flex-1 items-center justify-center rounded-lg px-2 text-xs">Download</button>
+        ) : (
+          <button type="button" onClick={onRender} disabled={rendering && !failed} className="btn-gold flex min-h-10 flex-1 items-center justify-center rounded-lg px-2 text-xs disabled:opacity-45">{failed ? "Retry" : busy ? "Rendering" : "Render"}</button>
+        )}
+      </div>
+      {failed && <p className="px-3 pb-2 text-[10px] leading-4 text-rose-200">{task?.error}</p>}
+      {ready && task?.librarySaved === false && <p className="px-3 pb-2 text-[10px] leading-4 text-amber-100">Rendered, but local Library storage was full.</p>}
+    </article>
   );
 }
 
@@ -1275,19 +1382,15 @@ function BulkTimelineOverview({
   const safeDuration = Math.max(duration, candidates.at(-1)?.end ?? 1, 1);
 
   return (
-    <section className="mt-6 rounded-2xl border border-[var(--hairline-soft)] bg-[rgba(16,17,21,0.62)] p-4" aria-labelledby="bulk-timeline-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 id="bulk-timeline-heading" className="text-sm font-medium text-parchment">Source timeline</h3>
-          <p className="mt-1 text-xs text-[var(--muted)]">Each segment is a complete-ayah draft. Select a range to review its text, listen, render, or open it in Studio.</p>
-        </div>
+    <div className="border-t border-[var(--hairline-soft)] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-[var(--muted)]">Each segment is a complete-ayah clip. Select one to highlight it.</p>
         <div className="flex items-center gap-3 text-[10px] text-[var(--muted)]">
           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-gold" />Active</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-300" />Ready</span>
-          <span className="tabular-nums">{fmt(safeDuration)}</span>
         </div>
       </div>
-      <div className="mt-4 overflow-x-auto pb-1">
+      <div className="mt-3 overflow-x-auto pb-1">
         <div className="relative h-20 min-w-[720px] rounded-xl border border-[var(--hairline-soft)] bg-[var(--ink-deep)]">
           <div className="absolute inset-x-3 top-8 h-2 rounded-full bg-white/[0.07]" />
           {candidates.map((candidate) => {
@@ -1322,7 +1425,7 @@ function BulkTimelineOverview({
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

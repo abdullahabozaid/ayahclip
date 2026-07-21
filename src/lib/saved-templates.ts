@@ -6,6 +6,7 @@ import {
   type SavedTemplate,
   type TemplateDefinition,
   type TemplateFamily,
+  type TemplateKind,
   type TemplateMediaPolicy,
   type TemplateMediaSlot,
   type TemplateExtras,
@@ -19,6 +20,7 @@ export interface SaveTemplateInput {
   name: string;
   description?: string;
   family?: TemplateFamily;
+  kind?: TemplateKind;
   swatch?: string;
   mediaPolicy: TemplateMediaPolicy;
   settings: StyleSettings;
@@ -85,7 +87,7 @@ export function sanitizeTemplateForStorage(
 }
 
 function validFamily(value: unknown): value is TemplateFamily {
-  return ["ayahclip", "reciter", "nature", "minimal", "broll"].includes(
+  return ["ayahclip", "reciter", "nature", "minimal", "broll", "text"].includes(
     String(value)
   );
 }
@@ -119,6 +121,7 @@ function parseTemplate(value: unknown): SavedTemplate | null {
     name: item.name,
     description: typeof item.description === "string" ? item.description : "",
     family: item.family,
+    kind: item.kind === "text" ? "text" : "composition",
     featured: Boolean(item.featured),
     swatch: typeof item.swatch === "string" ? item.swatch : "#08090d",
     mediaPolicy: item.mediaPolicy,
@@ -201,6 +204,7 @@ export function saveTemplate(input: SaveTemplateInput): SavedTemplate[] {
     name: input.name.trim() || `Template ${templates.length + 1}`,
     description: input.description?.trim() || "Custom Quran clip template",
     family: input.family ?? "minimal",
+    kind: input.kind ?? "composition",
     featured: false,
     swatch: input.swatch ?? sanitized.settings.background.value,
     mediaPolicy: input.mediaPolicy,
@@ -227,6 +231,7 @@ export function updateSavedTemplate(
           name: input.name.trim() || template.name,
           description: input.description?.trim() || template.description,
           family: input.family ?? template.family,
+          kind: input.kind ?? template.kind ?? "composition",
           swatch: input.swatch ?? sanitized.settings.background.value,
           mediaPolicy: input.mediaPolicy,
           settings: sanitized.settings,
@@ -251,6 +256,7 @@ export function duplicateSavedTemplate(template: TemplateDefinition): SavedTempl
     name: `${template.name} copy`,
     description: template.description,
     family: template.family,
+    kind: template.kind,
     swatch: template.swatch,
     mediaPolicy: template.mediaPolicy,
     settings: template.settings,

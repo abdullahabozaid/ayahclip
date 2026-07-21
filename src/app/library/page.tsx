@@ -568,6 +568,15 @@ export default function LibraryPage() {
         </div>
       )}
 
+      {!loaded && (
+        <div className="mx-auto max-w-lg px-8 py-20 text-center" role="status" aria-live="polite">
+          <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-[var(--hairline-soft)]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 animate-spin text-gold-soft" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden><path strokeLinecap="round" d="M12 3a9 9 0 1 0 9 9" /></svg>
+          </span>
+          <p className="mt-4 text-sm text-[var(--muted)]">Loading your clips…</p>
+        </div>
+      )}
+
       {loaded && clips.length === 0 && (
         <div className="panel mx-auto max-w-lg px-8 py-16 text-center">
           <span className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[var(--hairline)] text-2xl text-gold-soft">
@@ -578,9 +587,17 @@ export default function LibraryPage() {
             Every clip you export is saved here automatically, ready to preview,
             gather into folders, and schedule across TikTok, Reels, and Shorts.
           </p>
-          <NewClipLink href="/browse" className="btn-gold mt-7 inline-block rounded-full px-6 py-3 text-sm">
-            Make your first clip
-          </NewClipLink>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-2.5">
+            <NewClipLink href="/browse" className="btn-gold inline-flex min-h-11 items-center rounded-full px-6 text-sm">
+              Make your first clip
+            </NewClipLink>
+            <a href="/import" className="btn-ghost inline-flex min-h-11 items-center rounded-full px-5 text-sm">
+              Import a recitation
+            </a>
+            <a href="/bulk" className="btn-ghost inline-flex min-h-11 items-center rounded-full px-5 text-sm">
+              Bulk Create
+            </a>
+          </div>
         </div>
       )}
 

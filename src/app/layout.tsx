@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ayahclip.com"),
   applicationName: "AyahClip",
   title: {
-    default: "AyahClip — Luminous Quran recitation clips",
+    default: "AyahClip — Make beautiful Quran clips",
     template: "%s · AyahClip",
   },
   description:
@@ -57,14 +57,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     siteName: "AyahClip",
-    title: "AyahClip — Luminous Quran recitation clips",
+    title: "AyahClip — Make beautiful Quran clips",
     description:
       "Select verses, shape the typography, arrange B-roll, and export a polished social video.",
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AyahClip — Luminous Quran recitation clips",
+    title: "AyahClip — Make beautiful Quran clips",
     description:
       "Select verses, shape the typography, arrange B-roll, and export a polished social video.",
   },

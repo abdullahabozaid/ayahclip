@@ -8,7 +8,7 @@ import {
   duplicateSavedTemplate,
   getSavedTemplates,
 } from "@/lib/saved-templates";
-import { DEFAULT_TEMPLATE_STYLE, TEMPLATES } from "@/lib/templates";
+import { DEFAULT_TEMPLATE_STYLE, TEMPLATES, isTextTemplate } from "@/lib/templates";
 import type { SavedTemplate, TemplateDefinition, TemplateFamily } from "@/lib/template-model";
 import { TemplateCard } from "./TemplateCard";
 import { TemplateIcon } from "./TemplateIcon";
@@ -19,6 +19,7 @@ type Filter = "featured" | "all" | "mine" | TemplateFamily;
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "featured", label: "Featured" },
+  { id: "text", label: "Text only" },
   { id: "ayahclip", label: "AyahClip" },
   { id: "reciter", label: "Reciter" },
   { id: "nature", label: "Nature" },
@@ -51,7 +52,9 @@ export function TemplateGallery({ fromImport = false, initialFilter = "featured"
   }, [filter, saved]);
 
   const handleUseTemplate = (template: TemplateDefinition) => {
-    applyTemplate(template, { replaceMedia });
+    // Text presets restyle captions only; they must never swap the creator's
+    // media, whatever the global "replace media" toggle says.
+    applyTemplate(template, { replaceMedia: isTextTemplate(template) ? false : replaceMedia });
     trackProductEvent("template_chosen");
     router.push("/studio");
   };
@@ -94,18 +97,24 @@ export function TemplateGallery({ fromImport = false, initialFilter = "featured"
           </button>
         </div>
 
-        <label className="mt-6 flex w-fit cursor-pointer items-start gap-2.5 rounded-xl border border-[var(--hairline-soft)] bg-white/[0.02] px-4 py-3 text-xs leading-4 text-[var(--muted)]">
-          <input
-            type="checkbox"
-            checked={replaceMedia}
-            onChange={(event) => setReplaceMedia(event.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-[var(--gold)]"
-          />
-          <span>
-            <span className="font-medium text-parchment">Replace my media with the template’s media</span>
-            <span className="mt-0.5 block text-xs text-[var(--muted-deep)]">Off: templates restyle text, layout, and effects while your current background stays.</span>
-          </span>
-        </label>
+        {filter === "text" ? (
+          <p className="mt-6 w-fit rounded-xl border border-[var(--hairline-soft)] bg-white/[0.02] px-4 py-3 text-xs leading-5 text-[var(--muted)]">
+            <span className="font-medium text-parchment">Text-only presets.</span> Each one restyles just the Arabic and translation — your current background and media stay exactly as they are.
+          </p>
+        ) : (
+          <label className="mt-6 flex w-fit cursor-pointer items-start gap-2.5 rounded-xl border border-[var(--hairline-soft)] bg-white/[0.02] px-4 py-3 text-xs leading-4 text-[var(--muted)]">
+            <input
+              type="checkbox"
+              checked={replaceMedia}
+              onChange={(event) => setReplaceMedia(event.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-[var(--gold)]"
+            />
+            <span>
+              <span className="font-medium text-parchment">Replace my media with the template’s media</span>
+              <span className="mt-0.5 block text-xs text-[var(--muted-deep)]">Off: templates restyle text, layout, and effects while your current background stays.</span>
+            </span>
+          </label>
+        )}
 
         <div className="mt-8 flex gap-2 overflow-x-auto pb-2" aria-label="Template filters">
           {FILTERS.map((item) => (

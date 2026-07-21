@@ -62,6 +62,7 @@ const FAMILY_ICONS: Record<TemplateFamily, TemplateIconName> = {
   nature: "nature",
   minimal: "minimal",
   broll: "broll",
+  text: "type",
 };
 
 function cloneTemplate(template: TemplateDefinition): TemplateDefinition {

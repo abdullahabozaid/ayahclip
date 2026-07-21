@@ -766,7 +766,11 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
   const framed = frameMode !== "studio";
   const canReframe = store.background.type === "image" || store.background.type === "video";
   const phoneStage = stageSize.width > 0 && stageSize.width < 768;
-  const preferredWidth = phoneStage ? 220 : framed ? 292 : size.w >= size.h ? 520 : 292;
+  // Portrait clips are the common case; let the preview grow into whatever
+  // vertical space the stage offers (governed below by widthFromHeight) instead
+  // of pinning it to a small fixed cap that left the canvas marooned in a void.
+  // This is display sizing only — the export renderer path is untouched.
+  const preferredWidth = phoneStage ? 220 : framed ? 292 : size.w >= size.h ? 640 : 560;
   const chromeWidthRatio = framed ? 1.09 : 1;
   const chromeHeightRatio = framed ? 16 / 9 + 0.09 : size.h / size.w;
   const controlsHeight = (canReframe && framed ? 64 : 0) + (rows.length > 0 ? 64 : 0);

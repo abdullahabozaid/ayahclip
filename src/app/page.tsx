@@ -171,17 +171,17 @@ export default function Dashboard() {
             className="rise font-display text-5xl leading-[1.05] tracking-wide text-parchment sm:text-7xl"
             style={{ animationDelay: "160ms" }}
           >
-            Craft luminous
+            Make beautiful
             <br />
-            <span className="text-gold">recitation clips</span>
+            <span className="text-gold">Quran clips</span>
           </h1>
 
           <p
             className="rise mx-auto mt-6 max-w-xl text-base leading-relaxed text-[var(--muted)] sm:text-lg"
             style={{ animationDelay: "240ms" }}
           >
-            Select verses, choose a reciter, and shape a beautiful video for
-            TikTok, Reels, or YouTube Shorts — entirely in your browser.
+            Pick your verses, choose a reciter, and make a video for TikTok,
+            Reels, or Shorts. It all happens in your browser.
           </p>
 
           <div
@@ -300,25 +300,73 @@ export default function Dashboard() {
             </div>
           </>
         ) : (
-          <div className="panel mx-auto max-w-lg px-8 py-16 text-center">
-            <EmptyClipsMark />
-            <h2 className="font-display text-2xl text-parchment">Your clips</h2>
-            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
-              Begin your first clip from the Quran with an online reciter, or
-              bring your own recitation and let AyahClip find the verses for you.
-            </p>
-            <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-              <NewClipLink href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
-                Choose a surah
-              </NewClipLink>
-              <NewClipLink href="/import" className="btn-ghost rounded-full px-6 py-3 text-sm">
-                Import a recitation
-              </NewClipLink>
+          <div className="mx-auto max-w-4xl">
+            <div className="panel grid overflow-hidden sm:grid-cols-2">
+              {/* Left: a simple phone-shaped preview so the card is not just text. */}
+              <div className="flex items-center justify-center border-b border-[var(--hairline-soft)] bg-[var(--ink-deep)] p-10 sm:border-b-0 sm:border-r">
+                <div className="flex aspect-[9/16] w-32 flex-col items-center justify-center gap-3 rounded-[1.4rem] border border-[var(--hairline)] bg-black text-[var(--muted-deep)]">
+                  <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                    <rect x="2" y="6" width="14" height="12" rx="2" />
+                    <path d="M16 10l6-3v10l-6-3" />
+                  </svg>
+                  <span className="h-1 w-10 rounded-full bg-white/10" />
+                  <span className="h-1 w-6 rounded-full bg-white/10" />
+                </div>
+              </div>
+              {/* Right: plain copy + the two ways to start. */}
+              <div className="p-8 sm:p-10">
+                <h2 className="font-display text-2xl text-parchment">Your clips</h2>
+                <p className="mt-2 max-w-sm text-sm leading-relaxed text-[var(--muted)]">
+                  You haven’t made any clips yet. Pick a verse from the Quran, or bring your own
+                  recitation and we’ll find the verses for you.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <NewClipLink href="/browse" className="btn-gold rounded-full px-6 py-3 text-sm">
+                    Choose a surah
+                  </NewClipLink>
+                  <NewClipLink href="/import" className="btn-ghost rounded-full px-6 py-3 text-sm">
+                    Import a recitation
+                  </NewClipLink>
+                </div>
+              </div>
+            </div>
+
+            {/* Three short points so the page has substance, not empty black. */}
+            <div className="mt-12 grid gap-8 sm:grid-cols-3">
+              <HomeFeature
+                title="Clear text"
+                desc="Pick a text style you like. It stays sharp and easy to read on any screen."
+                icon={<path d="M5 5h14M12 5v14M8 19h8" />}
+              />
+              <HomeFeature
+                title="Stays private"
+                desc="Your video is made on your device. Nothing is uploaded unless you share it."
+                icon={<path d="M12 3l7 3v6c0 4-3 7-7 8-4-1-7-4-7-8V6l7-3z" />}
+              />
+              <HomeFeature
+                title="Ready-made looks"
+                desc="Start from a template and change only what you want."
+                icon={<><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /></>}
+              />
             </div>
           </div>
         )}
       </section>
     </main>
+  );
+}
+
+function HomeFeature({ title, desc, icon }: { title: string; desc: string; icon: React.ReactNode }) {
+  return (
+    <div>
+      <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--hairline)] text-gold-soft">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {icon}
+        </svg>
+      </span>
+      <h3 className="mt-3 text-sm font-medium text-parchment">{title}</h3>
+      <p className="mt-1.5 text-sm leading-6 text-[var(--muted)]">{desc}</p>
+    </div>
   );
 }
 

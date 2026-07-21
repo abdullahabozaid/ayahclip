@@ -8,7 +8,16 @@ export type TemplateFamily =
   | "reciter"
   | "nature"
   | "minimal"
-  | "broll";
+  | "broll"
+  | "text";
+
+/**
+ * "composition" (default) templates carry a full look including background and
+ * media slots. "text" presets are caption/typography looks only: applying one
+ * restyles the Arabic + translation (font, weight, colour, highlight, outline,
+ * position) and never touches the creator's current background or media.
+ */
+export type TemplateKind = "composition" | "text";
 
 export type TemplateMediaPolicy =
   | "preserve-current-media"
@@ -43,6 +52,8 @@ export interface TemplateDefinition {
   name: string;
   description: string;
   family: TemplateFamily;
+  /** Defaults to "composition" when omitted. */
+  kind?: TemplateKind;
   featured?: boolean;
   /** Small CSS background used while the real renderer preview is loading. */
   swatch: string;

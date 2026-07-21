@@ -38,6 +38,9 @@ export function DevicePreview({
   const bezel = width * 0.045;
   const screenRadius = width * 0.11;
   const frameRadius = screenRadius + bezel;
+  // Studio (unframed) mode still needs a defined edge so the canvas reads as a
+  // surface, not text floating in the void, even when the clip is near-black.
+  const studioRadius = width * 0.03;
   const islandW = width * 0.3;
   const islandH = width * 0.082;
 
@@ -47,7 +50,7 @@ export function DevicePreview({
       style={{
         width,
         aspectRatio: framed ? "9 / 16" : aspect,
-        borderRadius: framed ? screenRadius : 0,
+        borderRadius: framed ? screenRadius : studioRadius,
       }}
     >
       {children}
@@ -93,7 +96,11 @@ export function DevicePreview({
 
   if (!framed) {
     return (
-      <div data-testid="studio-canvas-frame" className="overflow-hidden bg-black">
+      <div
+        data-testid="studio-canvas-frame"
+        className="overflow-hidden bg-black ring-1 ring-[var(--hairline-soft)] shadow-[0_28px_80px_-44px_rgba(0,0,0,0.95)]"
+        style={{ borderRadius: studioRadius }}
+      >
         {screen}
       </div>
     );
