@@ -11,6 +11,8 @@ import {
 import { DEFAULT_TEMPLATE_STYLE, TEMPLATES, isTextTemplate } from "@/lib/templates";
 import type { SavedTemplate, TemplateDefinition, TemplateFamily } from "@/lib/template-model";
 import { TemplateCard } from "./TemplateCard";
+import { ExampleClipCard } from "./ExampleClipCard";
+import { EXAMPLE_CLIPS } from "@/lib/example-clips";
 import { TemplateIcon } from "./TemplateIcon";
 import { InlineActionPrompt } from "@/components/InlineActionPrompt";
 import { trackProductEvent } from "@/lib/telemetry";
@@ -79,10 +81,25 @@ export function TemplateGallery({ fromImport = false, initialFilter = "featured"
           </div>
         )}
 
+        <section className="mb-14">
+          <div className="mb-6">
+            <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-gold-soft/70">Clip library</p>
+            <h1 className="font-display text-4xl text-parchment sm:text-5xl">Ready-made clips</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Full recitations in different styles. Download one as it is, or open it in the studio to change the reciter, the verses, the B-roll, and any other option.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
+            {EXAMPLE_CLIPS.map((clip) => (
+              <ExampleClipCard key={clip.id} clip={clip} />
+            ))}
+          </div>
+        </section>
+
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-gold-soft/70">Templates</p>
-            <h1 className="font-display text-4xl text-parchment sm:text-5xl">Start with a look that works</h1>
+            <h1 className="font-display text-3xl text-parchment sm:text-4xl">Or start from a style</h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               Curated Quran clip compositions inspired by @ayahclip and current short-form formats. Every preview uses the real export renderer.
             </p>

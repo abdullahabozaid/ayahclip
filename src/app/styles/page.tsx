@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { TemplateGallery } from "@/components/templates/TemplateGallery";
 
 export const metadata: Metadata = {
-  title: "Templates",
-  description: "Choose or create a reusable Quran clip composition.",
+  title: "Clip library",
+  description: "Download ready-made Quran clips or open one in the studio to change the reciter, verses, B-roll, and more.",
   alternates: { canonical: "/styles" },
 };
 

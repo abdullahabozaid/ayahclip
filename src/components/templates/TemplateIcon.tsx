@@ -5,6 +5,7 @@ export type TemplateIconName =
   | "broll"
   | "check"
   | "copy"
+  | "download"
   | "expand"
   | "image"
   | "layout"
@@ -24,6 +25,7 @@ const paths: Record<TemplateIconName, React.ReactNode> = {
   broll: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M8 5v14M16 5v14M3 9h5M16 9h5M3 15h5M16 15h5" /></>,
   check: <path d="M5 12l4 4L19 6" />,
   copy: <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" /></>,
+  download: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M5 21h14" /></>,
   expand: <><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /><path d="M3 8l5-5M21 8l-5-5M3 16l5 5M21 16l-5 5" /></>,
   image: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 15l-5-5L5 20" /></>,
   layout: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M9 10h12" /></>,
