@@ -131,6 +131,9 @@ export async function renderClipFile(
     emphasis: s.emphasis,
     emphasisStyle: s.emphasisStyle,
     emphasisColor: s.emphasisColor,
+    // Karaoke word highlight (imported audio). Included here so it both reaches
+    // the encoder AND becomes part of the render-cache key below.
+    wordHighlight: s.wordHighlight,
     highlightEnabled: s.highlightEnabled,
     highlightColor: s.highlightColor,
     highlightOpacity: s.highlightOpacity,
