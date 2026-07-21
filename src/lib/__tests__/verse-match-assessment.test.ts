@@ -67,6 +67,22 @@ describe("pause-bounded recognition conflicts", () => {
       { surah: 89, ayahStart: 6, ayahEnd: 10, score: 0.96 },
     ])).toBe(true);
   });
+
+  it("allows a non-overlapping later same-surah window from a continuous recitation", () => {
+    // A 4-min continuous recitation naturally yields pause windows covering
+    // sequential, non-overlapping ranges of the same surah. That is expected,
+    // not a competing passage, as long as it does not materially out-score.
+    expect(hasCompetingRecognitionWindow(primary, [
+      { surah: 89, ayahStart: 11, ayahEnd: 14, score: 0.86 },
+    ])).toBe(false);
+  });
+
+  it("still flags a different surah appearing in any window", () => {
+    expect(hasCompetingRecognitionWindow(primary, [
+      { surah: 89, ayahStart: 11, ayahEnd: 14, score: 0.86 },
+      { surah: 12, ayahStart: 1, ayahEnd: 3, score: 0.7 },
+    ])).toBe(true);
+  });
 });
 
 describe("assessVerseMatch", () => {

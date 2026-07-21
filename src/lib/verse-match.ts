@@ -607,8 +607,12 @@ export function recoverRecognitionWindowCandidates(
 }
 
 /** A medium whole-clip match is not safe to auto-apply when a strong
- * pause-bounded window points to a different passage. Same-surah overlapping
- * subranges are expected around ordinary ayah pauses and do not conflict. */
+ * pause-bounded window points to a different passage. Same-surah windows —
+ * whether overlapping around an ordinary ayah pause, or non-overlapping
+ * earlier/later ranges of the same continuous recitation — are expected and do
+ * NOT conflict. Only a genuinely different surah, or the strongest window
+ * materially out-scoring the whole-clip match while disagreeing with it, is a
+ * real competitor. */
 export function hasCompetingRecognitionWindow(
   primary: VerseMatch,
   windows: readonly VerseMatch[],
@@ -620,9 +624,7 @@ export function hasCompetingRecognitionWindow(
     strongest.ayahEnd !== primary.ayahEnd
   ) && strongest.score >= primary.score + 0.02);
   return strongestDisagrees || windows.some((candidate) =>
-    candidate.surah !== primary.surah ||
-    candidate.ayahEnd < primary.ayahStart ||
-    candidate.ayahStart > primary.ayahEnd
+    candidate.surah !== primary.surah
   );
 }
 

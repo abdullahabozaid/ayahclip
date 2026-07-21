@@ -30,9 +30,10 @@ Root cause (confirmed): `bulk-recognition.ts` discarded the fully-built, corpus-
 
 ## Roadmap (by leverage)
 
-### A. Fix the competing-window false trigger — S, HIGH leverage
+### A. Fix the competing-window false trigger — S, HIGH leverage — ✅ DONE 2026-07-21
 `hasCompetingRecognitionWindow`: treat non-overlapping *same-surah* pause windows as expected (not competing); only flag a genuinely different surah, or a materially higher-scoring disagreement. This alone should move many windows from "ambiguous" back to confidently "matched".
 - **RISK**: it's shared with the single-clip editor auto-apply. MUST gate on the recognition benchmark (`npm run test:recognition`, `test:detection`) proving zero new false auto-applies before/after. Do not ship without that evidence.
+- **Shipped**: removed the over-broad `.some()` clause in `verse-match.ts` that flagged any non-overlapping same-surah window (`ayahEnd < primary.ayahStart` / `ayahStart > primary.ayahEnd`) as competing — the normal case inside a 4-min continuous recitation. Now only a different surah in any window, or the strongest window materially out-scoring the whole-clip match while disagreeing (`strongestDisagrees`), competes. Added unit tests (non-overlapping later same-surah allowed; different surah still flags). **Benchmark evidence** (before == after): `test:recognition` 43 safe auto-applies, 1.000 precision, 1.000 candidate recall; `test:detection` 18/18; `test:alignment` 14/14; `test:mixed-speech` no false auto-apply. Zero new false auto-applies.
 
 ### B. Cross-window merge into a continuous sequence — M
 Merge adjacent windows' ayahs into one continuous surah/ayah timeline (the plan's step 3), so a long recitation is reconstructed rather than each 4-min window self-classifying. Reduces boundary loss and lets confidence accrue over the whole passage.
