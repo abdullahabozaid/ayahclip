@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-import { isLocalNetworkHostname, localMutationAllowed } from "../local-origin";
+import { filesystemFeaturesEnabled, isLocalNetworkHostname, localMutationAllowed } from "../local-origin";
 
 function mutationRequest(
   url: string,
@@ -69,5 +69,41 @@ describe("local filesystem origin boundary", () => {
       "192.168.1.10",
       "https",
     ))).toBe(false);
+  });
+});
+
+describe("filesystem features env gate", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  const validLocal = () => mutationRequest(
+    "http://192.168.1.10:3000/api/library",
+    "http://192.168.1.10:3000",
+  );
+
+  it("denies even a perfect local origin when the disk library is disabled", () => {
+    vi.stubEnv("AYAHCLIP_ENABLE_DISK_LIBRARY", "0");
+    expect(filesystemFeaturesEnabled()).toBe(false);
+    expect(localMutationAllowed(validLocal())).toBe(false);
+  });
+
+  it("stays off in production unless explicitly enabled", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AYAHCLIP_ENABLE_DISK_LIBRARY", "");
+    expect(filesystemFeaturesEnabled()).toBe(false);
+    expect(localMutationAllowed(validLocal())).toBe(false);
+  });
+
+  it("is on when explicitly enabled, even in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AYAHCLIP_ENABLE_DISK_LIBRARY", "1");
+    expect(filesystemFeaturesEnabled()).toBe(true);
+    expect(localMutationAllowed(validLocal())).toBe(true);
+  });
+
+  it("defaults on in development when the flag is unset", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AYAHCLIP_ENABLE_DISK_LIBRARY", "");
+    expect(filesystemFeaturesEnabled()).toBe(true);
+    expect(localMutationAllowed(validLocal())).toBe(true);
   });
 });

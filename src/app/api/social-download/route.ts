@@ -3,8 +3,8 @@ import {
   validateSourceLink,
   youtubeRangeError,
 } from "@/lib/source-link";
-import { checkRateLimit, rateLimitClientKey, rateLimitHeaders } from "@/lib/server-rate-limit";
-import { startSocialDownloadJob, type SourceImportQuality } from "@/lib/social-download-jobs";
+import { checkRateLimit, rateLimitClientKey, rateLimitHeaders, releaseRateLimit } from "@/lib/server-rate-limit";
+import { ImportBusyError, startSocialDownloadJob, type SourceImportQuality } from "@/lib/social-download-jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +19,13 @@ export const SOURCE_IMPORT_RATE_LIMIT = {
 };
 
 export async function POST(request: Request) {
+  // Block cross-site browser traffic (same trade-off as telemetry/social-caption):
+  // real same-origin fetches send same-origin/none; non-browser clients omit the
+  // header and still pass. Stops any page on the internet spawning yt-dlp jobs.
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
   let body: unknown;
   try {
     body = await request.json();
@@ -69,14 +76,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const jobId = await startSocialDownloadJob({
-    platform: source.platform,
-    url: source.url.toString(),
-    startSeconds,
-    endSeconds,
-    quality,
-    bulk: input.bulk === true,
-    rateLimitKey: rateLimitClientKey(request, SOURCE_IMPORT_RATE_LIMIT),
-  });
+  let jobId: string;
+  try {
+    jobId = await startSocialDownloadJob({
+      platform: source.platform,
+      url: source.url.toString(),
+      startSeconds,
+      endSeconds,
+      quality,
+      bulk: input.bulk === true,
+      rateLimitKey: rateLimitClientKey(request, SOURCE_IMPORT_RATE_LIMIT),
+    });
+  } catch (err) {
+    if (err instanceof ImportBusyError) {
+      // A full queue did no real work for this creator, so refund the slot the
+      // rate-limit check just reserved and ask them to retry shortly.
+      releaseRateLimit(request, SOURCE_IMPORT_RATE_LIMIT);
+      return Response.json(
+        { error: "The import queue is full right now. Try again in about a minute." },
+        { status: 503, headers: { "retry-after": "60" } },
+      );
+    }
+    throw err;
+  }
   return Response.json({ jobId }, { status: 202, headers: { "Cache-Control": "private, no-store" } });
 }

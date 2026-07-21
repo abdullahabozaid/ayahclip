@@ -39,4 +39,16 @@ describe("activeHighlightWord", () => {
     expect(activeHighlightWord("one   two", 1.9, 2)).toBe(1);
     expect(activeHighlightWord("one   two", 0.1, 2)).toBe(0);
   });
+
+  // Plan 009 / BUG-09 regression: the fast (WebCodecs) export must feed the
+  // verse's OWN duration (verseDurations[vi]), not `(cum[vi+1] ?? cum[vi]) - cum[vi]`,
+  // which is 0 for the last/single verse and silently killed the highlight there.
+  // A positive duration must light words; only a genuinely zero duration is null.
+  it("lights the last/only verse when given its real (positive) duration, not a zero cum-diff", () => {
+    const singleVerseDuration = 4; // what verseDurations[vi] supplies (> 0)
+    expect(activeHighlightWord(text, 0, singleVerseDuration)).toBe(0);
+    expect(activeHighlightWord(text, 3.9, singleVerseDuration)).toBe(3);
+    // The old bug passed 0 here (cum[vi+1] undefined) → no highlight at all.
+    expect(activeHighlightWord(text, 3.9, 0)).toBeNull();
+  });
 });

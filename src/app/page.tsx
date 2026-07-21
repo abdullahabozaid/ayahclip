@@ -162,7 +162,7 @@ export default function Dashboard() {
           <p
             className="rise mb-6 font-arabic text-3xl text-gold-soft"
             style={{ animationDelay: "0ms" }}
-            dir="rtl"
+            dir="rtl" lang="ar"
           >
             بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
           </p>
@@ -185,7 +185,7 @@ export default function Dashboard() {
           </p>
 
           <div
-            className="rise mt-10 flex items-center justify-center gap-3"
+            className="rise mt-10 flex flex-wrap items-center justify-center gap-3"
             style={{ animationDelay: "320ms" }}
           >
             <NewClipLink

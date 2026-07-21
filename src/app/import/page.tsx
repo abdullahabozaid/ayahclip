@@ -1088,7 +1088,7 @@ export default function ImportPage() {
                                 )}
                                 <span className="ml-auto rounded border border-[var(--hairline-soft)] bg-[var(--ink-deep)] px-1.5 py-0.5 text-xs sm:text-[10px] tabular-nums text-[var(--muted-deep)]">{fmt(timing.start)}–{fmt(timing.end)}</span>
                               </div>
-                              <p className="font-arabic mt-1 truncate text-right text-lg leading-9 text-parchment sm:text-xl" dir="rtl">
+                              <p className="font-arabic mt-1 truncate text-right text-lg leading-9 text-parchment sm:text-xl" dir="rtl" lang="ar">
                                 {verse ? verseTextAt(timing, verse.text_uthmani, timing.start) : "Quran text loads here for comparison"}
                               </p>
                               {verse?.translation && (
@@ -1131,7 +1131,7 @@ export default function ImportPage() {
                     What recognition heard
                     <span className="ml-1 text-[var(--muted-deep)]">+</span>
                   </summary>
-                  <p className="font-arabic pb-1 text-right text-base leading-[1.9] text-[var(--muted)]" dir="rtl">
+                  <p className="font-arabic pb-1 text-right text-base leading-[1.9] text-[var(--muted)]" dir="rtl" lang="ar">
                     {detected.transcript || "(no speech recognised)"}
                   </p>
                 </details>

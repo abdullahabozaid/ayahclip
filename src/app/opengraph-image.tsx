@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "AyahClip — craft luminous Quran recitation clips";
+export const alt = "AyahClip — make beautiful Quran clips";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -74,7 +74,7 @@ export default function OpenGraphImage() {
               letterSpacing: -2,
             }}
           >
-            Craft luminous recitation clips.
+            Make beautiful Quran clips.
           </div>
           <div
             style={{

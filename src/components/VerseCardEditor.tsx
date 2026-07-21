@@ -9,6 +9,7 @@ import {
   snapToSentenceBoundary,
   type VerseTiming,
 } from "@/lib/audio-import";
+import { isMarkOnlyToken } from "@/lib/canvas-utils";
 import { loadCorpus, getVerseWeights } from "@/lib/verse-match";
 import { alignImportedAudio, attachAlignmentDiagnostics } from "@/lib/deep-align";
 import {
@@ -175,7 +176,7 @@ export function VerseCardEditor() {
   // Split a verse into parts AFTER an absolute word index. Keeps every word;
   // adds a time boundary so words 1..N show first, then the rest.
   const addWordSplit = useCallback(
-    (verseIdx: number, absBoundary: number) => {
+    (verseIdx: number, requestedBoundary: number) => {
       const cur = useAppStore.getState().audioSource;
       if (cur.mode !== "imported") return;
       const state = useAppStore.getState();
@@ -183,9 +184,14 @@ export function VerseCardEditor() {
       if (!seg) return;
       const verse = state.verses.find((v) => v.verse_number === seg.verseNumber);
       if (!verse) return;
-      const total = verse.text_uthmani.split(/\s+/).filter(Boolean).length;
+      const allTokens = verse.text_uthmani.split(/\s+/).filter(Boolean);
+      const total = allTokens.length;
       const dur = seg.end - seg.start;
       if (dur <= 0 || total < 2) return;
+      // A standalone waqf mark belongs to the word before it. Never let a part
+      // begin with one — push the cut past the mark instead.
+      let absBoundary = requestedBoundary;
+      while (absBoundary < total && isMarkOnlyToken(allTokens[absBoundary])) absBoundary += 1;
       if (absBoundary <= 0 || absBoundary >= total) return;
       const time = seg.start + (absBoundary / total) * dur;
       const existing = seg.splits ?? [];
@@ -961,6 +967,24 @@ export function PartBlock({
               Split
             </button>
           )}
+          {canSplit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // Auto split: cut this part straight down the middle. Repeating
+                // it on a resulting part subdivides further, so long ayahs can be
+                // chunked without hunting for a word boundary by hand.
+                onSplitWord(wordOffset + Math.floor(words.length / 2));
+                setSplitOpen(false);
+                setSelectedIdx(null);
+                setHoverIdx(null);
+              }}
+              className="min-h-11 rounded-full border border-[var(--hairline)] px-2.5 text-[11px] text-parchment transition-colors hover:border-emerald-soft hover:text-emerald-soft sm:min-h-7"
+              title="Split this part in half automatically"
+            >
+              Auto split
+            </button>
+          )}
           {canRemove && (
             <button
               onClick={(e) => {
@@ -981,7 +1005,7 @@ export function PartBlock({
           <p className="mb-2 text-[11px] text-[var(--muted)]">
             Tap between words to place the split
           </p>
-          <div dir="rtl" className="font-arabic text-[22px] leading-loose">
+          <div dir="rtl" lang="ar" className="font-arabic text-[22px] leading-loose">
             {words.map((w, i) => {
               const inPart1 = splitAt == null || i < splitAt;
               const showDivider = splitAt != null && i === splitAt;

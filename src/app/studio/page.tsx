@@ -88,6 +88,29 @@ export default function StudioPage() {
   // viewport before the creator asks to edit timing details.
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [timelineFullscreen, setTimelineFullscreen] = useState(false);
+  // Creators can drag the verse-editor dock taller when they need more room to
+  // read captions. `null` keeps the responsive default height; once dragged we
+  // pin an explicit pixel height (clamped so the preview above stays visible).
+  const [dockHeight, setDockHeight] = useState<number | null>(null);
+  const startDockResize = (event: React.PointerEvent) => {
+    if (!timelineOpen) return;
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight =
+      (event.currentTarget.closest("[data-testid='studio-timeline']") as HTMLElement | null)
+        ?.getBoundingClientRect().height ?? 232;
+    const maxHeight = Math.round(window.innerHeight * 0.75);
+    const onMove = (moveEvent: PointerEvent) => {
+      const next = startHeight + (startY - moveEvent.clientY);
+      setDockHeight(Math.max(140, Math.min(maxHeight, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
   // Two ways to edit imported verses: "words" (per-verse cards: split text,
   // trim words, duplicate) and "timeline" (waveform with draggable verse
   // boundaries). Each suits a different job, so the user picks.
@@ -570,6 +593,13 @@ export default function StudioPage() {
     store.emphasis, store.emphasisStyle, store.emphasisColor,
     store.clipFadeMs, store.audioFadeIn,
     store.translationVerseNumber, store.wordHighlight, store.backgroundVideoSync,
+    // Previously omitted — editing ONLY one of these + a hard refresh silently lost
+    // the edit because the 2s debounce never rescheduled (BUG-01 / plan 010).
+    store.verseParts,
+    store.arabicFontWeight, store.translationFontWeight,
+    store.verseIntro, store.verseIntroMs,
+    store.highlightEnabled, store.highlightColor, store.highlightOpacity,
+    store.highlightRadius, store.highlightPadding, store.highlightHeight,
     store.audioSource,
     surah, selectedVerseNumbers,
   ]);
@@ -589,7 +619,7 @@ export default function StudioPage() {
           </span>
           <h1 className="font-display text-2xl text-parchment">No verses selected</h1>
           <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-[var(--muted)]">
-            Choose a surah and pick your verses to begin crafting your clip.
+            Choose a surah and pick your verses to begin making your clip.
           </p>
           <button
             onClick={() => router.push("/browse")}
@@ -609,7 +639,7 @@ export default function StudioPage() {
 
   return (
     <>
-    <main data-testid="studio-shell" ref={stageRef} style={{ zoom }} className="studio-shell-layout flex h-dvh flex-col overflow-hidden bg-[var(--ink)] lg:grid lg:grid-cols-[56px_minmax(0,1fr)_304px] lg:grid-rows-[52px_minmax(0,1fr)_188px]">
+    <main data-testid="studio-shell" ref={stageRef} style={{ zoom, ...(dockHeight != null ? { ["--dock-h" as string]: `${dockHeight}px` } : {}) } as React.CSSProperties} className="studio-shell-layout flex h-dvh flex-col overflow-hidden bg-[var(--ink)] lg:grid lg:grid-cols-[56px_minmax(0,1fr)_304px] lg:grid-rows-[52px_minmax(0,1fr)_var(--dock-h,200px)]">
       {/* Studio top bar — pad for the notch / status bar on mobile */}
       <header className="relative z-40 flex min-h-[calc(48px+env(safe-area-inset-top))] min-w-0 shrink-0 items-end justify-between gap-2 border-b border-[var(--hairline-soft)] bg-[var(--ink)] px-2 pb-1 pt-[env(safe-area-inset-top)] sm:px-3 lg:col-span-3 lg:h-[52px] lg:min-h-0 lg:items-center lg:px-4 lg:pb-0 lg:pt-0">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
@@ -694,7 +724,7 @@ export default function StudioPage() {
                   onClick={() => setFrameMode(m.id)}
                   disabled={disabled}
                   title={disabled ? "Switch to 9:16 to preview device frames" : undefined}
-                  className={`rounded px-3 py-1.5 text-[11px] transition-colors ${
+                  className={`rounded px-2 py-1 text-[10px] transition-colors ${
                     frameMode === m.id
                       ? "bg-[var(--gold)] text-[var(--ink-deep)]"
                       : disabled
@@ -943,8 +973,31 @@ export default function StudioPage() {
           Height is bounded so the preview above is always visible; collapse
           shrinks it to just this bar. */}
       {(store.audioSource.mode === "imported" || selectedVerseNumbers.length > 0) && (
-        <div data-testid="studio-timeline" className={`studio-timeline-dock relative z-20 flex shrink-0 flex-col overflow-hidden border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-2 py-1 sm:px-3 lg:col-start-2 lg:row-start-3 lg:h-[188px] lg:py-0 ${timelineOpen ? "h-[min(232px,36dvh)]" : "h-12"}`}>
-          <div className="flex shrink-0 items-center gap-1.5 lg:h-7">
+        <div
+          data-testid="studio-timeline"
+          style={timelineOpen && dockHeight != null ? { height: dockHeight } : undefined}
+          className={`studio-timeline-dock relative z-20 flex shrink-0 flex-col overflow-hidden border-t border-[var(--hairline-soft)] bg-[var(--ink)] px-2 py-1 sm:px-3 lg:col-start-2 lg:row-start-3 lg:h-auto lg:py-0 ${
+            timelineOpen
+              ? dockHeight != null
+                ? ""
+                : "h-[min(280px,42dvh)]"
+              : "h-12"
+          }`}
+        >
+          {/* Drag the top edge to give captions more room. */}
+          {timelineOpen && (
+            <div
+              onPointerDown={startDockResize}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize verse editor"
+              title="Drag to resize"
+              className="group absolute inset-x-0 top-0 z-30 flex h-3 cursor-ns-resize touch-none items-center justify-center"
+            >
+              <span className="h-1 w-9 rounded-full bg-[var(--hairline-soft)] transition-colors group-hover:bg-gold-soft/70" />
+            </div>
+          )}
+          <div className="mt-1.5 flex shrink-0 items-center gap-1.5 lg:h-7">
             {/* Collapse / expand the dock */}
             <button
               onClick={() => openTimeline(!timelineOpen)}

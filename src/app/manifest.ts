@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "AyahClip — Quran recitation clip editor",
     short_name: "AyahClip",
     description:
-      "Craft polished Quran recitation clips for TikTok, Reels, and YouTube Shorts in your browser.",
+      "Make Quran recitation clips for TikTok, Reels, and YouTube Shorts in your browser.",
     start_url: "/",
     display: "standalone",
     background_color: "#08090d",

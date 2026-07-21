@@ -285,17 +285,17 @@ input[type="range"].slider-gold::-moz-range-thumb {
 @media (prefers-reduced-motion: reduce) {
   *, .rise, .shimmer {
     animation-duration: 0.01ms !important;
+    /* Also zero any inline animation-delay (e.g. the staggered .rise entrance),
+       otherwise reduced-motion users see content stay invisible then pop in. */
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
 @media (min-width: 1024px) and (max-height: 780px) {
   .studio-shell-layout {
-    grid-template-rows: 52px minmax(0, 1fr) 164px;
-  }
-
-  .studio-timeline-dock {
-    height: 164px;
+    grid-template-rows: 52px minmax(0, 1fr) var(--dock-h, 164px);
   }
 }
 

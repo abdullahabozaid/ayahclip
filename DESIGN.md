@@ -15,8 +15,8 @@ Midnight Mihrab. All tokens live in `src/app/globals.css` as CSS variables and T
 | Pressed / shadow | `#a07d2c` | `--gold-deep` | Deeper gold |
 | Secondary accent | `#1f6f5c` | `--emerald` | Deep emerald — used for splits, not chrome |
 | Body text | `#ece7da` | `--parchment` | Warm off-white |
-| Muted | `#8a8fa3` | `--muted` | Slate grey |
-| Muted deep | `#5a607a` | `--muted-deep` | Dimmest text — labels, helpers |
+| Muted | `#a9adbd` | `--muted` | Slate grey |
+| Muted deep | `#777d95` | `--muted-deep` | Dimmest text — labels/helpers. ~4.9:1 on `--ink` (passes AA, thin margin); avoid below ~12px on `--surface` |
 | Hairline | `rgba(201,162,75,0.18)` | `--hairline` | Gold-tinted borders |
 | Hairline soft | `rgba(236,231,218,0.08)` | `--hairline-soft` | Parchment-tinted dividers |
 

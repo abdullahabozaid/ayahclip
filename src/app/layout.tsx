@@ -52,21 +52,21 @@ export const metadata: Metadata = {
     template: "%s · AyahClip",
   },
   description:
-    "Craft polished Quran recitation clips for TikTok, Reels, and YouTube Shorts—entirely in your browser.",
+    "Make Quran recitation clips for TikTok, Reels, and YouTube Shorts—all in your browser.",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     siteName: "AyahClip",
     title: "AyahClip — Make beautiful Quran clips",
     description:
-      "Select verses, shape the typography, arrange B-roll, and export a polished social video.",
+      "Select verses, shape the typography, arrange B-roll, and export a social video.",
     url: "/",
   },
   twitter: {
     card: "summary_large_image",
     title: "AyahClip — Make beautiful Quran clips",
     description:
-      "Select verses, shape the typography, arrange B-roll, and export a polished social video.",
+      "Select verses, shape the typography, arrange B-roll, and export a social video.",
   },
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
     ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }

@@ -8,7 +8,7 @@ import { join } from "path";
 import { homedir } from "os";
 import type { NextRequest } from "next/server";
 import type { LibraryClip } from "./clip-library";
-import { isLocalNetworkHostname, localMutationAllowed } from "./local-origin";
+import { filesystemFeaturesEnabled, isLocalNetworkHostname, localMutationAllowed } from "./local-origin";
 
 const ROOT = join(homedir(), "Documents", "AyahClip", "Library");
 const VIDEOS = join(ROOT, "videos");
@@ -145,5 +145,6 @@ export function originAllowed(req: NextRequest): boolean {
 /** The disk-backed library is a localhost/LAN feature. Public deployments use
  * private browser storage and must never expose a shared server filesystem. */
 export function localRequestAllowed(req: NextRequest): boolean {
+  if (!filesystemFeaturesEnabled()) return false;
   return isLocalNetworkHostname(req.nextUrl.hostname);
 }

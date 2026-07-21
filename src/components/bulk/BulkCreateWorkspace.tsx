@@ -232,6 +232,14 @@ export function BulkCreateWorkspace() {
     return () => { cancelled = true; };
   }, []);
 
+  // Abort any in-flight recognition / link import when leaving the page, so ONNX
+  // inference and IndexedDB checkpoint writes stop instead of running after teardown
+  // (BUG-02 / plan 010).
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    linkAbortRef.current?.abort();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void Promise.all([...new Set(BULK_AYAH_REFERENCES.map((item) => item.surah))].map(async (surah) => {

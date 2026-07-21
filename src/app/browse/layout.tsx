@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Browse the Quran",
-  description: "Choose a surah and verses to begin a polished Quran recitation clip.",
+  description: "Choose a surah and verses to begin a Quran recitation clip.",
   alternates: { canonical: "/browse" },
 };
 

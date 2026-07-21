@@ -905,8 +905,8 @@ export async function exportVideoFast(options: ExportOptions): Promise<Blob> {
       // Karaoke word highlight: only while the audio verse is the one on screen
       // (never during the intro lead) and the full verse is shown, matching the
       // preview. Part of the dedupe key so each new lit word gets its own frame.
-      const activeWord = options.wordHighlight && audioVi === vi && segFast.ar === verse.text_uthmani
-        ? activeHighlightWord(verse.text_uthmani, localT, (cum[vi + 1] ?? cum[vi]) - cum[vi])
+      const activeWord = options.wordHighlight && options.importedAudio && audioVi === vi && segFast.ar === verse.text_uthmani
+        ? activeHighlightWord(verse.text_uthmani, localT, verseDurations[vi])
         : null;
       plan[f] = {
         t, vi, audioVi,

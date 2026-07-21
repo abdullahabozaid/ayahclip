@@ -4,9 +4,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { jobId } = await params;
   const status = getSocialDownloadJobStatus(jobId);
   if (!status) {
@@ -16,9 +20,13 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { jobId } = await params;
   cancelSocialDownloadJob(jobId);
   return new Response(null, { status: 204 });

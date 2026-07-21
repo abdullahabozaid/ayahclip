@@ -1258,7 +1258,7 @@ export function TimelineEditor({ fullscreen = false, compact = false }: Timeline
         <button
           onClick={togglePlay}
           disabled={loading || duration === 0}
-          className={`btn-gold flex shrink-0 items-center justify-center rounded-full disabled:opacity-40 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-10 sm:w-10"}`}
+          className={`btn-gold flex shrink-0 items-center justify-center rounded-full disabled:opacity-40 ${compact ? "h-11 w-11 md:h-8 md:w-8" : "h-11 w-11 sm:h-10 sm:w-10"}`}
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? (
@@ -1298,7 +1298,7 @@ export function TimelineEditor({ fullscreen = false, compact = false }: Timeline
           <button
             onClick={undo}
             disabled={historyRef.current.length === 0}
-            className={`btn-ghost flex items-center justify-center rounded-l border-r-0 text-[13px] disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
+            className={`btn-ghost flex items-center justify-center rounded-l border-r-0 text-[13px] disabled:opacity-30 ${compact ? "h-11 w-11 md:h-8 md:w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
             aria-label="Undo edit"
             title="Undo (⌘Z)"
           >
@@ -1309,7 +1309,7 @@ export function TimelineEditor({ fullscreen = false, compact = false }: Timeline
           <button
             onClick={redo}
             disabled={futureRef.current.length === 0}
-            className={`btn-ghost flex items-center justify-center rounded-r text-[13px] disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
+            className={`btn-ghost flex items-center justify-center rounded-r text-[13px] disabled:opacity-30 ${compact ? "h-11 w-11 md:h-8 md:w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
             aria-label="Redo edit"
             title="Redo (⌘⇧Z)"
           >
@@ -1414,7 +1414,7 @@ export function TimelineEditor({ fullscreen = false, compact = false }: Timeline
             <button
               onClick={() => setZoom((z) => Math.max(1, +(z / 1.5).toFixed(2)))}
               disabled={zoom <= 1}
-              className={`flex items-center justify-center rounded border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
+              className={`flex items-center justify-center rounded border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 ${compact ? "h-11 w-11 md:h-8 md:w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
               aria-label="Zoom out"
             >
               −
@@ -1425,7 +1425,7 @@ export function TimelineEditor({ fullscreen = false, compact = false }: Timeline
             <button
               onClick={() => setZoom((z) => Math.min(24, +(z * 1.5).toFixed(2)))}
               disabled={zoom >= 24}
-              className={`flex items-center justify-center rounded border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 ${compact ? "h-8 w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
+              className={`flex items-center justify-center rounded border border-[var(--hairline)] text-parchment hover:border-gold disabled:opacity-30 ${compact ? "h-11 w-11 md:h-8 md:w-8" : "h-11 w-11 sm:h-9 sm:w-9"}`}
               aria-label="Zoom in"
             >
               +
@@ -1709,7 +1709,7 @@ export function TimelineEditor({ fullscreen = false, compact = false }: Timeline
                   )}
                 </div>
                 <p
-                  dir="rtl"
+                  dir="rtl" lang="ar"
                   className="font-arabic mt-3 max-h-24 overflow-y-auto rounded-md bg-[var(--ink-deep)] p-3 text-[15px] leading-loose text-parchment ring-1 ring-[var(--hairline-soft)]"
                 >
                   {(() => {
@@ -1986,7 +1986,7 @@ export function TimelineEditor({ fullscreen = false, compact = false }: Timeline
                     }`}
                     style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                     title={segText}
-                    dir="rtl"
+                    dir="rtl" lang="ar"
                   >
                     <span
                       className={`font-arabic w-full truncate text-right text-[12px] leading-tight ${

@@ -76,12 +76,25 @@ export function buildLineLimitedCaptionSplits({
   const splitCharFractions = boundaries.map((boundary) =>
     arabicWords.slice(0, boundary).join(" ").length / totalCharacters,
   );
+
+  // `arabicWords` are wrap units: splitWords() glues a standalone waqf mark onto
+  // its preceding word, so a marked verse has fewer units than raw whitespace
+  // tokens. But splitWords/splitWordTotal are consumed against
+  // text_uthmani.split(/\s+/) (verseTextAt, the card/timeline editors, export).
+  // Emit boundaries + total in that RAW token space, otherwise verseTextAt sees
+  // allWords.length !== splitWordTotal, mistakes the Arabic for a translation,
+  // and proportionally remaps the cuts — showing the WRONG Quranic words.
+  const rawTokenCount = (units: readonly string[]) =>
+    units.join(" ").split(/\s+/).filter(Boolean).length;
+  const splitWordTotal = rawTokenCount(arabicWords);
+  const rawBoundaries = boundaries.map((boundary) => rawTokenCount(arabicWords.slice(0, boundary)));
+
   return {
     timing: {
       ...timing,
       splits,
-      splitWords: boundaries,
-      splitWordTotal: arabicWords.length,
+      splitWords: rawBoundaries,
+      splitWordTotal,
       splitCharFractions,
     },
     segmentCount: boundaries.length + 1,

@@ -165,7 +165,7 @@ export function ReciterSelect({
           >
             <span aria-hidden="true">{isFavorite ? "★" : "☆"}</span>
           </button>
-          <span className="truncate font-arabic text-sm text-parchment" dir="rtl">
+          <span className="truncate font-arabic text-sm text-parchment" dir="rtl" lang="ar">
             {selected.arabicName}
           </span>
         </div>

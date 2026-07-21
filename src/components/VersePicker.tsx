@@ -45,7 +45,7 @@ function VersePreview({ verse, verseNumber, selected, onToggle }: VersePreviewPr
           <>
             <p
               className="font-arabic text-right text-2xl leading-[2.15] text-parchment"
-              dir="rtl"
+              dir="rtl" lang="ar"
             >
               {verse.text_uthmani}
             </p>

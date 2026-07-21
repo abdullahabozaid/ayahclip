@@ -766,7 +766,7 @@ function ClipCard({
             </span>
           )}
           {!playing && (
-            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity hover:opacity-100">
+            <span className="absolute inset-0 flex items-center justify-center opacity-100 transition-opacity sm:opacity-0 sm:hover:opacity-100">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 backdrop-blur">
                 <svg viewBox="0 0 24 24" className="h-5 w-5 translate-x-0.5 text-white" fill="currentColor">
                   <path d="M8 5v14l11-7z" />
@@ -900,7 +900,7 @@ function ClipCard({
           <button
             onClick={onDownload}
             aria-label="Download"
-            className="rounded-lg border border-[var(--hairline)] p-1.5 text-parchment transition-colors hover:border-gold"
+            className="flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[var(--hairline)] p-1.5 text-parchment transition-colors hover:border-gold sm:min-h-0 sm:min-w-0"
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
@@ -909,7 +909,7 @@ function ClipCard({
           <button
             onClick={onDelete}
             aria-label="Delete"
-            className="rounded-lg border border-[var(--hairline)] p-1.5 text-[var(--muted)] transition-colors hover:border-red-400/50 hover:text-red-300"
+            className="flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-[var(--hairline)] p-1.5 text-[var(--muted)] transition-colors hover:border-red-400/50 hover:text-red-300 sm:min-h-0 sm:min-w-0"
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 7h12M9 7V5h6v2m-7 0l1 13h6l1-13" />

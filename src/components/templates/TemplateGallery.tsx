@@ -99,7 +99,7 @@ export function TemplateGallery({ fromImport = false, initialFilter = "featured"
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-[0.22em] text-gold-soft/70">Templates</p>
-            <h1 className="font-display text-3xl text-parchment sm:text-4xl">Or start from a style</h1>
+            <h2 className="font-display text-3xl text-parchment sm:text-4xl">Or start from a style</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               Curated Quran clip compositions inspired by @ayahclip and current short-form formats. Every preview uses the real export renderer.
             </p>

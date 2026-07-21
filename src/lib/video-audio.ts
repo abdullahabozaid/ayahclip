@@ -1,11 +1,13 @@
 // Client-only: extract the audio track from a video file (mp4/mov/webm) using
 // ffmpeg.wasm. Import lazily (await import) — never in SSR. Uses the single-thread
-// core from CDN so no COOP/COEP headers are required.
+// core so no COOP/COEP headers are required. The core is served same-origin from
+// public/ffmpeg/ (vendored @ffmpeg/core@0.12.10) — never a third-party CDN, so
+// imported-video recognition works offline/self-hosted and the CSP can stay tight.
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
-const CORE_BASE = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
+const CORE_BASE = "/ffmpeg";
 
 let ffmpeg: FFmpeg | null = null;
 

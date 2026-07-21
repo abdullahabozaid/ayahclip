@@ -41,6 +41,25 @@ describe("server request throttling", () => {
     expect(checkRateLimit(request, policy, 15_001)).toMatchObject({ allowed: true, remaining: 1 });
   });
 
+  it("keys on the rightmost forwarded address so a spoofed prefix cannot mint fresh buckets", () => {
+    // The trusted proxy (Caddy) APPENDS the real peer IP; the client tries to
+    // escape its bucket by prefixing junk. All three must land in ONE bucket
+    // keyed on the rightmost (real) address, not the attacker-chosen leftmost.
+    const oneAttempt = { namespace: "xff", limit: 1, windowMs: 60_000 };
+    const spoofA = new Request("https://ayahclip.test/api", {
+      headers: { "x-forwarded-for": "1.1.1.1, 203.0.113.9" },
+    });
+    const spoofB = new Request("https://ayahclip.test/api", {
+      headers: { "x-forwarded-for": "2.2.2.2, 203.0.113.9" },
+    });
+    const bare = new Request("https://ayahclip.test/api", {
+      headers: { "x-forwarded-for": "203.0.113.9" },
+    });
+    expect(checkRateLimit(spoofA, oneAttempt, 1_000).allowed).toBe(true); // consumes the only slot
+    expect(checkRateLimit(spoofB, oneAttempt, 1_001).allowed).toBe(false); // same bucket → blocked
+    expect(checkRateLimit(bare, oneAttempt, 1_002).allowed).toBe(false); // overwrite form → same bucket
+  });
+
   it("rejects invalid policies instead of silently disabling protection", () => {
     const request = new Request("https://ayahclip.test/api");
     expect(() => checkRateLimit(request, { ...policy, limit: 0 })).toThrow("Invalid rate-limit policy");

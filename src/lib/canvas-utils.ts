@@ -288,6 +288,12 @@ export function arabicTextForFont(
 const MARK_ONLY =
   /^[ؐ-ًؚ-ٰٟۖ-ۭ࣓-ࣿﹰ-ﹿ]+$/u;
 
+/** True when a raw whitespace token is only a waqf/pause mark, i.e. it belongs
+ *  to the word before it and must never start a line or a caption part. */
+export function isMarkOnlyToken(token: string): boolean {
+  return MARK_ONLY.test(token);
+}
+
 /** Split text into the same "words" (wrap-units) the renderer uses, so emphasis
  *  indices from the UI line up exactly with what's drawn. */
 export function splitWords(text: string): string[] {

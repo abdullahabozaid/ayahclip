@@ -503,8 +503,12 @@ export function StudioPreview({ frameMode = "studio", showSafeZones = false }: S
     const translationEmphasis = useSegments ? undefined : verseEmphasis?.translation;
 
     // Live word-by-word highlight during imported playback overrides manual emphasis.
+    // Only on the full verse — the index counts full-verse words, so applying it to
+    // a mid-playback split segment would light the wrong word (and the exporter
+    // suppresses it for partials too, keeping preview == export).
     const wordHi =
       s.audioSource.mode === "imported" && playing && s.wordHighlight && s.activeWordIndex != null
+      && displayArabic === cv.text_uthmani
         ? s.activeWordIndex
         : null;
     const introProgress =

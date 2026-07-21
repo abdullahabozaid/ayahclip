@@ -35,10 +35,23 @@ function requestProtocol(request: NextRequest): "http:" | "https:" | null {
   return protocol === "http:" || protocol === "https:" ? protocol : null;
 }
 
+/** Filesystem-backed features (disk library, save-export) run ONLY when the
+ * operator explicitly enables them on a machine they own. Request headers can
+ * never turn this on — headers refine WHICH origin may call; the env decides IF.
+ * Dev default: on unless explicitly "0". Production default: off unless "1", so
+ * the public VPS is browser-storage-only regardless of forged X-Forwarded-* /
+ * Origin headers (which could otherwise reach these routes via the shared
+ * Docker network, bypassing Caddy). */
+export function filesystemFeaturesEnabled(): boolean {
+  return process.env.AYAHCLIP_ENABLE_DISK_LIBRARY === "1"
+    || (process.env.AYAHCLIP_ENABLE_DISK_LIBRARY !== "0" && process.env.NODE_ENV !== "production");
+}
+
 /** Browser mutations of the local filesystem must come from the exact origin
  * serving AyahClip. Merely being another private-LAN origin is not sufficient:
  * otherwise any page on the same Wi-Fi could submit a cross-origin write. */
 export function localMutationAllowed(request: NextRequest): boolean {
+  if (!filesystemFeaturesEnabled()) return false;
   const origin = request.headers.get("origin");
   const host = requestHost(request);
   const protocol = requestProtocol(request);

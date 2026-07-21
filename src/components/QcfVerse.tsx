@@ -33,7 +33,7 @@ export function QcfVerse({ qcfWords, fallback, className = "", inkThickness = 0 
   if (!qcfWords || qcfWords.length === 0 || !fontsReady) {
     return (
       <p
-        dir="rtl"
+        dir="rtl" lang="ar"
         className={`font-arabic text-[22px] leading-loose ${className}`}
         style={inkThickness > 0 ? { WebkitTextStroke: `${inkThickness}px currentColor`, paintOrder: "stroke fill" } : undefined}
       >
@@ -44,7 +44,7 @@ export function QcfVerse({ qcfWords, fallback, className = "", inkThickness = 0 
 
   return (
     <p
-      dir="rtl"
+      dir="rtl" lang="ar"
       className={`text-[22px] leading-loose ${className}`}
       style={inkThickness > 0 ? { WebkitTextStroke: `${inkThickness}px currentColor`, paintOrder: "stroke fill" } : undefined}
     >

@@ -19,6 +19,12 @@ services:
       - .env
     environment:
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-https://ayahclip.com}
+      # Public deployment: browser-storage only. The disk-backed library and
+      # save-export routes stay OFF (deny by default) regardless of forged
+      # X-Forwarded-* / Origin headers, which a co-tenant on the shared Docker
+      # network could otherwise use to reach these routes past Caddy.
+      AYAHCLIP_ENABLE_DISK_LIBRARY: "0"
+      # NOTE: currently unread by application code; kept only for compatibility.
       AYAHCLIP_SELF_HOSTED: "1"
       DEPLOYMENT_VERSION: ${DEPLOYMENT_VERSION:-local}
       PORT: "3000"

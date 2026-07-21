@@ -21,7 +21,7 @@ function SurahCard({ surah }: { surah: Surah }) {
   return (
     <Link
       href={`/surah/${surah.id}`}
-      className="group flex items-center gap-3.5 rounded-2xl border border-[var(--hairline-soft)] bg-white/[0.02] p-3.5 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--gold)] hover:bg-[rgba(201,162,75,0.05)] focus-visible:outline-none focus-visible:border-[var(--gold)]"
+      className="group flex items-center gap-3.5 rounded-2xl border border-[var(--hairline-soft)] bg-white/[0.02] p-3.5 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--gold)] hover:bg-[rgba(201,162,75,0.05)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--gold-soft)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--ink)]"
     >
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--hairline)] bg-[var(--ink-deep)] text-sm font-medium tabular-nums text-gold-soft transition-colors group-hover:border-[var(--gold)]">
         {surah.id}

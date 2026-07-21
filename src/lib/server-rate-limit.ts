@@ -18,14 +18,22 @@ interface Bucket {
 const MAX_BUCKETS = 10_000;
 const buckets = new Map<string, Bucket>();
 
+// How many trusted reverse-proxy hops sit in front of the app. Caddy APPENDS the
+// real peer IP to the RIGHT of any client-supplied X-Forwarded-For, so the
+// trustworthy client entry is counted from the right (default: the last entry).
+const TRUSTED_PROXY_HOPS = Math.max(0, Number(process.env.AYAHCLIP_TRUSTED_PROXY_HOPS ?? "1") || 0);
+
 function clientAddress(request: Request): string {
-  // Production is reachable only through the trusted TLS reverse proxy, which
-  // overwrites X-Forwarded-For with the public client IP. Local development
-  // falls back to one shared bucket when there is no proxy header.
-  return (request.headers.get("x-forwarded-for") ?? "local")
-    .split(",")[0]
-    .trim()
-    .slice(0, 80) || "local";
+  // Take the client from the RIGHT, past the trusted hops. Taking the leftmost
+  // value (the old behavior) let a client prefix junk and mint unlimited buckets,
+  // bypassing every limit. With 1 hop: `[junk, real-ip]` → real-ip (append), and a
+  // bare `[real-ip]` (overwrite) → real-ip. No header → "local" (dev, one bucket).
+  const chain = (request.headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const fromRight = chain.length - TRUSTED_PROXY_HOPS;
+  return (chain[fromRight >= 0 ? fromRight : 0] ?? "local").slice(0, 80) || "local";
 }
 
 function prune(now: number): void {

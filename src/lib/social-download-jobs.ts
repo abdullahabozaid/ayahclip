@@ -205,12 +205,45 @@ interface SocialDownloadJob {
 // files live on its local disk anyway, so a shared store would buy nothing.
 const jobs = new Map<string, SocialDownloadJob>();
 
+// Cap concurrent heavy subprocesses so a burst of imports cannot OOM the 2 GB
+// container. Each active job can run a yt-dlp + ffmpeg pair using hundreds of MB.
+const MAX_ACTIVE_JOBS = Math.max(1, Number(process.env.AYAHCLIP_MAX_ACTIVE_IMPORTS ?? "3") || 3);
+
+/** Thrown by startSocialDownloadJob when MAX_ACTIVE_JOBS are already running. */
+export class ImportBusyError extends Error {
+  constructor() {
+    super("The import queue is full right now.");
+    this.name = "ImportBusyError";
+  }
+}
+
+function activeJobCount(): number {
+  let count = 0;
+  for (const job of jobs.values()) {
+    if (job.phase === "starting" || job.phase === "downloading" || job.phase === "processing") count += 1;
+  }
+  return count;
+}
+
 function sweepExpiredJobs(now = Date.now()): void {
   for (const [id, job] of jobs) {
     if (job.expiresAt <= now && job.phase !== "downloading" && job.phase !== "starting" && job.phase !== "processing") {
       jobs.delete(id);
       void rm(job.workDirectory, { recursive: true, force: true });
     }
+  }
+}
+
+// Reclaim temp dirs from crashed/abandoned jobs on a timer, not only when new
+// traffic happens to call in. Guarded against duplicate registration under dev
+// hot-reload; unref'd so it never keeps the process (or a test run) alive.
+{
+  const g = globalThis as Record<string, unknown>;
+  const SWEEP_KEY = "__ayahclipSocialDownloadSweep";
+  if (!g[SWEEP_KEY]) {
+    const timer = setInterval(() => sweepExpiredJobs(), 60_000);
+    timer.unref?.();
+    g[SWEEP_KEY] = timer;
   }
 }
 
@@ -227,12 +260,16 @@ function jobFailed(job: SocialDownloadJob): boolean {
 
 function failJob(job: SocialDownloadJob, message: string): void {
   if (job.phase === "ready" || job.phase === "error") return;
+  // Capture whether real subprocess work had begun BEFORE flipping to error.
+  const startedRealWork = job.phase === "downloading" || job.phase === "processing";
   job.phase = "error";
   job.error = message;
   job.expiresAt = Date.now() + ERROR_TTL_MS;
-  // Failed extractor/network attempts should not lock a legitimate creator
-  // out. Only completed imports consume the rolling anti-abuse allowance.
-  releaseSlotOnce(job);
+  // Refund the anti-abuse slot only for cheap early failures (validation/probe,
+  // still "starting") so a real typo doesn't lock a creator out. Anything that
+  // reached download/processing did expensive work and KEEPS its slot — otherwise
+  // start→cancel churn could spawn yt-dlp/ffmpeg forever without exhausting quota.
+  if (!startedRealWork) releaseSlotOnce(job);
   void rm(job.workDirectory, { recursive: true, force: true });
 }
 
@@ -547,6 +584,8 @@ export async function startSocialDownloadJob({
   rateLimitKey: string;
 }): Promise<string> {
   sweepExpiredJobs();
+  // Bound concurrent heavy subprocesses before doing any filesystem work.
+  if (activeJobCount() >= MAX_ACTIVE_JOBS) throw new ImportBusyError();
   const workDirectory = await mkdtemp(join(tmpdir(), "ayahclip-social-"));
   const outputTemplate = join(workDirectory, "%(extractor)s-%(id)s.%(ext)s");
   const ytDlpPath = process.env.AYAHCLIP_YTDLP_PATH || "yt-dlp";

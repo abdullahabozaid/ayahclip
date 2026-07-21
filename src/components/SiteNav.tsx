@@ -81,6 +81,7 @@ export function SiteNav() {
                   key={l.href}
                   href={l.href}
                   onClick={closeMenu}
+                  aria-current={active ? "page" : undefined}
                   className={`rounded-xl px-4 py-3 text-base transition-colors ${
                     active
                       ? "bg-[rgba(201,162,75,0.08)] text-parchment"
@@ -110,8 +111,11 @@ function NavLink({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={`shrink-0 rounded-full px-3 py-2 text-sm transition-colors ${
-        active ? "text-parchment" : "text-[var(--muted)] hover:text-parchment"
+        active
+          ? "text-parchment underline decoration-2 underline-offset-4 decoration-[var(--gold-soft)]"
+          : "text-[var(--muted)] hover:text-parchment"
       }`}
     >
       {label}

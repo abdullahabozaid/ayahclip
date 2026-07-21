@@ -6,9 +6,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ jobId: string }> },
 ) {
+  const fetchSite = request.headers.get("sec-fetch-site");
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
   const { jobId } = await params;
   const file = getSocialDownloadFile(jobId);
   if (!file) {

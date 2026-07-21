@@ -48,7 +48,7 @@ export const artisticBackgroundPresets: Background[] = [
     "Lantern mihrab",
     "Moonlit waterfall",
     "Forest waterfall",
-    "River sanctuary",
+    "Riverbank",
     "Mist mountains",
     "Crescent dunes",
     "Storm coast",

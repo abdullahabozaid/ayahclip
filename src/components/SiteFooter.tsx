@@ -34,7 +34,7 @@ export function SiteFooter() {
       </p>
       <div className="gold-rule mx-auto my-6 max-w-[12rem]" />
       <p className="text-xs text-[var(--muted-deep)]">
-        AyahClip is a personal tool for crafting Quran recitation clips. Please
+        AyahClip is a free tool for making Quran recitation clips. Please
         respect the source licenses below when sharing your clips.
       </p>
       <p className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs">

@@ -123,7 +123,7 @@ export default function SurahPage() {
         ) : surah ? (
           <>
             <header className="mb-8 text-center">
-              <p className="font-arabic text-4xl text-gold-soft" dir="rtl">
+              <p className="font-arabic text-4xl text-gold-soft" dir="rtl" lang="ar">
                 {surah.name_arabic}
               </p>
               <h1 className="mt-3 font-display text-3xl tracking-wide text-parchment">
