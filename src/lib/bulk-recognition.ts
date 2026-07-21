@@ -1,5 +1,6 @@
 import type { Surah } from "@/types";
 import { recognizeQuranPassage } from "./quran-recognition";
+import { findSilenceCenters } from "./audio-import";
 import type { BulkDetectedAyah } from "./bulk-clips";
 import type { RecognitionProgress } from "./recognition-progress";
 
@@ -31,6 +32,74 @@ export function bulkRecognitionWindows(
     const end = Math.min(duration, start + windowSeconds);
     windows.push({ start, end });
     if (end === duration) break;
+  }
+  return windows;
+}
+
+export interface SilenceAwareWindowOptions {
+  targetSeconds?: number;
+  minSeconds?: number;
+  maxSeconds?: number;
+  overlapSeconds?: number;
+  /** How far from the target boundary a pause may be and still be snapped to. */
+  snapToleranceSeconds?: number;
+}
+
+/**
+ * Recognition windows whose boundaries snap to the recitation's real pauses
+ * instead of arbitrary fixed slices (plan 008 item C). A reciter breathes
+ * between ayat; cutting there — rather than mid-ayah at a fixed 4:00 mark —
+ * keeps each window's passage a whole thought, so its match score does not
+ * bleed across a boundary. Near each target boundary we pick the LONGEST pause
+ * within tolerance (the cleanest cut), tie-broken by closeness to the target;
+ * with no usable pause we fall back to the fixed target. A small overlap still
+ * guards an ayah that straddles two windows. Pure function of duration + the
+ * pause list so it is unit-testable without audio.
+ */
+export function silenceAwareWindows(
+  duration: number,
+  silences: readonly { time: number; len: number }[],
+  {
+    targetSeconds = 4 * 60,
+    minSeconds = 2 * 60,
+    maxSeconds = 5 * 60,
+    overlapSeconds = 12,
+    snapToleranceSeconds = 45,
+  }: SilenceAwareWindowOptions = {},
+): { start: number; end: number }[] {
+  if (!(duration > 0)) return [];
+  const gaps = silences
+    .filter((gap) => gap.time > 0 && gap.time < duration)
+    .sort((a, b) => a.time - b.time);
+  const windows: { start: number; end: number }[] = [];
+  let start = 0;
+  // Guard against a degenerate config that could fail to advance.
+  const guardStep = Math.max(1, minSeconds - overlapSeconds);
+  while (start < duration) {
+    const hardEnd = Math.min(duration, start + maxSeconds);
+    if (hardEnd >= duration) {
+      windows.push({ start, end: duration });
+      break;
+    }
+    const target = start + targetSeconds;
+    const softStart = start + minSeconds;
+    const candidate = gaps
+      .filter((gap) =>
+        gap.time >= softStart &&
+        gap.time <= hardEnd &&
+        Math.abs(gap.time - target) <= snapToleranceSeconds)
+      .reduce<{ time: number; len: number } | null>((best, gap) => {
+        if (!best) return gap;
+        if (gap.len > best.len) return gap;
+        if (gap.len === best.len && Math.abs(gap.time - target) < Math.abs(best.time - target)) return gap;
+        return best;
+      }, null);
+    const end = candidate ? candidate.time : Math.min(duration, target);
+    windows.push({ start, end });
+    if (end >= duration) break;
+    const nextStart = Math.max(start + guardStep, end - overlapSeconds);
+    if (nextStart <= start) break;
+    start = nextStart;
   }
   return windows;
 }
@@ -68,7 +137,14 @@ export async function recognizeQuranInWindows({
   initialUnresolvedWindows?: BulkRecognitionResult["unresolvedWindows"];
   onWindowComplete?: (result: BulkRecognitionWindowComplete) => void | Promise<void>;
 }): Promise<BulkRecognitionResult> {
-  const windows = bulkRecognitionWindows(buffer.duration);
+  // Prefer pause-aligned windows so a 4-min slice never cuts through an ayah;
+  // fall back to fixed windows when the source has no usable pauses (e.g. an
+  // unbroken run-on or a very short clip).
+  const silences = findSilenceCenters(buffer);
+  const silenceWindows = silenceAwareWindows(buffer.duration, silences);
+  const windows = silenceWindows.length > 0
+    ? silenceWindows
+    : bulkRecognitionWindows(buffer.duration);
   const ayahs: BulkDetectedAyah[] = initialAyahs.map((ayah) => ({ ...ayah }));
   const unresolvedWindows: BulkRecognitionResult["unresolvedWindows"] = initialUnresolvedWindows.map((window) => ({ ...window }));
 
