@@ -147,6 +147,45 @@ export function mergeBulkAyahs(input: readonly BulkDetectedAyah[]): BulkDetected
   return merged.sort((a, b) => a.start - b.start);
 }
 
+/**
+ * Cross-window confidence accrual (plan 008 item B). A single 4-min window can
+ * mark an ayah "low" because accumulated ASR error dropped that window's score,
+ * yet the same ayah may sit inside a longer continuous recitation whose
+ * neighbours were recognised confidently. When a "low" ayah is bracketed on
+ * BOTH sides by high/medium same-surah ayahs at exactly verseNumber∓1 with only
+ * a small time gap, its verse number is *deductively pinned* — verse N is the
+ * only ayah that can fall chronologically between a confident N-1 and a confident
+ * N+1 of the same surah, and the Arabic shown is already verified corpus text
+ * for N. Promoting such an interior ayah to "medium" lets a continuous passage
+ * auto-approve as one clip instead of being withheld for a single soft window.
+ *
+ * Deliberately conservative: a "low" ayah with only one confident neighbour, or
+ * that starts/ends a run, or whose neighbours are themselves unverified, is NEVER
+ * promoted and stays a reviewable draft. This never invents a range; it only
+ * resolves the attribution the surrounding confident sequence already fixes.
+ */
+export function corroborateBulkAyahs(
+  merged: readonly BulkDetectedAyah[],
+  maxGapSeconds = 3,
+): BulkDetectedAyah[] {
+  const isConfident = (ayah: BulkDetectedAyah | undefined): ayah is BulkDetectedAyah =>
+    Boolean(ayah) && confidenceRank[ayah!.confidence] >= confidenceRank.medium;
+  return merged.map((ayah, index) => {
+    if (ayah.confidence !== "low") return ayah;
+    const prev = merged[index - 1];
+    const next = merged[index + 1];
+    const pinned = isConfident(prev)
+      && isConfident(next)
+      && prev.surah === ayah.surah
+      && next.surah === ayah.surah
+      && prev.verseNumber === ayah.verseNumber - 1
+      && next.verseNumber === ayah.verseNumber + 1
+      && ayah.start - prev.end <= maxGapSeconds
+      && next.start - ayah.end <= maxGapSeconds;
+    return pinned ? { ...ayah, confidence: "medium" as const } : ayah;
+  });
+}
+
 function weakestConfidence(timings: readonly BulkDetectedAyah[]): BulkDetectedAyah["confidence"] {
   return timings.reduce<BulkDetectedAyah["confidence"]>((weakest, timing) =>
     confidenceRank[timing.confidence] < confidenceRank[weakest] ? timing.confidence : weakest,
@@ -181,7 +220,12 @@ export function buildVerseCompleteCandidates({
   // rows available for Studio review, but never advertise them as a complete,
   // upload-ready Bulk clip boundary. Overlapping windows normally supply the
   // complete copy, which mergeBulkAyahs deliberately prefers.
-  const merged = mergeBulkAyahs(ayahs).filter(isCompleteDetectedAyah);
+  // Merge overlapping-window duplicates, keep only complete ayahs, then let a
+  // continuous confident sequence corroborate an interior "low" window (item B).
+  const merged = corroborateBulkAyahs(
+    mergeBulkAyahs(ayahs).filter(isCompleteDetectedAyah),
+    maxGapSeconds,
+  );
   if (merged.length === 0 || requestedCount <= 0) return [];
 
   const runs: BulkDetectedAyah[][] = [];
@@ -260,4 +304,57 @@ export function buildVerseCompleteCandidates({
         approved: isConfidentCandidate(timings),
       };
     });
+}
+
+const CONFIDENCE_SCORE: Record<BulkDetectedAyah["confidence"], number> = {
+  high: 1,
+  selected: 0.9,
+  medium: 0.75,
+  low: 0.4,
+};
+
+export interface BulkClipScoreOptions {
+  /** Sweet-spot duration in seconds; the score peaks here. */
+  idealSeconds?: number;
+  /** Soft band edges; clips outside are penalised but not discarded. */
+  minSeconds?: number;
+  maxSeconds?: number;
+}
+
+/**
+ * A 0–1 quality score for review-grid ranking (plan 008 item F, Opus-Clip style).
+ * Combines how much the creator should trust the clip (confidence) with how
+ * shareable its length is (duration fit to the muted-autoplay sweet spot). It is
+ * purely advisory ordering — it never approves a clip or changes its range, so it
+ * is outside the Quran-integrity gate. Higher is better.
+ */
+export function scoreBulkCandidate(
+  candidate: Pick<BulkClipCandidate, "confidence" | "duration">,
+  { idealSeconds = 40, minSeconds = 15, maxSeconds = 90 }: BulkClipScoreOptions = {},
+): number {
+  const confidenceScore = CONFIDENCE_SCORE[candidate.confidence] ?? 0.4;
+  const duration = candidate.duration;
+  let durationScore = 0;
+  if (duration > 0) {
+    const spread = Math.max(1, (maxSeconds - minSeconds) / 2);
+    const z = (duration - idealSeconds) / spread;
+    durationScore = Math.exp(-0.5 * z * z);
+    if (duration < minSeconds || duration > maxSeconds) durationScore *= 0.5;
+  }
+  return Number((0.55 * confidenceScore + 0.45 * durationScore).toFixed(4));
+}
+
+/**
+ * Order candidates best-first for a skim-and-approve review grid. Stable: equal
+ * scores keep their original chronological order (by `order`). Returns a new
+ * array; inputs are untouched.
+ */
+export function rankBulkCandidates(
+  candidates: readonly BulkClipCandidate[],
+  options?: BulkClipScoreOptions,
+): BulkClipCandidate[] {
+  return [...candidates]
+    .map((candidate) => ({ candidate, score: scoreBulkCandidate(candidate, options) }))
+    .sort((a, b) => b.score - a.score || a.candidate.order - b.candidate.order)
+    .map((entry) => entry.candidate);
 }

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVerseCompleteCandidates,
+  corroborateBulkAyahs,
   groupCandidatesBySurah,
   mergeBulkAyahs,
+  rankBulkCandidates,
+  scoreBulkCandidate,
   type BulkClipCandidate,
   type BulkDetectedAyah,
 } from "../bulk-clips";
@@ -15,6 +18,91 @@ const ayah = (verseNumber: number, start: number, end: number, extra: Partial<Bu
   confidence: "high",
   sourceWindow: 0,
   ...extra,
+});
+
+describe("corroborateBulkAyahs (item B: cross-window confidence accrual)", () => {
+  it("promotes a low ayah pinned between two confident consecutive same-surah neighbours", () => {
+    const input = [ayah(40, 0, 10), ayah(41, 10, 20, { confidence: "low" }), ayah(42, 20, 30)];
+    const result = corroborateBulkAyahs(input);
+    expect(result[1].confidence).toBe("medium");
+    expect(result.map((a) => a.confidence)).toEqual(["high", "medium", "high"]);
+  });
+
+  it("does NOT promote a low ayah at the edge of a run (only one confident neighbour)", () => {
+    const input = [ayah(41, 10, 20, { confidence: "low" }), ayah(42, 20, 30)];
+    expect(corroborateBulkAyahs(input)[0].confidence).toBe("low");
+  });
+
+  it("does NOT promote when a neighbour is itself unverified (low)", () => {
+    const input = [ayah(40, 0, 10, { confidence: "low" }), ayah(41, 10, 20, { confidence: "low" }), ayah(42, 20, 30)];
+    expect(corroborateBulkAyahs(input)[1].confidence).toBe("low");
+  });
+
+  it("does NOT promote when verse numbers are not exactly consecutive", () => {
+    const input = [ayah(40, 0, 10), ayah(42, 10, 20, { confidence: "low" }), ayah(44, 20, 30)];
+    expect(corroborateBulkAyahs(input)[1].confidence).toBe("low");
+  });
+
+  it("does NOT promote across a different surah neighbour", () => {
+    const input = [ayah(40, 0, 10, { surah: 3 }), ayah(41, 10, 20, { confidence: "low" }), ayah(42, 20, 30)];
+    expect(corroborateBulkAyahs(input)[1].confidence).toBe("low");
+  });
+
+  it("does NOT promote when the time gap to a neighbour is too large", () => {
+    const input = [ayah(40, 0, 10), ayah(41, 20, 30, { confidence: "low" }), ayah(42, 30, 40)];
+    expect(corroborateBulkAyahs(input, 3)[1].confidence).toBe("low");
+  });
+
+  it("lets a corroborated passage auto-approve as one clip in buildVerseCompleteCandidates", () => {
+    const input = [ayah(40, 0, 10), ayah(41, 10, 20, { confidence: "low" }), ayah(42, 20, 30)];
+    const result = buildVerseCompleteCandidates({
+      ayahs: input,
+      requestedCount: 1,
+      templateId: "clean-ink",
+      groupingMode: "whole-passage",
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].approved).toBe(true);
+    expect(result[0].ayahStart).toBe(40);
+    expect(result[0].ayahEnd).toBe(42);
+  });
+});
+
+describe("scoreBulkCandidate / rankBulkCandidates (item F: review grid)", () => {
+  const candidate = (over: Partial<BulkClipCandidate>): BulkClipCandidate => ({
+    id: "c", order: 1, surah: 2, ayahStart: 1, ayahEnd: 2,
+    start: 0, end: 40, duration: 40, timings: [], confidence: "high",
+    templateId: "clean-ink", approved: true, ...over,
+  });
+
+  it("scores a confident, sweet-spot-length clip highest and a low, off-length clip lowest", () => {
+    const great = scoreBulkCandidate(candidate({ confidence: "high", duration: 40 }));
+    const weak = scoreBulkCandidate(candidate({ confidence: "low", duration: 4 }));
+    expect(great).toBeGreaterThan(weak);
+    expect(great).toBeLessThanOrEqual(1);
+    expect(weak).toBeGreaterThanOrEqual(0);
+  });
+
+  it("prefers a duration nearer the ideal when confidence is equal", () => {
+    const near = scoreBulkCandidate(candidate({ duration: 40 }));
+    const far = scoreBulkCandidate(candidate({ duration: 120 }));
+    expect(near).toBeGreaterThan(far);
+  });
+
+  it("ranks best-first and keeps chronological order for ties", () => {
+    const a = candidate({ id: "a", order: 1, confidence: "high", duration: 40 });
+    const b = candidate({ id: "b", order: 2, confidence: "low", duration: 5 });
+    const c = candidate({ id: "c", order: 3, confidence: "high", duration: 40 });
+    const ranked = rankBulkCandidates([b, a, c]);
+    expect(ranked.map((r) => r.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const list = [candidate({ id: "a", order: 2, confidence: "low", duration: 5 }), candidate({ id: "b", order: 1 })];
+    const snapshot = list.map((c) => c.id);
+    rankBulkCandidates(list);
+    expect(list.map((c) => c.id)).toEqual(snapshot);
+  });
 });
 
 describe("buildVerseCompleteCandidates", () => {
