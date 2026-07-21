@@ -56,8 +56,9 @@ Score each draft (complete-ayah, clean silence padding at cuts, 20-60s duration,
 ### G. Burned-in caption detection → smart caption strategy — L
 Detect burned-in captions (sampled-frame edge-density heuristic first; PaddleOCR-WASM if needed) and auto-suggest the caption mode (the on/off toggle shipped 2026-07-20 is the manual version). Offer crop-away / keep-original / cover-and-replace; default cover-and-replace with verified text.
 
-### H. Word-highlight (karaoke) captions in EXPORT — M
+### H. Word-highlight (karaoke) captions in EXPORT — M — ✅ DONE 2026-07-21
 `wordHighlight` renders in preview but NOT in the exported MP4 (see plans/README.md addendum). The forced-alignment word timestamps already exist; drive per-word highlight through `drawScene` in the export frame loop, and add `wordHighlight` to the render-cache key. Biggest muted-autoplay "feels finished" win.
+- **Shipped**: `activeHighlightWord` (exact proportional formula from imported-player) computes the lit word per frame in BOTH export paths. `exportVideoFast` adds it to the run-length frame key (so each newly-lit word is encoded, never collapsed); `exportRealtime` renders every frame while a highlighted verse plays. `drawFrame` overrides emphasis to the color style, matching the preview. Gated to wordHighlight + imported audio + full-verse display, so ordinary exports are unchanged. `ExportOptions.wordHighlight` added (studio already passed it). Pure helper unit-tested; final visual wants one real export to eyeball. (Used the preview's proportional word timing rather than alignedWordStarts, matching what the creator already sees — swap to alignedWordStarts later if per-word acoustic timing is wanted.)
 
 ## Recommended order
 
